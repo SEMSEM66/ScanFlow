@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-11-04
+
+### Added
+- Step 3: Interactive Document Crop:
+  - 4-corner interactive draggable handle overlay with boundary clamping.
+  - Real-time magnifying loupe / zoom bubble with crosshairs for millimeter precision.
+  - Automatic perspective bounding-box calculation and high-resolution cropping via `expo-image-manipulator` (verified Expo Go fallback).
+  - Reset corners action and SQLite page preview synchronization.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added

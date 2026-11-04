@@ -97,17 +97,17 @@ Development pauses at each of these 5 checkpoints for physical verification on y
 
 ## 📋 Step 3: Interactive Document Crop
 *4-corner handle adjustment and geometric correction.*
-- [ ] Interactive 4-point corner handle overlay over document image.
-- [ ] Pan gestures on corner handles using `react-native-gesture-handler` with bounds clamping.
-- [ ] Visual polygon connecting the 4 corners.
-- [ ] Magnifying loupe / zoom bubble during corner drag for millimeter-precision edge placement.
-- [ ] **Expo Go Skia Compatibility Check:**
+- [x] Interactive 4-point corner handle overlay over document image.
+- [x] Pan gestures on corner handles using `react-native-gesture-handler` with bounds clamping.
+- [x] Visual polygon connecting the 4 corners.
+- [x] Magnifying loupe / zoom bubble during corner drag for millimeter-precision edge placement.
+- [x] **Expo Go Skia Compatibility Check:**
   - Verify `@shopify/react-native-skia` perspective warp inside standard Expo Go.
   - If Skia native module is missing in Expo Go: notify user immediately and seamlessly fall back to bounding-box crop via `expo-image-manipulator` (calculate bounding rect of points, crop, and normalize).
-- [ ] Reset corners button (reverts to full frame or default margin).
-- [ ] Save cropped page, update FileSystem file, and refresh document page record in SQLite.
-- [ ] **Verification:** Run `npx tsc --noEmit` + linter.
-- [ ] **Git:** Commit and push to `main`.
+- [x] Reset corners button (reverts to full frame or default margin).
+- [x] Save cropped page, update FileSystem file, and refresh document page record in SQLite.
+- [x] **Verification:** Run `npx tsc --noEmit` + linter.
+- [x] **Git:** Commit and push to `main`.
 - [ ] **🛑 STOP 3:** Instruct user to test 4-corner crop handles on physical iPhone.
 
 ---
