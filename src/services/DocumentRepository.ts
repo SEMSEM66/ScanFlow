@@ -215,6 +215,23 @@ export class DocumentRepository {
     await db.runAsync('DELETE FROM documents WHERE id = ?', [id]);
   }
 
+  async duplicate(id: string): Promise<Document | null> {
+    const existing = await this.getById(id);
+    if (!existing) return null;
+
+    const { document, pages } = existing;
+    return this.create({
+      title: `${document.title} (Kopie)`,
+      folderId: document.folderId,
+      pages: pages.map((p) => ({
+        originalUri: p.originalUri,
+        previewUri: p.previewUri,
+        filter: p.filter,
+        rotation: p.rotation,
+      })),
+    });
+  }
+
   async updatePage(pageId: string, updates: { previewUri?: string; filter?: FilterType; rotation?: number }): Promise<void> {
     const db = await getDatabase();
     const now = Date.now();

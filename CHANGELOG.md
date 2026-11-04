@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2026-11-04
+
+### Added
+- Step 1: Documents Library (`bearbeiten.png`):
+  - 2-column document grid with `DocumentCard` component (thumbnails, dates, page count badges).
+  - Search bar with instant title filtering against SQLite.
+  - Category pill filter bar ("Alle", "Rechnungen", "Verträge", "Ausweise", "Privat") with "+ Neuer Ordner" creation.
+  - Folder management: rename and delete folders with document preservation.
+  - Document options menu (`...`): Rename, Move to Folder, Duplicate document, and Delete with filesystem cleanup.
+  - Library sorting modal (Neueste zuerst, Älteste zuerst, Name A-Z, Name Z-A).
+  - Empty state UI with scan trigger CTA and pull-to-refresh control.
+
 ## [0.2.0] - 2026-11-04
 
 ### Added

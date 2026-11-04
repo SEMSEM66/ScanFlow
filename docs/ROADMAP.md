@@ -56,19 +56,19 @@ Development pauses at each of these 5 checkpoints for physical verification on y
 
 ## 📋 Step 1: Library Screen (`bearbeiten.png`)
 *Main dashboard for viewing, organizing, and finding documents using real SQLite persistence.*
-- [ ] Tab Navigation layout with floating circular blue Camera Scan button.
-- [ ] Top Header with large title "Dokumente" and action menu (`...`).
-- [ ] Search input with instant filtering against SQLite database (by document title).
-- [ ] Folder category pill filter row:
+- [x] Tab Navigation layout with floating circular blue Camera Scan button.
+- [x] Top Header with large title "Dokumente" and action menu (`...`).
+- [x] Search input with instant filtering against SQLite database (by document title).
+- [x] Folder category pill filter row:
   - "Alle", "Rechnungen", "Verträge", "Ausweise", "Privat", and "+ Neuer Ordner".
   - Folder creation modal with SQLite persistence.
-- [ ] 2-column document grid backed directly by SQLite:
+- [x] 2-column document grid backed directly by SQLite:
   - Card with document thumbnail preview, title, date formatted (`DD.MM.YYYY`), page count badge (`X Seiten`).
   - Context menu (`...` button on card) with actions: Rename, Move to folder, Duplicate, Delete (with file deletion).
-- [ ] Empty state UI with friendly German/English illustrations and CTA to scan first document.
-- [ ] Pull-to-refresh & list sorting (Date descending/ascending, Title A-Z).
-- [ ] **Verification:** Run `npx tsc --noEmit` + linter.
-- [ ] **Git:** Commit and push to `main`.
+- [x] Empty state UI with friendly German/English illustrations and CTA to scan first document.
+- [x] Pull-to-refresh & list sorting (Date descending/ascending, Title A-Z).
+- [x] **Verification:** Run `npx tsc --noEmit` + linter.
+- [x] **Git:** Commit and push to `main`.
 
 ---
 
