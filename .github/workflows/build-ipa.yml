@@ -48,8 +48,10 @@ jobs:
         with:
           node-version: 22
 
-      - name: 4. Install Dependencies
-        run: npm install
+      - name: 4. Install Dependencies & Apply Patches
+        run: |
+          npm install
+          node scripts/patch-expo-modules-jsi.js
 
       - name: 5. Prebuild iOS Project
         env:
