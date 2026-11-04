@@ -4,3 +4,8 @@ export * from './MoveFolderModal';
 export * from './PromptModal';
 export * from './SortModal';
 export * from './FolderOptionsModal';
+export * from './HeadlessFilterProcessor';
+export * from './FilterStrip';
+export * from './DocumentBottomBar';
+export * from './ExportModal';
+export * from './PageEditorModal';

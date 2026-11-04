@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-11-04
+
+### Added
+- Step 4: Filters & Image Adjustments (`Dokumente.png`):
+  - Document page viewer with large rounded page preview card and shadow.
+  - Filter strip matching `Dokumente.png` (Original, Auto, Schwarzweiß, Graustufen, Magic Color).
+  - Offline headless HTML5 `<canvas>` filter processing pipeline for contrast stretch, binarization, grayscale, and Magic Color.
+  - Bottom action bar with 90° rotation, crop transition, page deletion, and page addition.
+- Step 5: Multi-Page Document Editor:
+  - Page navigation controls and pagination indicators (`Seite X von Y`).
+  - `PageEditorModal` for visual page reordering, retaking, adding, and deleting with SQLite synchronization.
+- Step 6: Export & Sharing (`Exportieren.png`):
+  - Export bottom sheet modal matching `Exportieren.png` with PDF/JPG toggle.
+  - Niedrig/Mittel/Hoch quality selector with dynamic estimated file size calculation.
+  - Multi-page A4 borderless PDF generation via `expo-print`.
+  - Native iOS share sheet integration via `expo-sharing`.
+
 ## [0.5.0] - 2026-11-04
 
 ### Added

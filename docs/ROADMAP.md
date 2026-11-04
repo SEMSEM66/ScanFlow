@@ -114,55 +114,55 @@ Development pauses at each of these 5 checkpoints for physical verification on y
 
 ## 📋 Step 4: Filters & Image Adjustments (`Dokumente.png`)
 *Document page enhancement and viewing.*
-- [ ] Document page detail screen matching `Dokumente.png`:
+- [x] Document page detail screen matching `Dokumente.png`:
   - Navigation header: `< Dokumente`, document title, `...` options.
   - Large centered page preview card with rounded corners and subtle shadow.
-- [ ] Filter selection strip (horizontal thumbnail row):
+- [x] Filter selection strip (horizontal thumbnail row):
   1. **Original:** Unmodified captured photograph.
   2. **Auto:** Contrast and brightness auto-adjustment.
   3. **Schwarzweiß (B&W):** High-contrast document binarization for clean text.
   4. **Graustufen (Grayscale):** Smooth monochrome rendering.
   5. **Magic Color:** Saturation boost with text darkening (CamScanner style).
-- [ ] Implementation via Expo Go compatible Headless Canvas / `expo-image-manipulator` pipeline.
-- [ ] Bottom action bar:
+- [x] Implementation via Expo Go compatible Headless Canvas / `expo-image-manipulator` pipeline.
+- [x] Bottom action bar:
   - **Drehen:** Rotate 90° clockwise via `expo-image-manipulator`.
   - **Zuschneiden:** Opens Step 3 crop screen.
   - **Löschen:** Delete current page from SQLite & FileSystem with confirmation dialog.
   - **Seite hinzufügen:** Take new photo or pick from gallery to append page.
-- [ ] **Verification:** Run `npx tsc --noEmit` + linter.
-- [ ] **Git:** Commit and push to `main`.
+- [x] **Verification:** Run `npx tsc --noEmit` + linter.
+- [x] **Git:** Commit and push to `main`.
 - [ ] **🛑 STOP 4:** Instruct user to test filter switching and rotation on physical iPhone.
 
 ---
 
 ## 📋 Step 5: Multi-Page Document Editor
 *Organizing and managing pages within a document.*
-- [ ] Multi-page thumbnail carousel / grid view for the active document.
-- [ ] Reorder pages (drag-and-drop or Move Left / Move Right controls) with SQLite order updates.
-- [ ] Retake single page (replaces current page while preserving page index).
-- [ ] Add new page (from camera or gallery) at specific position.
-- [ ] Rename document inline or via modal with SQLite update.
-- [ ] Page count update and SQLite synchronization.
-- [ ] **Verification:** Run `npx tsc --noEmit` + linter.
-- [ ] **Git:** Commit and push to `main`.
+- [x] Multi-page thumbnail carousel / grid view for the active document.
+- [x] Reorder pages (drag-and-drop or Move Left / Move Right controls) with SQLite order updates.
+- [x] Retake single page (replaces current page while preserving page index).
+- [x] Add new page (from camera or gallery) at specific position.
+- [x] Rename document inline or via modal with SQLite update.
+- [x] Page count update and SQLite synchronization.
+- [x] **Verification:** Run `npx tsc --noEmit` + linter.
+- [x] **Git:** Commit and push to `main`.
 
 ---
 
 ## 📋 Step 6: Export & Sharing (`Exportieren.png`)
 *Generating PDF and image exports.*
-- [ ] Export bottom sheet modal matching `Exportieren.png`:
+- [x] Export bottom sheet modal matching `Exportieren.png`:
   - Sheet title: Document name.
   - **Format selector:** Segmented buttons `[PDF]` (with PDF icon) vs `[JPG]` (with Image icon).
   - **Qualität selector:** Segmented control: `Niedrig` (Low - 72 DPI), `Mittel` (Medium - 150 DPI), `Hoch` (High - 300 DPI / Original).
   - File info row: Estimated size calculation (e.g. `Geschätzte Größe: 1,8 MB`).
   - Primary CTA button: Blue full-width button `Teilen` (Share) with iOS share icon.
-- [ ] Multi-page A4 PDF builder using `expo-print`:
+- [x] Multi-page A4 PDF builder using `expo-print`:
   - Clean HTML/CSS layout with `@page { size: A4; margin: 0; }` rendering pages seamlessly without borders.
   - Configurable image compression based on selected quality.
-- [ ] Single/multi JPG export to system share or camera roll.
-- [ ] Native iOS Share Sheet trigger via `expo-sharing`.
-- [ ] **Verification:** Run `npx tsc --noEmit` + linter.
-- [ ] **Git:** Commit and push to `main`.
+- [x] Single/multi JPG export to system share or camera roll.
+- [x] Native iOS Share Sheet trigger via `expo-sharing`.
+- [x] **Verification:** Run `npx tsc --noEmit` + linter.
+- [x] **Git:** Commit and push to `main`.
 - [ ] **🛑 STOP 5:** Instruct user to test PDF/JPG export and iOS share sheet on physical iPhone.
 
 ---
