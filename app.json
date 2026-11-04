@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "scanflow",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.scanflow.app",
@@ -32,6 +31,12 @@
           "backgroundColor": "#FBF9F5",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 100
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ScanFlow benötigt Zugriff auf Ihre Kamera, um Dokumente zu scannen."
         }
       ],
       "expo-sqlite",

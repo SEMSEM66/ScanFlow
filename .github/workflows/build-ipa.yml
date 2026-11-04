@@ -35,52 +35,55 @@ jobs:
 
       - name: 5. Prebuild Native iOS Project
         run: |
-          npx expo prebuild --platform ios --clean
+          npx expo prebuild --platform ios --clean --no-install
           ls -la ios/
 
       - name: 6. Install CocoaPods Dependencies
         run: |
+          export LANG=en_US.UTF-8
+          export LC_ALL=en_US.UTF-8
           cd ios
-          pod install --repo-update
+          pod install || npx pod-install --non-interactive
           ls -la
           cd ..
 
-      - name: 7. Build Release Archive with Xcode
+      - name: 7. Build Release App with Xcode
         run: |
-          # Dynamically locate the .xcworkspace
           WORKSPACE=$(find ios -name "*.xcworkspace" -maxdepth 1 | head -n 1)
           echo "Using workspace: $WORKSPACE"
           
-          # List all schemes
+          # List schemes
           xcodebuild -workspace "$WORKSPACE" -list
           
-          # Detect scheme name (fallback to ScanFlow or scanflow)
-          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json | grep -o '"ScanFlow"' | head -n 1 | tr -d '"' || echo "")
-          if [ -z "$SCHEME" ]; then
-            SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json | grep -o '"scanflow"' | head -n 1 | tr -d '"' || echo "ScanFlow")
-          fi
-          echo "Using scheme: $SCHEME"
-          
-          # Compile unsigned/ad-hoc release archive
-          xcodebuild archive \
+          # Compile Release ARM64 binary with code-signing disabled
+          xcodebuild build \
             -workspace "$WORKSPACE" \
-            -scheme "$SCHEME" \
+            -scheme "ScanFlow" \
             -configuration Release \
+            -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            -archivePath build/ScanFlow.xcarchive \
-            CODE_SIGN_IDENTITY="-" \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=YES \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM=""
 
       - name: 8. Package into Sideloadable IPA
         run: |
           mkdir -p build/Payload
-          APP_PATH=$(find build/ScanFlow.xcarchive/Products/Applications -name "*.app" -maxdepth 1 | head -n 1)
-          echo "Packaging application: $APP_PATH"
-          cp -r "$APP_PATH" build/Payload/
+          APP_PATH=$(find build/DerivedData/Build/Products/Release-iphoneos -name "*.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Searching entire build directory for .app..."
+            APP_PATH=$(find build -name "*.app" -type d | head -n 1)
+          fi
+          echo "Found compiled app at: $APP_PATH"
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: No .app bundle found!"
+            exit 1
+          fi
+          cp -R "$APP_PATH" build/Payload/
           cd build
-          zip -r ScanFlow.ipa Payload
+          zip -qr ScanFlow.ipa Payload
           cd ..
           ls -lh build/ScanFlow.ipa
 
@@ -89,9 +92,13 @@ jobs:
         with:
           name: ScanFlow-ipa
           path: build/ScanFlow.ipa
+          if-no-files-found: error
 
-      - name: 10. Create GitHub Release & Upload IPA
+      - name: 10. Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v1.1.0
           name: ScanFlow v1.1.0
