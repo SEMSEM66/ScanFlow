@@ -66,17 +66,20 @@ This document contains persistent rules, operational constraints, and workflow g
 ---
 
 ## 5. Workflow & Feature Progression
-Development must proceed in small, verifiable steps, strictly in this order:
+Development proceeds in small, verifiable steps with real persisted storage from the beginning:
 
-1. **Library:** 2-column grid and list of documents (thumbnail, title, page count, date), search bar, folder categories (create, rename, delete, move), sorting, empty state.
-2. **Scan:** `expo-camera` with flash toggle, shutter button, page counter badge, multi-page capture mode; photo gallery import via `expo-image-picker`.
-3. **Crop:** 4 draggable corner handles. Verify Skia warp in Expo Go; if unsupported, use the bounding-box crop with `expo-image-manipulator` and notify user.
-4. **Filters per page:** Original, Auto-enhance, Black & White, Grayscale, Magic Color; rotate left/right.
-5. **Page editor:** Reorder pages, delete page, retake page, add pages, rename document.
-6. **Export:** Multi-page PDF generation (A4, quality setting: Low/Medium/High) via `expo-print`, JPG export per page, system share sheet via `expo-sharing`.
-7. **Storage:** `expo-file-system` for image/PDF assets, `expo-sqlite` for relational metadata behind a clean repository/service pattern (`src/services`, `src/db`).
-8. **Settings:** Language switcher (DE/EN), appearance toggle (System/Light/Dark), default export quality, app lock via `expo-local-authentication` + `expo-secure-store`.
-9. **Permission handling:** User-friendly German and English rationale dialogs for camera, photo library, and Face ID/Touch ID. Graceful fallback on denial (never crash).
+- **Phase 0: Foundations & Storage:**
+  - Expo setup (latest stable SDK), `expo-router`, TypeScript strict mode.
+  - `src/theme` (light/dark design tokens matching `/design`), `src/i18n` (German default & English).
+  - Storage & SQLite Repository Layer (`src/db`, `src/services`): SQLite schema for folders, documents, and pages (`expo-sqlite`), local file manager (`expo-file-system`). Initial folder seeds. Real persisted data from day one (no mock data).
+  - Minimal root tab layout to verify app runs in Expo Go.
+- **Step 1: Library:** 2-column grid and list of documents (thumbnail, title, page count, date), search bar, folder categories (create, rename, delete, move), sorting, empty state, backed directly by `DocumentRepository`.
+- **Step 2: Scan & Permissions:** `expo-camera` with flash toggle, shutter button, page counter badge, multi-page capture mode; photo gallery import via `expo-image-picker`. Includes camera & gallery permission dialogs (DE/EN) with graceful "denied" state UI.
+- **Step 3: Crop:** 4 draggable corner handles. Verify Skia warp in Expo Go; if unsupported, use bounding-box crop with `expo-image-manipulator` and notify user.
+- **Step 4: Filters per page:** Original, Auto-enhance, Black & White, Grayscale, Magic Color; rotate left/right.
+- **Step 5: Page editor:** Reorder pages, delete page, retake page, add pages, rename document.
+- **Step 6: Export:** Multi-page PDF generation (A4, quality setting: Low/Medium/High) via `expo-print`, JPG export per page, system share sheet via `expo-sharing`.
+- **Step 7: Settings & App Lock:** Language switcher (DE/EN), appearance toggle (System/Light/Dark), default export quality, app lock via `expo-local-authentication` + `expo-secure-store` with permission explanation (DE/EN) and denied-case UI.
 
 ---
 
@@ -87,9 +90,12 @@ Development must proceed in small, verifiable steps, strictly in this order:
   3. Update `docs/ROADMAP.md` (check off completed items).
   4. Update `CHANGELOG.md`.
   5. Commit and push to `main`.
-- **After each major feature (Scan, Crop, Filters, Export):**
-  - **STOP** and provide a clear 2-3 line testing instruction for the user to verify on their physical iPhone via Expo Go.
-  - **WAIT** for user feedback before proceeding to the next feature.
+- **iPhone Test STOP Gates (STOP and wait for user feedback):**
+  - **STOP 1 (after Phase 0):** App successfully launches in Expo Go, loads DB, displays base layout.
+  - **STOP 2 (after Step 2 - Scan):** Test camera permissions, burst capture, page counter, and gallery import on physical iPhone.
+  - **STOP 3 (after Step 3 - Crop):** Test 4 draggable corner handles and crop on physical iPhone.
+  - **STOP 4 (after Step 4 - Filters):** Test filter switching and rotation on physical iPhone.
+  - **STOP 5 (after Step 6 - Export):** Test PDF/JPG generation and iOS share sheet on physical iPhone.
 
 ---
 
