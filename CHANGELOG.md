@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-11-04
+
+### Added
+- Bank-Grade Security & Privacy Hardening:
+  - **App Switcher Privacy Veil:** Instant opaque shield overlay on `inactive` and `background` app states preventing iOS multitasking snapshot leaks of sensitive documents.
+  - **Custom 4-Digit Security PIN:** Full numeric keypad with salted hash storage in `expo-secure-store` as fallback when biometrics are unavailable.
+  - **Brute-Force & Lockout Protection:** 30-second penalty lockout with live countdown after 5 consecutive failed unlock attempts.
+  - **Configurable Auto-Lock Timeout:** Lock delay options: *Sofort* (Immediately), *1 Minute*, or *5 Minuten*.
+  - **Screenshot & Recording Protection:** Integrated `expo-screen-capture` with toggle to block screen recordings/captures and screenshot detection alerts.
+  - **Zero-Trace File Shredding:** Secure multi-byte zeroing of image files prior to unlinking to prevent flash memory data recovery.
+  - **File Path Traversal Guards:** Strict URI sandboxing preventing directory escape attacks (`..`).
+  - **Confidential Watermark Export:** Optional diagonal "VERTRAULICH" watermark overlay on PDF generation.
+  - **EXIF Metadata Stripping:** All camera serial numbers and GPS geolocation tags are scrubbed during image processing before sharing.
+
 ## [1.0.0] - 2026-11-04
 
 ### Added

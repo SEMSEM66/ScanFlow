@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
@@ -19,7 +20,7 @@ interface ExportModalProps {
   documentTitle: string;
   pageCount: number;
   onClose: () => void;
-  onShare: (format: ExportFormat, quality: ExportQuality) => Promise<void>;
+  onShare: (format: ExportFormat, quality: ExportQuality, watermark?: string) => Promise<void>;
   isGenerating?: boolean;
 }
 
@@ -36,11 +37,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
   const [format, setFormat] = useState<ExportFormat>('pdf');
   const [quality, setQuality] = useState<ExportQuality>('high');
+  const [includeWatermark, setIncludeWatermark] = useState(false);
 
   const estimatedSize = exportService.estimateSize(pageCount, format, quality);
 
   const handleSharePress = async () => {
-    await onShare(format, quality);
+    const watermarkText = includeWatermark ? 'VERTRAULICH' : undefined;
+    await onShare(format, quality, watermarkText);
   };
 
   return (
@@ -139,7 +142,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   style={[
                     typography.subhead,
                     styles.sectionHeader,
-                    { color: colors.textSecondary, marginTop: spacing.lg },
+                    { color: colors.textSecondary, marginTop: spacing.md },
                   ]}
                 >
                   {t.export.quality}
@@ -181,6 +184,23 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   })}
                 </View>
 
+                {/* Security Feature: Watermark Toggle (PDF only) */}
+                {format === 'pdf' && (
+                  <View style={[styles.watermarkRow, { borderColor: colors.borderLight }]}>
+                    <View style={styles.watermarkTextWrap}>
+                      <Ionicons name="shield-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+                      <Text style={[typography.body, { color: colors.textPrimary }]}>
+                        Wasserzeichen „VERTRAULICH“
+                      </Text>
+                    </View>
+                    <Switch
+                      value={includeWatermark}
+                      onValueChange={setIncludeWatermark}
+                      trackColor={{ false: colors.border, true: colors.primary }}
+                    />
+                  </View>
+                )}
+
                 {/* File size info row */}
                 <View style={styles.sizeInfoRow}>
                   <Ionicons name="document-outline" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
@@ -199,7 +219,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     {
                       backgroundColor: colors.primary,
                       borderRadius: borderRadius.lg,
-                      marginTop: spacing.xl,
+                      marginTop: spacing.lg,
                       marginBottom: spacing.xxl,
                     },
                   ]}
@@ -244,7 +264,7 @@ const styles = StyleSheet.create({
   },
   content: {},
   title: {
-    marginBottom: 18,
+    marginBottom: 16,
     letterSpacing: -0.3,
   },
   sectionHeader: {
@@ -290,10 +310,22 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
+  watermarkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+  },
+  watermarkTextWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   sizeInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 14,
     paddingHorizontal: 4,
   },
   shareButton: {

@@ -250,14 +250,14 @@ export default function DocumentDetailScreen() {
   };
 
   // Export & Share handler
-  const handleShare = async (format: ExportFormat, quality: ExportQuality) => {
+  const handleShare = async (format: ExportFormat, quality: ExportQuality, watermark?: string) => {
     if (!document || pages.length === 0) return;
 
     try {
       setIsExporting(true);
       if (format === 'pdf') {
         const pageUris = pages.map((p) => p.previewUri);
-        const pdfUri = await exportService.generatePdf(document.title, pageUris, quality);
+        const pdfUri = await exportService.generatePdf(document.title, pageUris, quality, watermark);
         setIsExportVisible(false);
         await exportService.shareDocument(pdfUri, 'pdf');
       } else {

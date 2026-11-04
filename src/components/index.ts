@@ -10,3 +10,4 @@ export * from './DocumentBottomBar';
 export * from './ExportModal';
 export * from './PageEditorModal';
 export * from './AppLockOverlay';
+export * from './PinSetupModal';

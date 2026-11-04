@@ -5,9 +5,14 @@ import { ExportQuality, ExportFormat } from '../types';
 
 export class ExportService {
   /**
-   * Generates a multi-page A4 PDF from an array of image URIs
+   * Generates a multi-page A4 PDF from an array of image URIs with optional confidential watermark
    */
-  async generatePdf(title: string, pageUris: string[], quality: ExportQuality): Promise<string> {
+  async generatePdf(
+    title: string,
+    pageUris: string[],
+    quality: ExportQuality,
+    watermark?: string
+  ): Promise<string> {
     // Read each page as base64 for reliable standalone offline rendering
     const base64Pages: string[] = [];
 
@@ -19,11 +24,16 @@ export class ExportService {
       base64Pages.push(`data:${mime};base64,${b64}`);
     }
 
+    const watermarkHtml = watermark
+      ? `<div class="watermark">${watermark}</div>`
+      : '';
+
     const pagesHtml = base64Pages
       .map(
         (b64) => `
         <div class="page">
           <img src="${b64}" />
+          ${watermarkHtml}
         </div>
       `
       )
@@ -56,6 +66,7 @@ export class ExportService {
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            position: relative;
           }
           .page:last-child {
             page-break-after: avoid;
@@ -64,6 +75,23 @@ export class ExportService {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
+          }
+          .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 48px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-weight: 800;
+            color: rgba(220, 20, 60, 0.18);
+            border: 5px solid rgba(220, 20, 60, 0.22);
+            padding: 12px 28px;
+            border-radius: 8px;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            pointer-events: none;
+            white-space: nowrap;
           }
         </style>
       </head>

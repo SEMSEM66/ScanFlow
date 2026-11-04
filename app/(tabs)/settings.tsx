@@ -10,17 +10,26 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ScreenCapture from 'expo-screen-capture';
 import { useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
-import { authService } from '../../src/services/AuthService';
+import { authService, LockTimeoutOption } from '../../src/services/AuthService';
 import { storageService, documentRepository } from '../../src/services';
 import { ExportQuality } from '../../src/types';
+import { PinSetupModal } from '../../src/components/PinSetupModal';
 
 export default function SettingsScreen() {
   const { colors, typography, spacing, borderRadius, mode, setMode } = useTheme();
   const { t, language, setLanguage } = useTranslation();
 
+  // Security state
   const [appLockEnabled, setAppLockEnabled] = useState(false);
+  const [hasPin, setHasPin] = useState(false);
+  const [lockTimeout, setLockTimeout] = useState<LockTimeoutOption>(0);
+  const [screenCaptureProtection, setScreenCaptureProtection] = useState(false);
+  const [isPinModalVisible, setIsPinModalVisible] = useState(false);
+
+  // App & Storage state
   const [defaultQuality, setDefaultQuality] = useState<ExportQuality>('high');
   const [storageBytes, setStorageBytes] = useState(0);
   const [docCount, setDocCount] = useState(0);
@@ -29,6 +38,12 @@ export default function SettingsScreen() {
     async function loadSettings() {
       const lock = await authService.isAppLockEnabled();
       setAppLockEnabled(lock);
+      const pinConfigured = await authService.hasPinCode();
+      setHasPin(pinConfigured);
+      const timeout = await authService.getLockTimeout();
+      setLockTimeout(timeout);
+      const screenCap = await authService.isScreenCaptureProtectionEnabled();
+      setScreenCaptureProtection(screenCap);
       const qual = await authService.getDefaultQuality();
       setDefaultQuality(qual);
       const size = await storageService.getStorageSize();
@@ -49,6 +64,25 @@ export default function SettingsScreen() {
         'Biometrische Authentifizierung konnte nicht eingerichtet werden.'
       );
     }
+  };
+
+  const handleToggleScreenCapture = async (value: boolean) => {
+    setScreenCaptureProtection(value);
+    await authService.setScreenCaptureProtection(value);
+    if (value) {
+      await ScreenCapture.preventScreenCaptureAsync();
+      Alert.alert(
+        'Screenshot-Schutz aktiv',
+        'Bildschirmaufnahmen und Screenshots sind nun gesperrt, um Ihre Dokumente zu schützen.'
+      );
+    } else {
+      await ScreenCapture.allowScreenCaptureAsync();
+    }
+  };
+
+  const handleSetTimeout = async (timeout: LockTimeoutOption) => {
+    setLockTimeout(timeout);
+    await authService.setLockTimeout(timeout);
   };
 
   const handleSetQuality = async (q: ExportQuality) => {
@@ -85,8 +119,130 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingHorizontal: spacing.base }]}>
-        {/* Section 1: Appearance */}
+        {/* Section 1: Security & Privacy (Prominent & Bank-Grade) */}
         <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary }]}>
+          Sicherheit & Datenschutz
+        </Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          {/* Biometric App Lock Toggle */}
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleRowLeft}>
+              <View style={[styles.iconBox, { backgroundColor: colors.primarySubdued }]}>
+                <Ionicons name="scan" size={20} color={colors.primary} />
+              </View>
+              <View>
+                <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
+                  {t.settings.appLock}
+                </Text>
+                <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
+                  Face ID / Touch ID Schutz
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={appLockEnabled}
+              onValueChange={handleToggleAppLock}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+
+          {/* Backup PIN Setup */}
+          <View style={[styles.actionRow, { borderTopWidth: 1, borderTopColor: colors.borderLight, marginTop: 12, paddingTop: 12 }]}>
+            <View style={styles.toggleRowLeft}>
+              <View style={[styles.iconBox, { backgroundColor: colors.surfaceSubdued }]}>
+                <Ionicons name="keypad-outline" size={20} color={colors.textPrimary} />
+              </View>
+              <View>
+                <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
+                  Sicherheits-PIN
+                </Text>
+                <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
+                  {hasPin ? 'PIN-Code eingerichtet' : 'Backup-PIN festlegen'}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setIsPinModalVisible(true)}
+              style={[styles.smallPillBtn, { backgroundColor: colors.surfaceSubdued }]}
+            >
+              <Text style={[typography.caption1, { color: colors.primary, fontWeight: '700' }]}>
+                {hasPin ? 'Ändern' : 'Einrichten'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Auto-Lock Timeout */}
+          {appLockEnabled && (
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.borderLight, marginTop: 12, paddingTop: 12 }}>
+              <Text style={[typography.footnote, { color: colors.textSecondary, marginBottom: 8 }]}>
+                Sperr-Verzögerung
+              </Text>
+              <View style={styles.segmentedRow}>
+                {[
+                  { id: 0 as LockTimeoutOption, label: 'Sofort' },
+                  { id: 60 as LockTimeoutOption, label: '1 Min.' },
+                  { id: 300 as LockTimeoutOption, label: '5 Min.' },
+                ].map((item) => {
+                  const isSelected = lockTimeout === item.id;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      activeOpacity={0.8}
+                      onPress={() => handleSetTimeout(item.id)}
+                      style={[
+                        styles.segmentButton,
+                        isSelected && { backgroundColor: colors.primary },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          typography.caption1,
+                          { color: isSelected ? '#FFFFFF' : colors.textPrimary, fontWeight: isSelected ? '700' : '500' },
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* Screen Capture & Recording Protection */}
+          <View style={[styles.toggleRow, { borderTopWidth: 1, borderTopColor: colors.borderLight, marginTop: 12, paddingTop: 12 }]}>
+            <View style={styles.toggleRowLeft}>
+              <View style={[styles.iconBox, { backgroundColor: colors.surfaceSubdued }]}>
+                <Ionicons name="eye-off-outline" size={20} color={colors.textPrimary} />
+              </View>
+              <View>
+                <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
+                  Screenshot-Schutz
+                </Text>
+                <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
+                  Verhindert Bildschirmaufnahmen & Fotos
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={screenCaptureProtection}
+              onValueChange={handleToggleScreenCapture}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+
+          {/* Zero-Trace Shredding Badge */}
+          <View style={[styles.securityFeatureBadge, { backgroundColor: colors.surfaceSubdued, marginTop: 14 }]}>
+            <Ionicons name="shield-checkmark" size={16} color={colors.success} style={{ marginRight: 8 }} />
+            <Text style={[typography.caption2, { color: colors.textSecondary, flex: 1 }]}>
+              Zero-Trace Löschen: Gelöschte Seiten werden physikalisch mit Nullen überschrieben.
+            </Text>
+          </View>
+        </View>
+
+        {/* Section 2: Appearance */}
+        <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary, marginTop: spacing.lg }]}>
           {t.settings.appearance}
         </Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -124,7 +280,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Section 2: Language */}
+        {/* Section 3: Language */}
         <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary, marginTop: spacing.lg }]}>
           {t.settings.language}
         </Text>
@@ -168,7 +324,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Section 3: Default PDF Quality */}
+        {/* Section 4: Default PDF Quality */}
         <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary, marginTop: spacing.lg }]}>
           {t.settings.defaultQuality}
         </Text>
@@ -207,33 +363,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Section 4: Security & App Lock */}
-        <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary, marginTop: spacing.lg }]}>
-          Sicherheit & Datenschutz
-        </Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleRowLeft}>
-              <View style={[styles.iconBox, { backgroundColor: colors.primarySubdued }]}>
-                <Ionicons name="lock-closed" size={20} color={colors.primary} />
-              </View>
-              <View>
-                <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
-                  {t.settings.appLock}
-                </Text>
-                <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
-                  {t.settings.appLockSubtitle}
-                </Text>
-              </View>
-            </View>
-            <Switch
-              value={appLockEnabled}
-              onValueChange={handleToggleAppLock}
-              trackColor={{ false: colors.border, true: colors.primary }}
-            />
-          </View>
-        </View>
-
         {/* Section 5: Storage Info */}
         <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary, marginTop: spacing.lg }]}>
           {t.settings.storage}
@@ -255,7 +384,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Section 6: Privacy Info */}
+        {/* Section 6: Privacy Guarantee */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: spacing.lg, marginBottom: 40 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name="shield-checkmark" size={24} color={colors.success} style={{ marginRight: 12 }} />
@@ -270,6 +399,16 @@ export default function SettingsScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* PIN Setup Modal */}
+      <PinSetupModal
+        visible={isPinModalVisible}
+        onClose={() => setIsPinModalVisible(false)}
+        onSuccess={() => {
+          setIsPinModalVisible(false);
+          setHasPin(true);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -315,6 +454,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   toggleRowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -327,6 +471,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+  },
+  smallPillBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  securityFeatureBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
   },
   infoRow: {
     flexDirection: 'row',
