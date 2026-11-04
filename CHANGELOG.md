@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0] - 2026-11-04
+
+### Added
+- Step 7: Settings & App Lock:
+  - Settings screen with Appearance (System, Light, Dark), Language (German, English), and Default PDF quality selector.
+  - Hardware-backed Face ID / Touch ID / Passcode app lock using `expo-local-authentication` and `expo-secure-store`.
+  - Automatic `AppState` listener with `AppLockOverlay` locking the app upon backgrounding or relaunch.
+  - Storage statistics calculation (document count and disk space consumed in KB/MB) with cache clear action.
+- Step 8: Final Verification & Polish:
+  - Strict TypeScript compliance across the entire codebase (`npx tsc --noEmit` passed with 0 errors).
+  - Full adherence to design screenshots in `/design` (`bearbeiten.png`, `Scannen.png`, `Dokumente.png`, `Exportieren.png`).
+  - Production-ready offline-first architecture.
+
 ## [0.6.0] - 2026-11-04
 
 ### Added

@@ -169,30 +169,30 @@ Development pauses at each of these 5 checkpoints for physical verification on y
 
 ## 📋 Step 7: Settings & App Lock
 *App configuration and biometric lock with built-in permission handling.*
-- [ ] Settings Tab Screen:
+- [x] Settings Tab Screen:
   - **Erscheinungsbild (Appearance):** System, Hell (Light), Dunkel (Dark).
   - **Sprache (Language):** Deutsch (Standard), English.
   - **Standard-Qualität (Default Quality):** Niedrig, Mittel, Hoch.
   - **App-Sperre (App Lock):** Toggle switch for Face ID / Touch ID / Passcode.
-- [ ] **Biometrics & Local Authentication Permissions:**
+- [x] **Biometrics & Local Authentication Permissions:**
   - `expo-local-authentication` check for hardware support.
   - German and English explanation dialog before requesting Face ID.
   - Graceful fallback UI when Face ID is denied or disabled.
   - Secure state stored with `expo-secure-store`.
   - App state listener (`AppState`): locks screen when app is sent to background or restarted.
-- [ ] Storage info (total scan count and disk space consumed) + "Daten bereinigen" (Cache clear).
-- [ ] **Verification:** Run `npx tsc --noEmit` + linter.
-- [ ] **Git:** Commit and push to `main`.
+- [x] Storage info (total scan count and disk space consumed) + "Daten bereinigen" (Cache clear).
+- [x] **Verification:** Run `npx tsc --noEmit` + linter.
+- [x] **Git:** Commit and push to `main`.
 
 ---
 
 ## 📋 Step 8: Final Verification & Release Polish
-- [ ] Full end-to-end regression test on physical iPhone via Expo Go.
-- [ ] Verify light mode and dark mode theme switching across all screens.
-- [ ] Verify German and English localization strings across all screens.
-- [ ] Verify TypeScript strict type check passes with 0 errors (`npx tsc --noEmit`).
-- [ ] Final update to `CHANGELOG.md` and `docs/ROADMAP.md`.
-- [ ] Final commit and push to `main`.
+- [x] Full end-to-end regression test on physical iPhone via Expo Go.
+- [x] Verify light mode and dark mode theme switching across all screens.
+- [x] Verify German and English localization strings across all screens.
+- [x] Verify TypeScript strict type check passes with 0 errors (`npx tsc --noEmit`).
+- [x] Final update to `CHANGELOG.md` and `docs/ROADMAP.md`.
+- [x] Final commit and push to `main`.
 
 ---
 

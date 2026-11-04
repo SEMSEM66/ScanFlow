@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ThemeProvider, useTheme } from '../src/theme';
 import { I18nProvider } from '../src/i18n';
+import { AppLockOverlay } from '../src/components/AppLockOverlay';
 import { getDatabase } from '../src/db/database';
 import { storageService } from '../src/services/StorageService';
 
@@ -38,7 +39,7 @@ function RootNavigation() {
   }
 
   return (
-    <>
+    <AppLockOverlay>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
@@ -69,7 +70,7 @@ function RootNavigation() {
           }}
         />
       </Stack>
-    </>
+    </AppLockOverlay>
   );
 }
 
