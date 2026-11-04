@@ -27,29 +27,29 @@ Development pauses at each of these 5 checkpoints for physical verification on y
 
 ## 📋 Phase 0: Foundations, Storage & Database
 *Initialize Expo, setup design tokens, i18n, and fully implement local persistent storage so subsequent steps use real database records from the start.*
-- [ ] Initialize Expo project with `expo-router` and TypeScript strict mode.
-- [ ] Configure `app.json` for iOS bundle identifier, camera permissions, photo library permissions, face-id permissions, and portrait orientation lock.
-- [ ] Install vetted Expo Go compatible dependencies:
+- [x] Initialize Expo project with `expo-router` and TypeScript strict mode.
+- [x] Configure `app.json` for iOS bundle identifier, camera permissions, photo library permissions, face-id permissions, and portrait orientation lock.
+- [x] Install vetted Expo Go compatible dependencies:
   - `expo-router`, `expo-camera`, `expo-image-picker`, `expo-image-manipulator`
   - `expo-file-system`, `expo-sqlite`, `expo-print`, `expo-sharing`
   - `expo-local-authentication`, `expo-secure-store`, `expo-localization`
   - `@expo/vector-icons`, `react-native-safe-area-context`, `react-native-screens`
   - `react-native-gesture-handler`, `react-native-reanimated`
-- [ ] Setup Design System tokens (`src/theme`):
+- [x] Setup Design System tokens (`src/theme`):
   - Colors: Warm Ivory background (`#FBF9F5` / `#F7F5F0`), Primary Blue (`#0066FF`), Card White (`#FFFFFF`), Text Primary (`#111111`), Text Secondary (`#8E8E93`), Borders (`#E5E2DC`), Dark mode palette.
   - Spacing, Radius (12px, 16px, 20px, 28px pill), Typography scale (Title 1, Title 2, Body, Caption).
-- [ ] Setup Localization (`src/i18n`):
+- [x] Setup Localization (`src/i18n`):
   - German (default) and English locale strings.
   - Typed translation helper.
-- [ ] **Storage & SQLite Repository Layer (`src/db`, `src/services`):**
+- [x] **Storage & SQLite Repository Layer (`src/db`, `src/services`):**
   - SQLite database schema: `folders`, `documents`, `pages`.
   - Migrations and initial seed data (default folders matching mock: "Rechnungen", "Verträge", "Ausweise", "Privat").
   - `FolderRepository`: `getAll()`, `create()`, `rename()`, `delete()`.
   - `DocumentRepository`: `getAll()`, `getById()`, `create()`, `update()`, `delete()`, `moveToFolder()`.
   - FileSystem Asset Manager: directory initialization (`FileSystem.documentDirectory + 'scanflow/'`), file copy/delete utilities.
-- [ ] Minimal root tab layout (`app/_layout.tsx`, `app/(tabs)/index.tsx`) to verify end-to-end boot.
-- [ ] **Verification:** Run `npx tsc --noEmit` + linter.
-- [ ] **Git:** Commit and push to `main`.
+- [x] Minimal root tab layout (`app/_layout.tsx`, `app/(tabs)/index.tsx`) to verify end-to-end boot.
+- [x] **Verification:** Run `npx tsc --noEmit` + linter.
+- [x] **Git:** Commit and push to `main`.
 - [ ] **🛑 STOP 1:** Instruct user to open app in Expo Go on physical iPhone and verify clean boot.
 
 ---

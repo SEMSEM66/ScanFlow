@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "ScanFlow",
+    "slug": "scanflow",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "scanflow",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.scanflow.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "ScanFlow benötigt Zugriff auf Ihre Kamera, um Dokumente zu scannen.",
+        "NSPhotoLibraryUsageDescription": "ScanFlow benötigt Zugriff auf Ihre Fotomediathek, um Dokumente zu importieren.",
+        "NSFaceIDUsageDescription": "ScanFlow verwendet Face ID, um Ihre gescannten Dokumente sicher zu schützen."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FBF9F5",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FBF9F5",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 100
+        }
+      ],
+      "expo-sqlite",
+      "expo-localization",
+      "expo-sharing",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -7,18 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.2.0] - 2026-11-04
 
-### Planned
-- Phase 1 Core MVP:
-  - Document library with search, folder categories, grid view
-  - Multi-page camera scanning and gallery import
-  - 4-corner document cropping
-  - Image filter processing (Original, Auto, B&W, Grayscale, Magic Color)
-  - Multi-page document editor (reorder, retake, add, rename)
-  - Multi-page PDF (A4) and JPG export with share sheet
-  - Offline SQLite database and FileSystem repository layer
-  - Settings, Biometric App Lock, and permission handling
+### Added
+- Phase 0: Foundations, Storage & Database:
+  - Expo configuration with strict TypeScript, portrait lock, and iOS permissions (Camera, Photos, Face ID).
+  - Design tokens in `src/theme` (colors, typography, spacing, border radii) matching design mockups with Light (warm ivory) and Dark mode support.
+  - Localization in `src/i18n` with German (default) and English translations.
+  - Storage & SQLite Repository Layer (`src/db`, `src/services`):
+    - SQLite schema for `folders`, `documents`, and `pages`.
+    - Initial folder seeds: *Rechnungen*, *Verträge*, *Ausweise*, *Privat*.
+    - Typed `FolderRepository` and `DocumentRepository`.
+    - Local file manager with `expo-file-system`.
+  - Core navigation tab bar with custom elevated circular Scan button, Library list, Tools placeholder, Settings placeholder, and Scan/Crop modal routes.
+
 
 ---
 
