@@ -2,6 +2,8 @@ name: Build iOS IPA & Publish Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -64,10 +66,9 @@ jobs:
 
       - name: 9. Create GitHub Release & Upload IPA
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
-          tag_name: ${{ github.ref_name || 'v1.1.0' }}
-          name: ScanFlow ${{ github.ref_name || 'v1.1.0' }}
+          tag_name: v1.1.0
+          name: ScanFlow v1.1.0
           body: |
             ## 📄 ScanFlow v1.1.0 — iOS Sideloadable Release
             
