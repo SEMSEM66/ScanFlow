@@ -19,10 +19,20 @@ jobs:
       - name: 1. Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 2. Select Xcode 16
+      - name: 2. Configure Xcode Environment
         run: |
-          sudo xcode-select -s /Applications/Xcode_16.2.app || sudo xcode-select -s /Applications/Xcode_16.1.app || sudo xcode-select -s /Applications/Xcode_16.app || sudo xcode-select -s /Applications/Xcode.app
+          echo "Available Xcode installations on runner:"
+          ls -d /Applications/Xcode*
+          
+          # Default to the primary pre-configured Xcode on macos-15 (Xcode 16.x)
+          sudo xcode-select -s /Applications/Xcode.app || true
           xcodebuild -version
+          
+          # Run first launch setup to register device platforms
+          sudo xcodebuild -runFirstLaunch
+          
+          # Ensure iOS platform runtime is installed
+          sudo xcodebuild -downloadPlatform iOS || true
 
       - name: 3. Set up Node.js 22 LTS
         uses: actions/setup-node@v4
@@ -66,8 +76,8 @@ jobs:
           fi
           echo "Using workspace: $WORKSPACE"
           
-          # List schemes
-          xcodebuild -workspace "$WORKSPACE" -list
+          # Show schemes and destinations
+          xcodebuild -workspace "$WORKSPACE" -scheme "ScanFlow" -showdestinations
           
           # Compile Release ARM64 binary with code-signing disabled
           xcodebuild build \
