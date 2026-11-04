@@ -23,10 +23,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: 3. Install Dependencies
-        run: npm ci
+        run: npm install
 
       - name: 4. Setup Expo CLI
         uses: expo/expo-github-action@v8
@@ -35,36 +34,63 @@ jobs:
           packager: npm
 
       - name: 5. Prebuild Native iOS Project
-        run: npx expo prebuild --platform ios --clean
-
-      - name: 6. Build Release Archive with Xcode
         run: |
+          npx expo prebuild --platform ios --clean
+          ls -la ios/
+
+      - name: 6. Install CocoaPods Dependencies
+        run: |
+          cd ios
+          pod install --repo-update
+          ls -la
+          cd ..
+
+      - name: 7. Build Release Archive with Xcode
+        run: |
+          # Dynamically locate the .xcworkspace
+          WORKSPACE=$(find ios -name "*.xcworkspace" -maxdepth 1 | head -n 1)
+          echo "Using workspace: $WORKSPACE"
+          
+          # List all schemes
+          xcodebuild -workspace "$WORKSPACE" -list
+          
+          # Detect scheme name (fallback to ScanFlow or scanflow)
+          SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json | grep -o '"ScanFlow"' | head -n 1 | tr -d '"' || echo "")
+          if [ -z "$SCHEME" ]; then
+            SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json | grep -o '"scanflow"' | head -n 1 | tr -d '"' || echo "ScanFlow")
+          fi
+          echo "Using scheme: $SCHEME"
+          
+          # Compile unsigned/ad-hoc release archive
           xcodebuild archive \
-            -workspace ios/ScanFlow.xcworkspace \
-            -scheme ScanFlow \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath build/ScanFlow.xcarchive \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
+            CODE_SIGNING_ALLOWED=YES \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
 
-      - name: 7. Package into Sideloadable IPA
+      - name: 8. Package into Sideloadable IPA
         run: |
           mkdir -p build/Payload
-          cp -r build/ScanFlow.xcarchive/Products/Applications/ScanFlow.app build/Payload/
+          APP_PATH=$(find build/ScanFlow.xcarchive/Products/Applications -name "*.app" -maxdepth 1 | head -n 1)
+          echo "Packaging application: $APP_PATH"
+          cp -r "$APP_PATH" build/Payload/
           cd build
           zip -r ScanFlow.ipa Payload
           cd ..
           ls -lh build/ScanFlow.ipa
 
-      - name: 8. Upload Artifact
+      - name: 9. Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ScanFlow-ipa
           path: build/ScanFlow.ipa
 
-      - name: 9. Create GitHub Release & Upload IPA
+      - name: 10. Create GitHub Release & Upload IPA
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.1.0
