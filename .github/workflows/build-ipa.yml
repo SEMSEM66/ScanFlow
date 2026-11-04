@@ -24,9 +24,18 @@ jobs:
           echo "Available Xcode installations on runner:"
           ls -d /Applications/Xcode*
           
-          # Default to the primary pre-configured Xcode on macos-15 (Xcode 16.x)
-          sudo xcode-select -s /Applications/Xcode.app || true
+          # Automatically select newest Xcode (preferring Xcode 26.x which bundles Swift 6.2+)
+          TARGET_XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$TARGET_XCODE" ]; then
+            TARGET_XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -n 1)
+          fi
+          if [ -z "$TARGET_XCODE" ]; then
+            TARGET_XCODE="/Applications/Xcode.app"
+          fi
+          echo "Selected Xcode: $TARGET_XCODE"
+          sudo xcode-select -s "$TARGET_XCODE"
           xcodebuild -version
+          swift --version
           
           # Run first launch setup to register device platforms
           sudo xcodebuild -runFirstLaunch
