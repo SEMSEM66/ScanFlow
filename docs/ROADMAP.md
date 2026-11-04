@@ -74,23 +74,23 @@ Development pauses at each of these 5 checkpoints for physical verification on y
 
 ## 📋 Step 2: Camera Scanner & Permissions (`Scannen.png`)
 *Multi-page capture interface with built-in permission handling.*
-- [ ] **Camera & Photo Permissions:**
+- [x] **Camera & Photo Permissions:**
   - German and English explanation dialog before requesting permission.
   - Dedicated fallback UI if permission is denied (instructions and "In Einstellungen öffnen" button).
   - Never crash on denied permission.
-- [ ] Fullscreen camera view using `expo-camera`.
-- [ ] Glowing cyan framing corner guides matching `Scannen.png`.
-- [ ] Flashlight toggle button (Off, On, Auto).
-- [ ] Alignment hint pill ("Dokument im Rahmen ausrichten" / "Align document in frame").
-- [ ] Capture mode toggle: "Auto" vs "Manuell".
-- [ ] Circular iOS shutter button with haptic feedback.
-- [ ] Multi-page capture buffer:
+- [x] Fullscreen camera view using `expo-camera`.
+- [x] Glowing cyan framing corner guides matching `Scannen.png`.
+- [x] Flashlight toggle button (Off, On, Auto).
+- [x] Alignment hint pill ("Dokument im Rahmen ausrichten" / "Align document in frame").
+- [x] Capture mode toggle: "Auto" vs "Manuell".
+- [x] Circular iOS shutter button with haptic feedback.
+- [x] Multi-page capture buffer:
   - Bottom left stacked thumbnail with blue counter badge showing captured page count (`3`).
   - Tapping thumbnail opens quick review.
-- [ ] Gallery import button using `expo-image-picker` (with photo library permission handling).
-- [ ] "Fertig" (Done) button: saves all captured pages into FileSystem + SQLite document record and navigates to Document View.
-- [ ] **Verification:** Run `npx tsc --noEmit` + linter.
-- [ ] **Git:** Commit and push to `main`.
+- [x] Gallery import button using `expo-image-picker` (with photo library permission handling).
+- [x] "Fertig" (Done) button: saves all captured pages into FileSystem + SQLite document record and navigates to Document View.
+- [x] **Verification:** Run `npx tsc --noEmit` + linter.
+- [x] **Git:** Commit and push to `main`.
 - [ ] **🛑 STOP 2:** Instruct user to test Camera Scan, permissions, and burst capture on physical iPhone.
 
 ---

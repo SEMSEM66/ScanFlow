@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] - 2026-11-04
+
+### Added
+- Step 2: Camera Scanner & Permissions (`Scannen.png`):
+  - Camera View with flash control (off, on, auto) and mode toggle (auto, manual).
+  - Cyan glowing framing corner guides matching `Scannen.png`.
+  - Multi-page burst capture with stacked thumbnail preview and blue page counter badge.
+  - Quick review modal to view and delete captured pages before saving.
+  - Multi-image photo gallery import via `expo-image-picker`.
+  - Polite permission handling in German & English with graceful "denied" fallback UI.
+  - Multi-page document creation directly into SQLite and FileSystem.
+
 ## [0.3.0] - 2026-11-04
 
 ### Added
