@@ -316,17 +316,19 @@ Spike result / decision: Expo Go contains no OCR engine; tesseract.js in a WebVi
 - [ ] OCR on synthetic / real pages in CI (needs macOS + Vision; not possible in the Jest/Node tests).
 - [ ] Measure recognition time and memory on an iPhone; tune `OCR_MIN_TEXT_HEIGHT`, `OCR_DPI` / `OCR_MAX_LONG_SIDE` if needed (bump `OCR_VERSION` when the recognition setup changes).
 - [ ] Optional: normalized title search (umlaut case), more recognition languages (setting), embedded Unicode font for non-WinAnsi text in the PDF layer.
-- [ ] **🛑 STOP C:** Test on physical iPhone (**IPA** v1.5.0; then a short check in Expo Go):
+- [ ] **🛑 STOP C:** Test on physical iPhone (**IPA** v1.5.1; then a short check in Expo Go):
   1. Update from 1.4.0: documents, folders and settings are still there. Settings → *Texterkennung* shows *Text wird erkannt … x von y Seiten*, after a while *y von y Seiten erkannt*. While it runs, scrolling, opening documents and editing stay smooth.
   2. Scan a letter or an invoice → after a few seconds the search finds a word from the body text (not from the title), with the excerpt and the word in bold. Also try `muller` for *Müller*, `strasse` for *Straße*, two words, a word hyphenated at a line end.
   3. Small print (footer, fine print): is it found? If not, report which size is missing (setting `OCR_MIN_TEXT_HEIGHT`).
   4. Document menu (*…*) → *Text kopieren*: text per page in a sensible reading order; *Kopieren*, *Alles kopieren*, paste in Notes; *Text teilen*.
   5. Rotate a page or change its corners → the text is recognized again (search still finds it; *Text kopieren* shows the new text).
-  6. Export a PDF → *In Dateien sichern* → open in Files: search for a word (it is highlighted at the right place), select and copy text; also open in Preview on a Mac/PC or Acrobat if available. JPG export unchanged.
+  6. Export a PDF → the export sheet slides down, then the share sheet appears (fixed in 1.5.1) → *In Dateien sichern* → open in Files: search for a word (it is highlighted at the right place), select and copy text; also open in Preview on a Mac/PC or Acrobat if available. Export a JPG → the share sheet appears as well → *In Dateien sichern*.
   7. Settings → *Text erkennen* off → *Text behalten*: search still finds text, new scans are not recognized; off → *Text löschen*: text search finds nothing anymore; on again → everything is recognized again.
   8. Duplicate a document → the copy is found by its text immediately. Delete a document → its text is gone from the search.
   9. Library → *…* → *In Ordner verschieben* opens the folder list and moves the document (fixed in 1.5.0).
   10. Expo Go: the app starts and works; *Texterkennung* in Settings says it is only available in the installed app; *Text kopieren* is not offered; title search works.
+
+> ⚠️ **Correction (v1.5.1, found in STOP C):** PDF and JPG export hung on *Seite wird berechnet …* – the share sheet was presented while the export sheet was still sliding out, iOS dropped it and `shareAsync()` never settled. Now the document screen closes the export sheet first (`ModalHandoff`: `Modal.onDismiss`, 1.5 s fallback) and then opens the share sheet; the sheet cannot be closed while the file is created; the OCR pause ends when the file is ready. Covered by STOP C item 6.
 
 ## ⏳ Phase D: Docs, repo & release hygiene
 - [x] README, ROADMAP, CHANGELOG, AGENTS.md updated; `docs/ARCHITECTURE.md` added; doc-vs-code discrepancies corrected (v1.2.0).

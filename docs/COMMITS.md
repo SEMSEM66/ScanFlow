@@ -1,5 +1,19 @@
 # Commit groups per release
 
+## v1.5.1 – Export fix (share sheet)
+
+Committed on `main` and pushed once → one IPA build and the release
+`v1.5.1`. Verified: `npx tsc --noEmit`, `npm run lint` 0 errors, `npm test`
+and `npm run test:security`.
+
+| # | Message | Files |
+| --- | --- | --- |
+| 1 | `fix(export): open the share sheet only after the export sheet has closed` | `src/components/modalHandoff.ts`, `src/components/index.ts`, `src/components/ExportModal.tsx`, `app/document/[id].tsx`, `__tests__/modalHandoff.test.ts` |
+| 2 | `docs: export fix and presentation timing for the share sheet (v1.5.1)` | `CHANGELOG.md`, `AGENTS.md`, `docs/*` |
+| 3 | `chore(release): 1.5.1` | `package.json`, `package-lock.json`, `app.json` |
+
+---
+
 ## v1.5.0 – Phase C: text recognition & searchable PDF
 
 Committed directly from the agent's working copy on the branch

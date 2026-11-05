@@ -131,7 +131,7 @@ See `docs/ARCHITECTURE.md` for details.
 See `docs/ARCHITECTURE.md` → "Scan flow".
 - **Every scan entry point** (FAB, empty state, "Weitere Seiten hinzufügen", add page, retake) calls `useScanner().scan(target)` / `importFromLibrary(target)` from `src/components/ScannerProvider.tsx`. Do not `router.push('/scan')` directly – the provider decides between the iOS document scanner (default) and the ScanFlow camera (setting / fallback).
 - **Storing pages** from any source goes through `saveScan()` (`src/services/ScanImportService.ts`): `detect: false` for iOS scanner pages (already cropped), `detect: true` for photos. It handles new document / append / retake, temp-file cleanup and the scan notice for the document screen.
-- **Native presentation timing:** the iOS scanner and the photo picker must only be presented when no modal or alert is animating (alert → short delay, RN `Modal` → `onDismiss`). Otherwise UIKit drops the presentation and the scan promise never settles.
+- **Native presentation timing:** the iOS scanner, the photo picker and the share sheet must only be presented when no modal or alert is animating (alert → short delay, RN `Modal` → `onDismiss`, e.g. `ModalHandoff` in `src/components/modalHandoff.ts`). Otherwise UIKit drops the presentation and the scan / share promise never settles (v1.5.0 export bug: share sheet opened while the export sheet was closing).
 - Temporary scan files are deleted only via `storageService.deleteTempFile()` (restricted to the cache directory); stored page files only via the repository.
 - The iOS scanner's UI language comes from `CFBundleLocalizations` in `app.json` (de, en) – keep it when adding languages.
 

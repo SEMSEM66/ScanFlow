@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.1] - 2026-11-05
+
+Bug fix for exporting PDFs and JPGs: the share sheet now opens reliably.
+
+### Fixed
+- **Export (PDF and JPG) hung on *Seite wird berechnet …* and the share sheet never appeared.** The share sheet was opened while the export sheet was still sliding down; iOS silently ignores a sheet opened during that animation, so the export never finished. Now the export sheet closes first and the share sheet opens as soon as it is gone.
+- The export sheet can no longer be closed while the file is being created; it shows the progress on the *Teilen* button and closes by itself.
+- The pause of the background text recognition now ends as soon as the export file is ready. Before, an export whose share sheet never appeared kept the recognition paused until ScanFlow was restarted.
+
+### Changed
+- During an export the page no longer shows *Seite wird berechnet …*; the progress is shown on the *Teilen* button only.
+
+### Added
+- `ModalHandoff` (`src/components/modalHandoff.ts`): closes a sheet and waits for `Modal.onDismiss` (fallback 1.5 s) before a native sheet is presented. Tests: `__tests__/modalHandoff.test.ts` (6).
+
+---
+
 ## [1.5.0] - 2026-11-05
 
 Text recognition (OCR) and searchable PDFs – Phase C. Runs completely on the iPhone with Apple's text recognition (Vision), nothing is uploaded. **Only in the installed app (IPA)** – in Expo Go everything else keeps working, just without text recognition. See `docs/ARCHITECTURE.md` → "Text recognition (OCR)".

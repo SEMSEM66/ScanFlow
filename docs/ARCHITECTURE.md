@@ -56,6 +56,8 @@ src/services/
 
 src/components/ScannerProvider.tsx  App-wide scan entry (useScanner): scanner choice, permission,
                                     progress overlay, fallback to the ScanFlow camera
+src/components/modalHandoff.ts      ModalHandoff: hide a sheet, resolve on Modal.onDismiss (1.5 s fallback)
+                                    → then present a native sheet (export sheet → share sheet)
 
 src/security/           Pure TypeScript: SHA-256/PBKDF2, PIN records, attempt limit, lock policy (see §8)
 
@@ -173,7 +175,10 @@ Photo import (Documents tab: header button / empty state; add page → "Aus Foto
   page editor start the scanner only after they are fully dismissed (alert:
   300 ms delay, editor: `Modal.onDismiss` + 900 ms fallback). If a scan is
   "running" for > 1.5 s while the app UI is usable, the next tap offers the
-  ScanFlow camera instead.
+  ScanFlow camera instead. The share sheet follows the same rule (v1.5.1):
+  the document screen creates the file while the export sheet shows the
+  progress, closes the sheet with `ModalHandoff` (`Modal.onDismiss`, 1.5 s
+  fallback) and only then calls `exportService.shareDocument()`.
 - **Why VisionKit pages skip detection:** they are already cropped and
   de-warped; a second detection pass could only crop them wrongly. The crop
   screen still allows manual corners on them.
@@ -474,7 +479,8 @@ Duplicating a document copies the rows of pages whose text is still current
   (`PageTextRepository.pending()`). Order: the open document first, then the
   newest documents, pages in page order. One page at a time, 350 ms pause in
   between, only while the app is active and *Text erkennen* is on; paused while
-  an export runs (`ocrService.hold()`).
+  an export file is created (`ocrService.hold()`, released when the file is
+  ready – before the share sheet opens).
 - Per page: `imagePipeline.renderForOcr()` renders the page (filter
   *Original*, no adjustments, 200 dpi, long side ≤ 2400 px, JPEG 90) through
   the serial render queue into `cache/scanflow-ocr/`, the native module
