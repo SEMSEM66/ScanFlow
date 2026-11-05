@@ -56,9 +56,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const thumbKeyOf = (p: DocumentPage) =>
   `${p.id}|${p.originalUri}|${JSON.stringify(p.corners)}|${p.rotation}|${p.pageFormat}|${JSON.stringify(p.adjustments)}`;
 
-// iOS shows one modal at a time: open the next sheet once the menu has faded out
-const MENU_HANDOFF_MS = 400;
-
 export default function DocumentDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -644,7 +641,7 @@ export default function DocumentDetailScreen() {
           await documentRepository.delete(document.id);
           router.replace('/(tabs)');
         }}
-        onShowText={ocrService.available ? () => setTimeout(() => setIsTextVisible(true), MENU_HANDOFF_MS) : undefined}
+        onShowText={ocrService.available ? () => setIsTextVisible(true) : undefined}
       />
 
       <DocumentTextModal visible={isTextVisible} document={document} onClose={() => setIsTextVisible(false)} />

@@ -14,3 +14,4 @@ export * from './AdjustmentsPanel';
 export * from './ScannerProvider';
 export * from './DocumentTextModal';
 export * from './modalHandoff';
+export * from './BottomSheet';

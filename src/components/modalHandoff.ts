@@ -14,7 +14,7 @@
  * Pure TypeScript (no React / Expo imports) → unit-tested in Node.
  */
 
-/** Fallback when `onDismiss` never arrives; well above the ~0.35 s slide-out animation. */
+/** Fallback when `onDismiss` never arrives; above the sheet's 0.28 s glide-out plus BottomSheet's own 1 s fallback. */
 export const MODAL_DISMISS_FALLBACK_MS = 1500;
 
 export class ModalHandoff {

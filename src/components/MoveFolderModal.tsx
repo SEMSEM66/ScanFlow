@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TouchableWithoutFeedback } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { Folder, Document } from '../types';
+import { BottomSheet } from './BottomSheet';
 
 interface MoveFolderModalProps {
   visible: boolean;
@@ -22,126 +23,103 @@ export const MoveFolderModal: React.FC<MoveFolderModalProps> = ({
 }) => {
   const { colors, typography, spacing, borderRadius } = useTheme();
   const { t } = useTranslation();
+  // Keep the last document on screen while the sheet glides out (the screen clears it on close)
+  const [shown, setShown] = useState(document);
+  if (document && document !== shown) setShown(document);
 
-  if (!document) return null;
+  if (!shown) return null;
 
+  // Folder list scrolls: a pull-down to close starts only on the handle / title
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
+    <BottomSheet visible={visible} onClose={onClose} dragArea="top" style={styles.sheet}>
+      <View style={styles.handleContainer}>
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
+      </View>
+
+      <Text style={[typography.title3, styles.title, { color: colors.textPrimary }]}>
+        {t.library.moveToFolder}
+      </Text>
+
+      <ScrollView style={{ maxHeight: 320 }}>
+        {/* Option: No folder */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => {
+            onSelectFolder(null);
+            onClose();
+          }}
+          style={[
+            styles.folderRow,
+            { borderBottomColor: colors.borderLight },
+            shown.folderId === null && { backgroundColor: colors.surfaceSubdued },
+          ]}
+        >
+          <Ionicons name="folder-outline" size={22} color={colors.textSecondary} style={styles.icon} />
+          <Text style={[typography.bodyMedium, { color: colors.textPrimary, flex: 1 }]}>
+            {t.library.removeFromFolder}
+          </Text>
+          {shown.folderId === null && (
+            <Ionicons name="checkmark" size={20} color={colors.primary} />
+          )}
+        </TouchableOpacity>
+
+        {/* Available folders */}
+        {folders.map((folder) => {
+          const isCurrent = shown.folderId === folder.id;
+          return (
+            <TouchableOpacity
+              key={folder.id}
+              activeOpacity={0.7}
+              onPress={() => {
+                onSelectFolder(folder.id);
+                onClose();
+              }}
               style={[
-                styles.sheet,
-                {
-                  backgroundColor: colors.surface,
-                  borderTopLeftRadius: borderRadius.xl,
-                  borderTopRightRadius: borderRadius.xl,
-                },
+                styles.folderRow,
+                { borderBottomColor: colors.borderLight },
+                isCurrent && { backgroundColor: colors.surfaceSubdued },
               ]}
             >
-              <View style={styles.handleContainer}>
-                <View style={[styles.handle, { backgroundColor: colors.border }]} />
-              </View>
-
-              <Text style={[typography.title3, styles.title, { color: colors.textPrimary }]}>
-                {t.library.moveToFolder}
+              <Ionicons
+                name="folder"
+                size={22}
+                color={isCurrent ? colors.primary : colors.textSecondary}
+                style={styles.icon}
+              />
+              <Text style={[typography.bodyMedium, { color: colors.textPrimary, flex: 1 }]}>
+                {folder.name}
               </Text>
+              {isCurrent && (
+                <Ionicons name="checkmark" size={20} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
-              <ScrollView style={{ maxHeight: 320 }}>
-                {/* Option: No folder */}
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    onSelectFolder(null);
-                    onClose();
-                  }}
-                  style={[
-                    styles.folderRow,
-                    { borderBottomColor: colors.borderLight },
-                    document.folderId === null && { backgroundColor: colors.surfaceSubdued },
-                  ]}
-                >
-                  <Ionicons name="folder-outline" size={22} color={colors.textSecondary} style={styles.icon} />
-                  <Text style={[typography.bodyMedium, { color: colors.textPrimary, flex: 1 }]}>
-                    {t.library.removeFromFolder}
-                  </Text>
-                  {document.folderId === null && (
-                    <Ionicons name="checkmark" size={20} color={colors.primary} />
-                  )}
-                </TouchableOpacity>
-
-                {/* Available folders */}
-                {folders.map((folder) => {
-                  const isCurrent = document.folderId === folder.id;
-                  return (
-                    <TouchableOpacity
-                      key={folder.id}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        onSelectFolder(folder.id);
-                        onClose();
-                      }}
-                      style={[
-                        styles.folderRow,
-                        { borderBottomColor: colors.borderLight },
-                        isCurrent && { backgroundColor: colors.surfaceSubdued },
-                      ]}
-                    >
-                      <Ionicons
-                        name="folder"
-                        size={22}
-                        color={isCurrent ? colors.primary : colors.textSecondary}
-                        style={styles.icon}
-                      />
-                      <Text style={[typography.bodyMedium, { color: colors.textPrimary, flex: 1 }]}>
-                        {folder.name}
-                      </Text>
-                      {isCurrent && (
-                        <Ionicons name="checkmark" size={20} color={colors.primary} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={onClose}
-                style={[
-                  styles.cancelButton,
-                  {
-                    backgroundColor: colors.surfaceSubdued,
-                    borderRadius: borderRadius.md,
-                    marginHorizontal: spacing.base,
-                    marginTop: spacing.md,
-                    marginBottom: spacing.xl,
-                  },
-                ]}
-              >
-                <Text style={[typography.bodyBold, { color: colors.textPrimary, textAlign: 'center' }]}>
-                  {t.common.cancel}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={onClose}
+        style={[
+          styles.cancelButton,
+          {
+            backgroundColor: colors.surfaceSubdued,
+            borderRadius: borderRadius.md,
+            marginHorizontal: spacing.base,
+            marginTop: spacing.md,
+            marginBottom: spacing.xl,
+          },
+        ]}
+      >
+        <Text style={[typography.bodyBold, { color: colors.textPrimary, textAlign: 'center' }]}>
+          {t.common.cancel}
+        </Text>
+      </TouchableOpacity>
+    </BottomSheet>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'flex-end',
-  },
   sheet: {
     paddingTop: 12,
   },

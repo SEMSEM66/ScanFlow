@@ -32,9 +32,6 @@ import {
   useScanner,
 } from '../../src/components';
 
-// iOS shows one modal at a time: open the next sheet once the menu has faded out
-const MENU_HANDOFF_MS = 400;
-
 export default function LibraryScreen() {
   const { colors, typography, spacing, borderRadius } = useTheme();
   const { t } = useTranslation();
@@ -471,16 +468,16 @@ export default function LibraryScreen() {
         )}
       </View>
 
-      {/* Document Action Modal */}
+      {/* Document Action Modal – runs the chosen action once the menu is gone */}
       <DocumentActionModal
         visible={activeDocForAction !== null}
         document={activeDocForAction}
         onClose={() => setActiveDocForAction(null)}
         onRename={(doc) => handleRenameDocument(doc)}
-        onMove={(doc) => setTimeout(() => setDocToMove(doc), MENU_HANDOFF_MS)}
+        onMove={(doc) => setDocToMove(doc)}
         onDuplicate={(doc) => handleDuplicateDocument(doc)}
         onDelete={(doc) => handleDeleteDocument(doc)}
-        onShowText={ocrService.available ? (doc) => setTimeout(() => setTextDoc(doc), MENU_HANDOFF_MS) : undefined}
+        onShowText={ocrService.available ? (doc) => setTextDoc(doc) : undefined}
       />
 
       {/* Move Folder Modal */}

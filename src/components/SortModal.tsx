@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { useTranslation } from '../i18n';
+import { BottomSheet } from './BottomSheet';
 
 export type SortOption = 'date_desc' | 'date_asc' | 'title_asc' | 'title_desc';
 
@@ -30,108 +31,81 @@ export const SortModal: React.FC<SortModalProps> = ({
   ];
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
+    <BottomSheet visible={visible} onClose={onClose} style={styles.sheet}>
+      <View style={styles.handleContainer}>
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
+      </View>
+
+      <Text style={[typography.title3, styles.title, { color: colors.textPrimary }]}>
+        {t.library.sort}
+      </Text>
+
+      <View style={[styles.list, { marginHorizontal: spacing.base }]}>
+        {options.map((opt) => {
+          const isSelected = currentSort === opt.id;
+          return (
+            <TouchableOpacity
+              key={opt.id}
+              activeOpacity={0.7}
+              onPress={() => {
+                onSelectSort(opt.id);
+                onClose();
+              }}
               style={[
-                styles.sheet,
-                {
-                  backgroundColor: colors.surface,
-                  borderTopLeftRadius: borderRadius.xl,
-                  borderTopRightRadius: borderRadius.xl,
-                },
+                styles.row,
+                { borderBottomColor: colors.borderLight },
+                isSelected && { backgroundColor: colors.surfaceSubdued },
               ]}
             >
-              <View style={styles.handleContainer}>
-                <View style={[styles.handle, { backgroundColor: colors.border }]} />
-              </View>
-
-              <Text style={[typography.title3, styles.title, { color: colors.textPrimary }]}>
-                {t.library.sort}
-              </Text>
-
-              <View style={[styles.list, { marginHorizontal: spacing.base }]}>
-                {options.map((opt) => {
-                  const isSelected = currentSort === opt.id;
-                  return (
-                    <TouchableOpacity
-                      key={opt.id}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        onSelectSort(opt.id);
-                        onClose();
-                      }}
-                      style={[
-                        styles.row,
-                        { borderBottomColor: colors.borderLight },
-                        isSelected && { backgroundColor: colors.surfaceSubdued },
-                      ]}
-                    >
-                      <Ionicons
-                        name={opt.icon}
-                        size={20}
-                        color={isSelected ? colors.primary : colors.textSecondary}
-                        style={styles.icon}
-                      />
-                      <Text
-                        style={[
-                          typography.body,
-                          {
-                            color: isSelected ? colors.primary : colors.textPrimary,
-                            fontWeight: isSelected ? '600' : '400',
-                            flex: 1,
-                          },
-                        ]}
-                      >
-                        {opt.label}
-                      </Text>
-                      {isSelected && (
-                        <Ionicons name="checkmark" size={20} color={colors.primary} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={onClose}
+              <Ionicons
+                name={opt.icon}
+                size={20}
+                color={isSelected ? colors.primary : colors.textSecondary}
+                style={styles.icon}
+              />
+              <Text
                 style={[
-                  styles.cancelButton,
+                  typography.body,
                   {
-                    backgroundColor: colors.surfaceSubdued,
-                    borderRadius: borderRadius.md,
-                    marginHorizontal: spacing.base,
-                    marginTop: spacing.md,
-                    marginBottom: spacing.xl,
+                    color: isSelected ? colors.primary : colors.textPrimary,
+                    fontWeight: isSelected ? '600' : '400',
+                    flex: 1,
                   },
                 ]}
               >
-                <Text style={[typography.bodyBold, { color: colors.textPrimary, textAlign: 'center' }]}>
-                  {t.common.cancel}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+                {opt.label}
+              </Text>
+              {isSelected && (
+                <Ionicons name="checkmark" size={20} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={onClose}
+        style={[
+          styles.cancelButton,
+          {
+            backgroundColor: colors.surfaceSubdued,
+            borderRadius: borderRadius.md,
+            marginHorizontal: spacing.base,
+            marginTop: spacing.md,
+            marginBottom: spacing.xl,
+          },
+        ]}
+      >
+        <Text style={[typography.bodyBold, { color: colors.textPrimary, textAlign: 'center' }]}>
+          {t.common.cancel}
+        </Text>
+      </TouchableOpacity>
+    </BottomSheet>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'flex-end',
-  },
   sheet: {
     paddingTop: 12,
   },

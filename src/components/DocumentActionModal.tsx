@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { Document } from '../types';
+import { BottomSheet } from './BottomSheet';
 
 interface DocumentActionModalProps {
   visible: boolean;
@@ -17,6 +18,11 @@ interface DocumentActionModalProps {
   onShowText?: (document: Document) => void;
 }
 
+/**
+ * Document menu (bottom sheet). The chosen action runs once the menu is
+ * completely gone, so the next sheet, prompt or alert can be presented
+ * (iOS shows one modal at a time).
+ */
 export const DocumentActionModal: React.FC<DocumentActionModalProps> = ({
   visible,
   document,
@@ -29,155 +35,133 @@ export const DocumentActionModal: React.FC<DocumentActionModalProps> = ({
 }) => {
   const { colors, typography, spacing, borderRadius } = useTheme();
   const { t } = useTranslation();
+  // Keep the last document on screen while the sheet glides out (the screen clears it on close)
+  const [shown, setShown] = useState(document);
+  if (document && document !== shown) setShown(document);
+  // Action chosen in the menu; runs in onDismiss
+  const pending = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (visible) pending.current = null; // reopened: an earlier choice no longer applies
+  }, [visible]);
 
-  if (!document) return null;
+  if (!shown) return null;
+
+  const choose = (action: (document: Document) => void) => {
+    const doc = shown;
+    pending.current = () => action(doc);
+    onClose();
+  };
+
+  const runPending = () => {
+    const action = pending.current;
+    pending.current = null;
+    action?.();
+  };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.sheet,
-                {
-                  backgroundColor: colors.surface,
-                  borderTopLeftRadius: borderRadius.xl,
-                  borderTopRightRadius: borderRadius.xl,
-                },
-              ]}
-            >
-              {/* Handle Bar */}
-              <View style={styles.handleContainer}>
-                <View style={[styles.handle, { backgroundColor: colors.border }]} />
-              </View>
+    <BottomSheet visible={visible} onClose={onClose} onDismiss={runPending} style={styles.sheet}>
+      {/* Handle Bar */}
+      <View style={styles.handleContainer}>
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
+      </View>
 
-              {/* Title */}
-              <View style={[styles.header, { paddingHorizontal: spacing.base, paddingBottom: spacing.sm }]}>
-                <Text
-                  numberOfLines={1}
-                  style={[typography.title3, { color: colors.textPrimary, textAlign: 'center' }]}
-                >
-                  {document.title}
-                </Text>
-              </View>
+      {/* Title */}
+      <View style={[styles.header, { paddingHorizontal: spacing.base, paddingBottom: spacing.sm }]}>
+        <Text
+          numberOfLines={1}
+          style={[typography.title3, { color: colors.textPrimary, textAlign: 'center' }]}
+        >
+          {shown.title}
+        </Text>
+      </View>
 
-              {/* Action Buttons */}
-              <View style={[styles.actionsList, { marginHorizontal: spacing.base }]}>
-                {/* Rename */}
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    onClose();
-                    onRename(document);
-                  }}
-                  style={[styles.actionRow, { borderBottomColor: colors.borderLight }]}
-                >
-                  <Ionicons name="pencil-outline" size={20} color={colors.primary} style={styles.actionIcon} />
-                  <Text style={[typography.body, { color: colors.textPrimary }]}>
-                    {t.library.renameDocument}
-                  </Text>
-                </TouchableOpacity>
+      {/* Action Buttons */}
+      <View style={[styles.actionsList, { marginHorizontal: spacing.base }]}>
+        {/* Rename */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => choose(onRename)}
+          style={[styles.actionRow, { borderBottomColor: colors.borderLight }]}
+        >
+          <Ionicons name="pencil-outline" size={20} color={colors.primary} style={styles.actionIcon} />
+          <Text style={[typography.body, { color: colors.textPrimary }]}>
+            {t.library.renameDocument}
+          </Text>
+        </TouchableOpacity>
 
-                {/* Move to folder */}
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    onClose();
-                    onMove(document);
-                  }}
-                  style={[styles.actionRow, { borderBottomColor: colors.borderLight }]}
-                >
-                  <Ionicons name="folder-outline" size={20} color={colors.primary} style={styles.actionIcon} />
-                  <Text style={[typography.body, { color: colors.textPrimary }]}>
-                    {t.library.moveToFolder}
-                  </Text>
-                </TouchableOpacity>
+        {/* Move to folder */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => choose(onMove)}
+          style={[styles.actionRow, { borderBottomColor: colors.borderLight }]}
+        >
+          <Ionicons name="folder-outline" size={20} color={colors.primary} style={styles.actionIcon} />
+          <Text style={[typography.body, { color: colors.textPrimary }]}>
+            {t.library.moveToFolder}
+          </Text>
+        </TouchableOpacity>
 
-                {/* Duplicate */}
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    onClose();
-                    onDuplicate(document);
-                  }}
-                  style={[styles.actionRow, { borderBottomColor: colors.borderLight }]}
-                >
-                  <Ionicons name="copy-outline" size={20} color={colors.primary} style={styles.actionIcon} />
-                  <Text style={[typography.body, { color: colors.textPrimary }]}>
-                    {t.library.duplicateDocument}
-                  </Text>
-                </TouchableOpacity>
+        {/* Duplicate */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => choose(onDuplicate)}
+          style={[styles.actionRow, { borderBottomColor: colors.borderLight }]}
+        >
+          <Ionicons name="copy-outline" size={20} color={colors.primary} style={styles.actionIcon} />
+          <Text style={[typography.body, { color: colors.textPrimary }]}>
+            {t.library.duplicateDocument}
+          </Text>
+        </TouchableOpacity>
 
-                {/* Recognized text */}
-                {onShowText ? (
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      onClose();
-                      onShowText(document);
-                    }}
-                    style={[styles.actionRow, { borderBottomColor: colors.borderLight }]}
-                  >
-                    <Ionicons name="document-text-outline" size={20} color={colors.primary} style={styles.actionIcon} />
-                    <Text style={[typography.body, { color: colors.textPrimary }]}>{t.ocr.menuAction}</Text>
-                  </TouchableOpacity>
-                ) : null}
+        {/* Recognized text */}
+        {onShowText ? (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => choose(onShowText)}
+            style={[styles.actionRow, { borderBottomColor: colors.borderLight }]}
+          >
+            <Ionicons name="document-text-outline" size={20} color={colors.primary} style={styles.actionIcon} />
+            <Text style={[typography.body, { color: colors.textPrimary }]}>{t.ocr.menuAction}</Text>
+          </TouchableOpacity>
+        ) : null}
 
-                {/* Delete */}
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    onClose();
-                    onDelete(document);
-                  }}
-                  style={styles.actionRow}
-                >
-                  <Ionicons name="trash-outline" size={20} color={colors.danger} style={styles.actionIcon} />
-                  <Text style={[typography.body, { color: colors.danger, fontWeight: '500' }]}>
-                    {t.library.deleteDocument}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+        {/* Delete */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => choose(onDelete)}
+          style={styles.actionRow}
+        >
+          <Ionicons name="trash-outline" size={20} color={colors.danger} style={styles.actionIcon} />
+          <Text style={[typography.body, { color: colors.danger, fontWeight: '500' }]}>
+            {t.library.deleteDocument}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-              {/* Cancel Button */}
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={onClose}
-                style={[
-                  styles.cancelButton,
-                  {
-                    backgroundColor: colors.surfaceSubdued,
-                    borderRadius: borderRadius.md,
-                    marginHorizontal: spacing.base,
-                    marginTop: spacing.md,
-                    marginBottom: spacing.xl,
-                  },
-                ]}
-              >
-                <Text style={[typography.bodyBold, { color: colors.textPrimary, textAlign: 'center' }]}>
-                  {t.common.cancel}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+      {/* Cancel Button */}
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={onClose}
+        style={[
+          styles.cancelButton,
+          {
+            backgroundColor: colors.surfaceSubdued,
+            borderRadius: borderRadius.md,
+            marginHorizontal: spacing.base,
+            marginTop: spacing.md,
+            marginBottom: spacing.xl,
+          },
+        ]}
+      >
+        <Text style={[typography.bodyBold, { color: colors.textPrimary, textAlign: 'center' }]}>
+          {t.common.cancel}
+        </Text>
+      </TouchableOpacity>
+    </BottomSheet>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'flex-end',
-  },
   sheet: {
     paddingTop: 12,
   },

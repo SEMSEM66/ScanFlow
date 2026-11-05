@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TouchableWithoutFeedback, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { Adjustments } from '../types';
 import { DEFAULT_ADJUSTMENTS } from '../imaging/types';
+import { BottomSheet } from './BottomSheet';
 
 interface AdjustmentsPanelProps {
   visible: boolean;
@@ -56,65 +57,59 @@ export const AdjustmentsPanel: React.FC<AdjustmentsPanelProps> = ({ visible, val
     </View>
   );
 
+  // Sliders: a pull-down to close starts only on the handle / title
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.sheet,
-                { backgroundColor: colors.surface, borderTopLeftRadius: borderRadius.xxl, borderTopRightRadius: borderRadius.xxl },
-              ]}
-            >
-              <View style={styles.handleContainer}>
-                <View style={[styles.handle, { backgroundColor: colors.border }]} />
-              </View>
-              <View style={{ paddingHorizontal: spacing.base, paddingBottom: spacing.xxl }}>
-                <View style={styles.titleRow}>
-                  <Text style={[typography.title2, { color: colors.textPrimary }]}>{t.filters.adjust}</Text>
-                  <TouchableOpacity onPress={() => commit({ ...DEFAULT_ADJUSTMENTS })} disabled={busy}>
-                    <Text style={[typography.bodyMedium, { color: colors.primary }]}>{t.common.reset}</Text>
-                  </TouchableOpacity>
-                </View>
-                {row(t.filters.brightness, 'brightness', -1, 1)}
-                {row(t.filters.contrast, 'contrast', -1, 1)}
-                {row(t.filters.sharpness, 'sharpness', 0, 1)}
-                <View style={[styles.switchRow, { borderColor: colors.borderLight }]}>
-                  <Text style={[typography.body, { color: colors.textPrimary }]}>{t.filters.denoise}</Text>
-                  <Switch
-                    value={local.denoise}
-                    disabled={busy}
-                    onValueChange={(v) => commit({ ...local, denoise: v })}
-                    trackColor={{ false: colors.border, true: colors.primary }}
-                  />
-                </View>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  disabled={busy}
-                  onPress={onApplyToAll}
-                  style={[styles.applyAll, { borderColor: colors.primary, borderRadius: borderRadius.lg, opacity: busy ? 0.5 : 1 }]}
-                >
-                  <Text style={[typography.bodyBold, { color: colors.primary }]}>{t.filters.applyToAll}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={onClose}
-                  style={[styles.done, { backgroundColor: colors.primary, borderRadius: borderRadius.lg }]}
-                >
-                  <Text style={[typography.headline, { color: '#FFFFFF' }]}>{t.common.done}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      dim={0.35}
+      dragArea="top"
+      radius={borderRadius.xxl}
+      style={styles.sheet}
+    >
+      <View style={styles.handleContainer}>
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
+      </View>
+      <View style={{ paddingHorizontal: spacing.base, paddingBottom: spacing.xxl }}>
+        <View style={styles.titleRow}>
+          <Text style={[typography.title2, { color: colors.textPrimary }]}>{t.filters.adjust}</Text>
+          <TouchableOpacity onPress={() => commit({ ...DEFAULT_ADJUSTMENTS })} disabled={busy}>
+            <Text style={[typography.bodyMedium, { color: colors.primary }]}>{t.common.reset}</Text>
+          </TouchableOpacity>
         </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+        {row(t.filters.brightness, 'brightness', -1, 1)}
+        {row(t.filters.contrast, 'contrast', -1, 1)}
+        {row(t.filters.sharpness, 'sharpness', 0, 1)}
+        <View style={[styles.switchRow, { borderColor: colors.borderLight }]}>
+          <Text style={[typography.body, { color: colors.textPrimary }]}>{t.filters.denoise}</Text>
+          <Switch
+            value={local.denoise}
+            disabled={busy}
+            onValueChange={(v) => commit({ ...local, denoise: v })}
+            trackColor={{ false: colors.border, true: colors.primary }}
+          />
+        </View>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          disabled={busy}
+          onPress={onApplyToAll}
+          style={[styles.applyAll, { borderColor: colors.primary, borderRadius: borderRadius.lg, opacity: busy ? 0.5 : 1 }]}
+        >
+          <Text style={[typography.bodyBold, { color: colors.primary }]}>{t.filters.applyToAll}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={onClose}
+          style={[styles.done, { backgroundColor: colors.primary, borderRadius: borderRadius.lg }]}
+        >
+          <Text style={[typography.headline, { color: '#FFFFFF' }]}>{t.common.done}</Text>
+        </TouchableOpacity>
+      </View>
+    </BottomSheet>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
   sheet: { paddingTop: 12 },
   handleContainer: { alignItems: 'center', paddingBottom: 12 },
   handle: { width: 44, height: 5, borderRadius: 2.5 },
