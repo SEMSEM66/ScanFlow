@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,25 +10,36 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as ScreenCapture from 'expo-screen-capture';
+import { useFocusEffect } from 'expo-router';
 import { useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
-import { authService, LockTimeoutOption, ScannerMode } from '../../src/services/AuthService';
+import {
+  authService,
+  type LockTimeoutOption,
+  type ScannerMode,
+  type UnlockCapabilities,
+} from '../../src/services/AuthService';
+import { privacyService } from '../../src/services/PrivacyService';
 import { storageService, documentRepository, documentScanner } from '../../src/services';
 import { ExportDpi, ExportQuality } from '../../src/types';
 import { EXPORT_DPI_PRESETS } from '../../src/imaging/pageFormat';
-import { PinSetupModal } from '../../src/components/PinSetupModal';
+import { PinSetupModal, type PinFlow } from '../../src/components/PinSetupModal';
+import { useAppLock } from '../../src/components/AppLockOverlay';
 
 export default function SettingsScreen() {
-  const { colors, typography, spacing, borderRadius, mode, setMode } = useTheme();
+  const { colors, typography, spacing, mode, setMode } = useTheme();
   const { t, language, setLanguage, formatString } = useTranslation();
+  const { reload: reloadSecurity } = useAppLock();
 
   // Security state
   const [appLockEnabled, setAppLockEnabled] = useState(false);
-  const [hasPin, setHasPin] = useState(false);
   const [lockTimeout, setLockTimeout] = useState<LockTimeoutOption>(0);
+  const [hidePreview, setHidePreview] = useState(true);
   const [screenCaptureProtection, setScreenCaptureProtection] = useState(false);
-  const [isPinModalVisible, setIsPinModalVisible] = useState(false);
+  const [caps, setCaps] = useState<UnlockCapabilities | null>(null);
+  const [securityBusy, setSecurityBusy] = useState(false);
+  const [pinModal, setPinModal] = useState<{ visible: boolean; flow: PinFlow }>({ visible: false, flow: 'create' });
+  const pinFlowDone = useRef<((ok: boolean) => void) | null>(null);
 
   // Scanner preference
   const [systemScannerAvailable] = useState(() => documentScanner.isSystemScannerAvailable());
@@ -41,16 +52,25 @@ export default function SettingsScreen() {
   const [storageBytes, setStorageBytes] = useState(0);
   const [docCount, setDocCount] = useState(0);
 
+  const refreshCaps = useCallback(async () => {
+    setCaps(await authService.getCapabilities());
+  }, []);
+
+  const loadSecurity = useCallback(async () => {
+    try {
+      const cfg = await authService.getSecurityConfig();
+      setAppLockEnabled(cfg.lockEnabled);
+      setLockTimeout(cfg.lockTimeout);
+      setHidePreview(cfg.hidePreview);
+      setScreenCaptureProtection(cfg.screenCaptureProtection);
+    } catch (err) {
+      console.warn('[Settings] Security settings not readable:', err);
+    }
+    await refreshCaps();
+  }, [refreshCaps]);
+
   useEffect(() => {
     async function loadSettings() {
-      const lock = await authService.isAppLockEnabled();
-      setAppLockEnabled(lock);
-      const pinConfigured = await authService.hasPinCode();
-      setHasPin(pinConfigured);
-      const timeout = await authService.getLockTimeout();
-      setLockTimeout(timeout);
-      const screenCap = await authService.isScreenCaptureProtectionEnabled();
-      setScreenCaptureProtection(screenCap);
       const qual = await authService.getDefaultQuality();
       setDefaultQuality(qual);
       setDefaultDpiState(await authService.getDefaultDpi());
@@ -63,36 +83,167 @@ export default function SettingsScreen() {
     loadSettings();
   }, []);
 
+  // Face ID / passcode may have changed in iOS Settings meanwhile.
+  useFocusEffect(
+    useCallback(() => {
+      loadSecurity();
+    }, [loadSecurity])
+  );
+
+  /** Opens the PIN dialog; resolves true when the flow completed. */
+  const runPinFlow = (flow: PinFlow) =>
+    new Promise<boolean>((resolve) => {
+      pinFlowDone.current = resolve;
+      setPinModal({ visible: true, flow });
+    });
+
+  const endPinFlow = (ok: boolean) => {
+    setPinModal((m) => ({ ...m, visible: false }));
+    const done = pinFlowDone.current;
+    pinFlowDone.current = null;
+    done?.(ok);
+  };
+
+  /** Face ID / Touch ID, device passcode or ScanFlow PIN – same rules as the lock screen. */
+  const verifyOwner = async (prompt: string, c: UnlockCapabilities): Promise<boolean> => {
+    const result = await authService.authenticateOwner(c, {
+      prompt,
+      usePin: t.security.usePin,
+      cancel: t.common.cancel,
+    });
+    if (result === 'success') return true;
+    if (result === 'use-pin') return runPinFlow('verify');
+    if (result === 'unavailable') Alert.alert(t.security.noMethodTitle, t.security.noMethodMessage);
+    return false;
+  };
+
+  const enableLockWithNewPin = async () => {
+    const created = await runPinFlow('create');
+    if (!created) return;
+    try {
+      await authService.setAppLockEnabled(true);
+      setAppLockEnabled(true);
+      await reloadSecurity();
+    } catch (err) {
+      console.error('[Settings] Enabling the app lock failed:', err);
+      Alert.alert(t.common.error, t.security.saveFailed);
+    }
+    await refreshCaps();
+  };
+
   const handleToggleAppLock = async (value: boolean) => {
-    const success = await authService.setAppLockEnabled(value, t.auth.prompt);
-    if (success) {
+    if (securityBusy) return;
+    setSecurityBusy(true);
+    try {
+      const c = await authService.getCapabilities();
+      setCaps(c);
+      if (value && !authService.canUseAppLock(c)) {
+        Alert.alert(t.security.noMethodTitle, t.security.noMethodMessage, [
+          { text: t.common.cancel, style: 'cancel' },
+          { text: t.security.setPinAction, onPress: () => enableLockWithNewPin() },
+        ]);
+        return;
+      }
+      // Turning the lock on proves the unlock method works; turning it off needs the owner.
+      const ok = await verifyOwner(value ? t.security.promptEnable : t.security.promptDisable, c);
+      if (!ok) return;
+      await authService.setAppLockEnabled(value);
       setAppLockEnabled(value);
-    } else {
-      Alert.alert(
-        t.settings.appLock,
-        'Biometrische Authentifizierung konnte nicht eingerichtet werden.'
-      );
+      await reloadSecurity();
+    } catch (err) {
+      console.error('[Settings] Changing the app lock failed:', err);
+      Alert.alert(t.common.error, t.security.saveFailed);
+    } finally {
+      setSecurityBusy(false);
+    }
+  };
+
+  const handleSetupPin = async () => {
+    if (await runPinFlow('create')) await refreshCaps();
+  };
+
+  const handleChangePin = async () => {
+    if (await runPinFlow('change')) await refreshCaps();
+  };
+
+  const handleRemovePin = async () => {
+    const c = await authService.getCapabilities();
+    setCaps(c);
+    if (appLockEnabled && !c.passcodeSet) {
+      Alert.alert(t.security.pinTitle, t.security.pinRemoveBlocked);
+      return;
+    }
+    Alert.alert(t.security.pinRemoveTitle, t.security.pinRemoveMessage, [
+      { text: t.common.cancel, style: 'cancel' },
+      {
+        text: t.security.pinRemove,
+        style: 'destructive',
+        onPress: async () => {
+          if (!(await runPinFlow('verify'))) return;
+          try {
+            await authService.removePinCode();
+          } catch (err) {
+            console.error('[Settings] Removing the PIN failed:', err);
+            Alert.alert(t.common.error, t.security.saveFailed);
+          }
+          await refreshCaps();
+        },
+      },
+    ]);
+  };
+
+  const handleSetTimeout = async (timeout: LockTimeoutOption) => {
+    try {
+      await authService.setLockTimeout(timeout);
+      setLockTimeout(timeout);
+      await reloadSecurity();
+    } catch (err) {
+      console.error('[Settings] Saving the lock timeout failed:', err);
+      Alert.alert(t.common.error, t.security.saveFailed);
+    }
+  };
+
+  const handleToggleHidePreview = async (value: boolean) => {
+    try {
+      await authService.setHidePreview(value);
+      setHidePreview(value);
+      await reloadSecurity();
+    } catch (err) {
+      console.error('[Settings] Saving the app preview setting failed:', err);
+      Alert.alert(t.common.error, t.security.saveFailed);
     }
   };
 
   const handleToggleScreenCapture = async (value: boolean) => {
-    setScreenCaptureProtection(value);
-    await authService.setScreenCaptureProtection(value);
-    if (value) {
-      await ScreenCapture.preventScreenCaptureAsync();
-      Alert.alert(
-        'Screenshot-Schutz aktiv',
-        'Bildschirmaufnahmen und Screenshots sind nun gesperrt, um Ihre Dokumente zu schützen.'
-      );
-    } else {
-      await ScreenCapture.allowScreenCaptureAsync();
+    if (!(await privacyService.setScreenCaptureProtection(value))) {
+      Alert.alert(t.common.error, t.security.screenCaptureFailed);
+      return;
     }
+    try {
+      await authService.setScreenCaptureProtection(value);
+    } catch (err) {
+      console.error('[Settings] Saving the screenshot setting failed:', err);
+      await privacyService.setScreenCaptureProtection(!value);
+      Alert.alert(t.common.error, t.security.saveFailed);
+      return;
+    }
+    setScreenCaptureProtection(value);
+    await reloadSecurity();
+    if (value) Alert.alert(t.security.screenCaptureOnTitle, t.security.screenCaptureOnMessage);
   };
 
-  const handleSetTimeout = async (timeout: LockTimeoutOption) => {
-    setLockTimeout(timeout);
-    await authService.setLockTimeout(timeout);
-  };
+  const lockSubtitle = (() => {
+    if (!caps) return t.settings.appLockSubtitle;
+    const methods: string[] = [];
+    if (caps.biometry === 'faceId') methods.push('Face ID');
+    else if (caps.biometry === 'touchId') methods.push('Touch ID');
+    if (caps.pinLength !== null) methods.push(t.security.methodPin);
+    else if (caps.passcodeSet) methods.push(t.security.methodPasscode);
+    return methods.length > 0
+      ? formatString(t.security.lockMethods, { methods: methods.join(t.security.or) })
+      : t.security.lockUnavailable;
+  })();
+  const pinLength = caps?.pinLength ?? null;
 
   const handleSetQuality = async (q: ExportQuality) => {
     setDefaultQuality(q);
@@ -182,70 +333,41 @@ export default function SettingsScreen() {
           </Text>
         </View>
 
-        {/* Section 1: Security & Privacy (Prominent & Bank-Grade) */}
+        {/* Section 1: Security & Privacy */}
         <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary, marginTop: spacing.lg }]}>
-          Sicherheit & Datenschutz
+          {t.security.section}
         </Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          {/* Biometric App Lock Toggle */}
+          {/* App lock */}
           <View style={styles.toggleRow}>
             <View style={styles.toggleRowLeft}>
               <View style={[styles.iconBox, { backgroundColor: colors.primarySubdued }]}>
-                <Ionicons name="scan" size={20} color={colors.primary} />
+                <Ionicons name="lock-closed" size={20} color={colors.primary} />
               </View>
-              <View>
-                <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
-                  {t.settings.appLock}
-                </Text>
-                <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
-                  Face ID / Touch ID Schutz
-                </Text>
+              <View style={styles.rowText}>
+                <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>{t.settings.appLock}</Text>
+                <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>{lockSubtitle}</Text>
               </View>
             </View>
             <Switch
               value={appLockEnabled}
+              disabled={securityBusy}
               onValueChange={handleToggleAppLock}
               trackColor={{ false: colors.border, true: colors.primary }}
             />
           </View>
 
-          {/* Backup PIN Setup */}
-          <View style={[styles.actionRow, { borderTopWidth: 1, borderTopColor: colors.borderLight, marginTop: 12, paddingTop: 12 }]}>
-            <View style={styles.toggleRowLeft}>
-              <View style={[styles.iconBox, { backgroundColor: colors.surfaceSubdued }]}>
-                <Ionicons name="keypad-outline" size={20} color={colors.textPrimary} />
-              </View>
-              <View>
-                <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
-                  Sicherheits-PIN
-                </Text>
-                <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
-                  {hasPin ? 'PIN-Code eingerichtet' : 'Backup-PIN festlegen'}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => setIsPinModalVisible(true)}
-              style={[styles.smallPillBtn, { backgroundColor: colors.surfaceSubdued }]}
-            >
-              <Text style={[typography.caption1, { color: colors.primary, fontWeight: '700' }]}>
-                {hasPin ? 'Ändern' : 'Einrichten'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Auto-Lock Timeout */}
+          {/* Lock after … */}
           {appLockEnabled && (
-            <View style={{ borderTopWidth: 1, borderTopColor: colors.borderLight, marginTop: 12, paddingTop: 12 }}>
+            <View style={[styles.divided, { borderTopColor: colors.borderLight }]}>
               <Text style={[typography.footnote, { color: colors.textSecondary, marginBottom: 8 }]}>
-                Sperr-Verzögerung
+                {t.security.lockTimeout}
               </Text>
               <View style={styles.segmentedRow}>
                 {[
-                  { id: 0 as LockTimeoutOption, label: 'Sofort' },
-                  { id: 60 as LockTimeoutOption, label: '1 Min.' },
-                  { id: 300 as LockTimeoutOption, label: '5 Min.' },
+                  { id: 0 as LockTimeoutOption, label: t.security.timeoutImmediately },
+                  { id: 60 as LockTimeoutOption, label: t.security.timeoutOneMinute },
+                  { id: 300 as LockTimeoutOption, label: t.security.timeoutFiveMinutes },
                 ].map((item) => {
                   const isSelected = lockTimeout === item.id;
                   return (
@@ -253,10 +375,7 @@ export default function SettingsScreen() {
                       key={item.id}
                       activeOpacity={0.8}
                       onPress={() => handleSetTimeout(item.id)}
-                      style={[
-                        styles.segmentButton,
-                        isSelected && { backgroundColor: colors.primary },
-                      ]}
+                      style={[styles.segmentButton, isSelected && { backgroundColor: colors.primary }]}
                     >
                       <Text
                         style={[
@@ -270,21 +389,84 @@ export default function SettingsScreen() {
                   );
                 })}
               </View>
+              <Text style={[typography.caption2, styles.hint, { color: colors.textSecondary }]}>{t.security.timeoutHint}</Text>
             </View>
           )}
 
-          {/* Screen Capture & Recording Protection */}
-          <View style={[styles.toggleRow, { borderTopWidth: 1, borderTopColor: colors.borderLight, marginTop: 12, paddingTop: 12 }]}>
+          {/* ScanFlow PIN */}
+          <View style={[styles.divided, { borderTopColor: colors.borderLight }]}>
+            <View style={styles.actionRow}>
+              <View style={styles.toggleRowLeft}>
+                <View style={[styles.iconBox, { backgroundColor: colors.surfaceSubdued }]}>
+                  <Ionicons name="keypad-outline" size={20} color={colors.textPrimary} />
+                </View>
+                <View style={styles.rowText}>
+                  <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>{t.security.pinTitle}</Text>
+                  <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
+                    {pinLength !== null ? formatString(t.security.pinIsSet, { digits: pinLength }) : t.security.pinNotSet}
+                  </Text>
+                </View>
+              </View>
+              {pinLength !== null ? (
+                <View style={styles.pillRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleChangePin}
+                    style={[styles.smallPillBtn, { backgroundColor: colors.surfaceSubdued }]}
+                  >
+                    <Text style={[typography.caption1, { color: colors.primary, fontWeight: '700' }]}>{t.security.pinChange}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleRemovePin}
+                    style={[styles.smallPillBtn, { backgroundColor: colors.surfaceSubdued }]}
+                  >
+                    <Text style={[typography.caption1, { color: colors.danger, fontWeight: '700' }]}>{t.security.pinRemove}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={handleSetupPin}
+                  style={[styles.smallPillBtn, { backgroundColor: colors.surfaceSubdued }]}
+                >
+                  <Text style={[typography.caption1, { color: colors.primary, fontWeight: '700' }]}>{t.security.pinSetup}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={[typography.caption2, styles.hint, { color: colors.textSecondary }]}>{t.security.pinHint}</Text>
+          </View>
+
+          {/* Hide the app preview (app switcher) */}
+          <View style={[styles.toggleRow, styles.divided, { borderTopColor: colors.borderLight }]}>
+            <View style={styles.toggleRowLeft}>
+              <View style={[styles.iconBox, { backgroundColor: colors.surfaceSubdued }]}>
+                <Ionicons name="albums-outline" size={20} color={colors.textPrimary} />
+              </View>
+              <View style={styles.rowText}>
+                <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>{t.security.hidePreview}</Text>
+                <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
+                  {t.security.hidePreviewSubtitle}
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={hidePreview}
+              onValueChange={handleToggleHidePreview}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+
+          {/* Screenshot & recording protection */}
+          <View style={[styles.toggleRow, styles.divided, { borderTopColor: colors.borderLight }]}>
             <View style={styles.toggleRowLeft}>
               <View style={[styles.iconBox, { backgroundColor: colors.surfaceSubdued }]}>
                 <Ionicons name="eye-off-outline" size={20} color={colors.textPrimary} />
               </View>
-              <View>
-                <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
-                  Screenshot-Schutz
-                </Text>
+              <View style={styles.rowText}>
+                <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>{t.security.screenCapture}</Text>
                 <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
-                  Verhindert Bildschirmaufnahmen & Fotos
+                  {t.security.screenCaptureSubtitle}
                 </Text>
               </View>
             </View>
@@ -295,12 +477,10 @@ export default function SettingsScreen() {
             />
           </View>
 
-          {/* Zero-Trace Shredding Badge */}
+          {/* What deleting and local storage really mean */}
           <View style={[styles.securityFeatureBadge, { backgroundColor: colors.surfaceSubdued, marginTop: 14 }]}>
-            <Ionicons name="shield-checkmark" size={16} color={colors.success} style={{ marginRight: 8 }} />
-            <Text style={[typography.caption2, { color: colors.textSecondary, flex: 1 }]}>
-              Zero-Trace Löschen: Gelöschte Seiten werden physikalisch mit Nullen überschrieben.
-            </Text>
+            <Ionicons name="phone-portrait-outline" size={16} color={colors.success} style={{ marginRight: 8 }} />
+            <Text style={[typography.caption2, { color: colors.textSecondary, flex: 1 }]}>{t.security.storageNote}</Text>
           </View>
         </View>
 
@@ -461,11 +641,11 @@ export default function SettingsScreen() {
         </Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.infoRow}>
-            <Text style={[typography.body, { color: colors.textPrimary }]}>Gespeicherte Dokumente</Text>
+            <Text style={[typography.body, { color: colors.textPrimary }]}>{t.settings.storedDocuments}</Text>
             <Text style={[typography.bodyBold, { color: colors.textSecondary }]}>{docCount}</Text>
           </View>
           <View style={[styles.infoRow, { borderTopWidth: 1, borderTopColor: colors.borderLight, marginTop: 10, paddingTop: 10 }]}>
-            <Text style={[typography.body, { color: colors.textPrimary }]}>Speicherbelegung</Text>
+            <Text style={[typography.body, { color: colors.textPrimary }]}>{t.settings.storageUsed}</Text>
             <Text style={[typography.bodyBold, { color: colors.textSecondary }]}>{formatStorage(storageBytes)}</Text>
           </View>
           <TouchableOpacity
@@ -492,14 +672,12 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
 
-      {/* PIN Setup Modal */}
+      {/* ScanFlow PIN: set up / change / confirm */}
       <PinSetupModal
-        visible={isPinModalVisible}
-        onClose={() => setIsPinModalVisible(false)}
-        onSuccess={() => {
-          setIsPinModalVisible(false);
-          setHasPin(true);
-        }}
+        visible={pinModal.visible}
+        flow={pinModal.flow}
+        onClose={() => endPinFlow(false)}
+        onSuccess={() => endPinFlow(true)}
       />
     </SafeAreaView>
   );
@@ -572,6 +750,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 14,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginLeft: 8,
+  },
+  rowText: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  divided: {
+    borderTopWidth: 1,
+    marginTop: 12,
+    paddingTop: 12,
+  },
+  hint: {
+    marginTop: 8,
+    paddingHorizontal: 2,
   },
   securityFeatureBadge: {
     flexDirection: 'row',

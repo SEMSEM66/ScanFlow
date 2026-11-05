@@ -1,9 +1,11 @@
-# ScanFlow – Scan & Image Pipeline Architecture (Phase A + B)
+# ScanFlow – Architecture: Scan & Image Pipeline (Phase A + B), App Lock & Security (v1.4.0)
 
 This document describes how ScanFlow captures pages (iOS document scanner or
 its own camera), turns a phone photo into a page that looks like a real
 scanned PDF page, how page state is stored, and how the pieces are tested. It
 is the reference for anybody changing `src/imaging/` or the scan flow.
+Section 8 describes the app lock, the ScanFlow PIN and the privacy features
+(`src/security/`, v1.4.0).
 
 ---
 
@@ -43,12 +45,16 @@ src/services/
   PageRenderService.ts     ensurePagePreview() (stale-safe), importPages() (+ cleanup on failure)
   DocumentScannerService.ts iOS document scanner (VisionKit via expo-camera), camera permission
   ScanImportService.ts     saveScan(): new document / add pages / retake, temp cleanup, scan notices
-  ExportService.ts         PDF (pdf-lib, expo-print fallback), JPG, share, size estimate
+  ExportService.ts         PDF (pdf-lib, expo-print fallback), JPG, share (+ delete after sharing), size estimate
   DocumentRepository.ts    Pages CRUD incl. non-destructive state, reorder, replace, delete
-  StorageService.ts        Sandboxed file areas, export cache, best-effort deletion
+  StorageService.ts        Sandboxed file areas, export cache, deletion
+  AuthService.ts           Keychain, Face ID / passcode, ScanFlow PIN, security settings (see §8)
+  PrivacyService.ts        App-switcher blur, screenshot protection (see §8)
 
 src/components/ScannerProvider.tsx  App-wide scan entry (useScanner): scanner choice, permission,
                                     progress overlay, fallback to the ScanFlow camera
+
+src/security/           Pure TypeScript: SHA-256/PBKDF2, PIN records, attempt limit, lock policy (see §8)
 
 src/db/migrations.ts    PRAGMA user_version based migrations (v1 → v2)
 tools/prototype/        Python/OpenCV prototype of the enhancement algorithm (not bundled)
@@ -241,7 +247,150 @@ cached previews).
 
 ---
 
-## 8. Not yet implemented (see ROADMAP)
+## 8. App lock & security (v1.4.0)
+
+```text
+src/security/                 Pure TypeScript, no Expo imports (unit-tested in Node)
+  sha256.ts                   SHA-256, HMAC-SHA256, PBKDF2-HMAC-SHA256, UTF-8 / hex, constant-time compare
+  pinHash.ts                  PIN records v2 (PBKDF2) + verification of v1 records (≤ 1.3.0), weak-PIN check
+  lockout.ts                  Persisted attempt limit (5 free, then 30 s / 1 min / 5 min / 15 min)
+  lockPolicy.ts               When to lock: state machine over AppState changes
+src/services/AuthService.ts   Keychain (expo-secure-store), Face ID / Touch ID / passcode
+                              (expo-local-authentication), PIN, security settings
+src/services/PrivacyService.ts  App-switcher blur + screen-capture protection (expo-screen-capture)
+src/components/AppLockOverlay.tsx  Lock controller (AppState → lockPolicy), useAppLock() context
+src/components/LockScreen.tsx      Lock screen: Face ID button / PIN pad / "no method" message
+src/components/PinPad.tsx          Dots + keypad, shake, useCountdown()
+src/components/PinSetupModal.tsx   PIN flows: create / change / verify
+```
+
+### When the app locks (`lockPolicy.ts`)
+
+iOS reports `active`, `inactive` and `background`. **`inactive` means the app
+is still on screen** – Face ID / passcode prompt, Control Center,
+Notification Center, system alerts, the app switcher being opened. v1.3.0
+locked on `inactive`, so the Face ID prompt relocked the app it had just
+unlocked (endless loop). Rules now:
+
+| Event | Lock on, "Sofort" | Lock on, 1 / 5 min |
+| --- | --- | --- |
+| Launch | locked, one automatic prompt | same |
+| `inactive` | nothing | nothing |
+| `background` | lock immediately (app-switcher snapshot + return show the lock screen) | remember the time |
+| `active` after `background` | stays locked, one automatic prompt | lock if away ≥ timeout or the clock went backwards |
+| Unlock result arrives while in `background` | ignored (stays locked) | ignored |
+
+Lock off → always unlocked. Turning the lock on in Settings does not lock
+the running session (the user just authenticated).
+
+### How the lock is drawn (`AppLockOverlay.tsx`)
+
+- The app content (**children) always stays mounted** – navigation, open
+  editors and a running import survive locking.
+- While locked, or while the settings are not read yet, `LockScreen` is
+  rendered in a `FullWindowOverlay` (react-native-screens): a native view on
+  the key window above the root view and above everything presented before
+  the lock (crop screen, sheets, share sheet, VisionKit scanner). The
+  keyboard is dismissed when locking.
+- **Fail closed:** the Keychain is read up to 4 × (1.5 s apart); if it stays
+  unreadable the app assumes "lock on" and reads again on the next `active`.
+- The automatic Face ID prompt is shown once per lock / return and only
+  while the app is `active`; afterwards the lock screen offers a button.
+
+### Unlock methods (`AuthService.authenticateOwner()`)
+
+| Device | Without ScanFlow PIN | With ScanFlow PIN |
+| --- | --- | --- |
+| Face ID / Touch ID enrolled | biometrics, iOS falls back to the device passcode | biometrics only; fallback button *ScanFlow-PIN eingeben* → PIN pad |
+| Device passcode only (or biometrics locked by iOS) | device passcode | PIN pad |
+| No device passcode | lock cannot be turned on; if it is on, stays locked with a message | PIN pad |
+
+`authenticateOwner()` returns `success` only after iOS confirmed the user;
+every error maps to `use-pin`, `cancelled` or `unavailable`. *PIN vergessen?*
+(`authenticateBiometric()`) accepts Face ID / Touch ID only. Successful
+biometrics reset the PIN attempt counter.
+
+### PIN record (`pinHash.ts`)
+
+```text
+v2$<digits>$<iterations>$<saltHex>$<hashHex>
+hash = PBKDF2-HMAC-SHA256(utf8(pin), salt, iterations, 32 bytes)
+digits 4 | 6, iterations 5000 (accepted 1000…1 000 000), salt 16 random bytes
+```
+
+- v1 (≤ 1.3.0): hex of a 32-bit string hash of `"scanflow_salt_v1_" + pin`,
+  4 digits – still verified, rewritten as v2 after the first correct entry
+  (also v2 records with fewer iterations than `PIN_ITERATIONS`).
+- Salt source: `crypto.getRandomValues` if present → native UUID v4
+  (`expo`) → `Math.random` (uniqueness matters, secrecy does not).
+- With 10⁴ / 10⁶ possible PINs no hash stops an attacker who has the record.
+  The protection is the Keychain (this device only) and the attempt limit;
+  the hash keeps the PIN itself out of storage.
+
+### Attempt limit (`lockout.ts`)
+
+`{ failures, lockedUntil, lastFailureAt }` as JSON in the Keychain
+(`scanflow_pin_attempts`). The 5th wrong PIN starts a 30 s wait, each further
+one 1 min → 5 min → 15 min (stays at 15 min). No PIN is checked during a
+wait. A clock set back behind the last failure restarts the full wait.
+Checks run one at a time (queue in `AuthService`). Reset by the correct PIN,
+successful Face ID / Touch ID, a new or a removed PIN.
+
+### Keychain entries
+
+| Key | Content | Accessibility |
+| --- | --- | --- |
+| `scanflow_app_lock_enabled` | `true` / `false` | `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` |
+| `scanflow_lock_timeout_sec` | `0` / `60` / `300` | `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` |
+| `scanflow_hide_app_preview` | `true` / `false` (missing = `true`) | `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` |
+| `scanflow_prevent_screen_capture` | `true` / `false` | `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` |
+| `scanflow_security_pin` | PIN record | `WHEN_UNLOCKED_THIS_DEVICE_ONLY` |
+| `scanflow_pin_attempts` | attempt state | `WHEN_UNLOCKED_THIS_DEVICE_ONLY` |
+| `scanflow_keychain_version` | `2` after the one-time migration | `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` |
+
+`migrateKeychain()` rewrites entries of ≤ 1.3.0 once with these classes
+(expo-secure-store updates `kSecAttrAccessible` on existing items).
+Preferences (quality, resolution, scanner) keep the default class.
+
+### Privacy & files
+
+- **App switcher:** `enableAppSwitcherProtectionAsync()` – native blur on
+  `willResignActive`, removed on `didBecomeActive` (setting *App-Vorschau
+  verbergen*, default on, independent of the lock).
+- **Screenshots / recordings:** `preventScreenCaptureAsync('scanflow-settings')`
+  (black output) only when *Screenshot-Schutz* is on; the screenshot notice
+  is registered only then.
+- **Exports:** one folder per export below `<cache>/scanflow-export/`,
+  deleted when the share sheet closes (also after errors) and at every app
+  start; only paths inside the export directory are deleted
+  (`exportFolderOf()`). JPGs are shared without a declared type so
+  expo-sharing does not stage a `.jpeg` hard link in its own cache.
+- **Deleting** removes files directly. Overwriting is pointless on APFS
+  (copy-on-write); iOS Data Protection encrypts the files at rest – only
+  when a device passcode is set.
+
+### Not covered by the app lock
+
+- ScanFlow does not encrypt the database and page files itself (not
+  possible in Expo Go). A development / IPA build could add SQLCipher and
+  file encryption with a Keychain key – a decision for later.
+- Backups contain the documents like any other app data.
+- Alerts that appear while locked (e.g. an import error) can show above the
+  lock screen.
+
+### Tests
+
+`__tests__/security.test.ts` (hashes vs. Node crypto incl. RFC 4231,
+PIN records incl. v1, attempt limit, lock policy incl. the Face ID loop),
+`__tests__/authService.test.ts` (in-memory Keychain + scripted Face ID:
+no unlock without a check, PIN replaces the passcode, persisted lockout
+across a fresh module instance, v1 upgrade, Keychain classes, migration),
+`__tests__/exportCleanup.test.ts` (deletion after sharing, path guard).
+Run: `npm run test:security`.
+
+---
+
+## 9. Not yet implemented (see ROADMAP)
 
 - Live edge overlay / auto-capture in ScanFlow's *own* camera (`app/scan.tsx`).
   Live detection and auto-capture are provided by the iOS document scanner

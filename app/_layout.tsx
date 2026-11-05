@@ -22,6 +22,8 @@ function RootNavigation() {
         await getDatabase();
         // Initialize storage directory
         await storageService.initStorageDirectory();
+        // Exported PDFs/JPGs are deleted after sharing; remove leftovers of an interrupted share
+        await storageService.clearCaches();
       } catch (err) {
         console.error('[ScanFlow] Initialization error:', err);
       } finally {
@@ -39,8 +41,9 @@ function RootNavigation() {
     );
   }
 
-  // ScannerProvider sits outside the lock overlay so a running scan import
-  // survives the privacy veil (it replaces its children while inactive).
+  // AppLockOverlay keeps its children mounted and draws the lock screen above
+  // the whole window (also above modal screens and the iOS scanner), so
+  // navigation and a running scan import survive locking.
   return (
     <ScannerProvider>
       <AppLockOverlay>

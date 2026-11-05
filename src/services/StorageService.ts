@@ -97,10 +97,13 @@ class StorageService {
   }
 
   /**
-   * Deletes a file inside app storage. Best effort: the content is overwritten
-   * before unlinking, but on APFS/flash storage (copy-on-write, wear levelling)
-   * this is NOT a guaranteed secure erase. iOS Data Protection encrypts the
-   * files at rest; deleted blocks are unreadable without the file key.
+   * Deletes a file inside app storage (paths outside it are refused).
+   *
+   * There is deliberately no "overwrite with zeros" pass: on APFS / flash
+   * storage an overwrite is written to new blocks (copy-on-write, wear
+   * levelling), so it would not destroy the old content and only cost time.
+   * Protection at rest comes from iOS Data Protection, which encrypts app
+   * files as long as a device passcode is set.
    */
   async deleteFile(fileUri: string): Promise<void> {
     try {
@@ -108,25 +111,12 @@ class StorageService {
         console.warn(`[StorageService] Blocked unauthorized path deletion: ${fileUri}`);
         return;
       }
-
       const info = await FileSystem.getInfoAsync(fileUri);
       if (info.exists && !info.isDirectory) {
-        // Zero-trace shredding: overwrite file bytes with zeros
-        try {
-          const fileSize = info.size || 2048;
-          const shredChunk = '0'.repeat(Math.min(fileSize, 8192));
-          await FileSystem.writeAsStringAsync(fileUri, shredChunk, {
-            encoding: FileSystem.EncodingType.UTF8,
-          });
-        } catch {
-          // Continue to deletion if shredding fails
-        }
-
-        // Unlink file from storage
         await FileSystem.deleteAsync(fileUri, { idempotent: true });
       }
     } catch (err) {
-      console.warn(`[StorageService] Failed to securely delete file: ${fileUri}`, err);
+      console.warn(`[StorageService] Failed to delete file: ${fileUri}`, err);
     }
   }
 
@@ -189,7 +179,7 @@ class StorageService {
     try {
       const dirInfo = await FileSystem.getInfoAsync(this.baseDir);
       if (dirInfo.exists) {
-        // Overwrite + delete all individual files first (incl. sub-directories)
+        // Delete all individual files first (incl. sub-directories)
         await this.deleteTree(this.baseDir);
         await FileSystem.deleteAsync(this.baseDir, { idempotent: true });
         await this.initStorageDirectory();

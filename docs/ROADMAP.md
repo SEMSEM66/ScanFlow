@@ -190,6 +190,8 @@ Development pauses at each of these 5 checkpoints for physical verification on y
   - App state listener (`AppState`): locks screen when app is sent to background or restarted.
 - [x] Storage info (total scan count and disk space consumed) + "Daten bereinigen" (Cache clear).
 
+> ⚠️ **Correction (v1.4.0):** the lock also triggered while the app was only *inactive* (the Face ID prompt itself) → Face ID loop and navigation reset; without Face ID / Touch ID it opened without any check; the PIN attempt limit was reset by restarting the app; the PIN used a 32-bit hash with a fixed salt. All fixed in Phase S (v1.4.0).
+
 > ⚠️ **Correction (v1.2.0):** the default quality setting was stored but not used; "cache clear" deleted nothing (it only recalculated the size). Now: default resolution + quality are used by the export dialog, and cache clear deletes the export folder.
 - [x] **Verification:** Run `npx tsc --noEmit` + linter.
 - [x] **Git:** Commit and push to `main`.
@@ -269,6 +271,36 @@ Spike result: Expo Go has no camera frame processors, so a custom live overlay w
   5. Cancel the scanner → nothing is stored; deny camera access → alert with *In iOS-Einstellungen öffnen*.
   6. Settings → *ScanFlow-Kamera* → FAB opens the own camera; switch back to *iOS-Scanner*.
 
+## ✅ Phase S: Security hardening (v1.4.0)
+*Goal: an app lock that cannot be bypassed and does not get in the way – no Face ID loop, no lost screens, a PIN that is stored and rate-limited properly. Everything runs in Expo Go (no new dependency).*
+
+- [x] **Face ID loop fixed:** lock decisions in a pure state machine (`src/security/lockPolicy.ts`): `inactive` (Face ID prompt, Control Center, alerts) never locks; `background` + *Sperren nach* decides; one automatic prompt per lock / return; an unlock result that arrives in the background is ignored.
+- [x] App content stays mounted while locked; the lock screen is drawn in a `FullWindowOverlay` above modal screens, sheets, the share sheet and the iOS scanner (`AppLockOverlay.tsx`, `LockScreen.tsx`).
+- [x] Never unlock without a check (`AuthService.authenticateOwner()`): Face ID / Touch ID → device passcode or ScanFlow PIN; nothing available → stays locked; Keychain unreadable → locked (fail closed).
+- [x] PIN v2: PBKDF2-HMAC-SHA256, 5,000 iterations, random 16-byte salt, constant-time comparison (`src/security/sha256.ts`, `pinHash.ts`); v1 PINs (≤ 1.3.0) verified and converted.
+- [x] Persisted, escalating attempt limit (`lockout.ts`): 5 free attempts, then 30 s / 1 min / 5 min / 15 min; safe against setting the clock back; checks are serialised.
+- [x] 4- or 6-digit PIN (default 6), weak PINs rejected; set / change / remove with verification; *PIN vergessen? Mit Face ID bestätigen*.
+- [x] With a PIN: Face ID with *ScanFlow-PIN eingeben* as fallback, no device-passcode fallback.
+- [x] Keychain classes *this device only* + one-time migration of existing entries.
+- [x] *App-Vorschau verbergen* (native blur, independent of the lock) and *Screenshot-Schutz* with a notice only while it is on (`PrivacyService.ts`).
+- [x] Exports deleted when the share sheet closes (JPGs shared without a declared type, so expo-sharing keeps no `.jpeg` copy); export cache cleared at start; fake "Zero-Trace" shredding removed.
+- [x] Lock screen, PIN dialog and security settings localized (de / en).
+- [x] Tests: `__tests__/security.test.ts`, `authService.test.ts`, `exportCleanup.test.ts` (56 tests, `npm run test:security`).
+- [ ] Measure the PIN check time on an iPhone; adjust `PIN_ITERATIONS` if it is far from 0.2–0.4 s (existing records are upgraded automatically).
+- [ ] Optional, needs a development / IPA build (**decide with the user**): encrypt the database and page files (e.g. SQLCipher + file encryption with a Keychain key).
+- [ ] **🛑 STOP S:** Test on physical iPhone (Expo Go):
+  1. Settings → *App-Sperre* on, *Sperren nach: Sofort*. Home → reopen → **exactly one** Face ID prompt → the library opens; no loop, no second prompt.
+  2. While unlocked: Control Center, Notification Center, a banner, the app switcher (without switching apps) → no lock, no Face ID.
+  3. Open a document → *Zuschneiden* (also: page editor, export sheet, iOS scanner) → home → reopen → the lock screen covers everything → unlock → the same screen is still open.
+  4. *Sperren nach: 1 Min.*: back after ~20 s → no lock; after > 1 min → locked.
+  5. Cancel Face ID → lock screen with *Mit Face ID entsperren* → tap → prompt again.
+  6. *ScanFlow-PIN → Einrichten*: 111111 / 123456 are rejected; set a 6-digit PIN (also try *4-stelligen PIN verwenden*). Lock → the Face ID prompt offers *ScanFlow-PIN eingeben* → the PIN unlocks.
+  7. 5 wrong PINs → 30 s countdown; force-quit and reopen → the wait continues; afterwards the correct PIN unlocks.
+  8. *Ändern* / *Entfernen* ask for the current PIN (or Face ID via *PIN vergessen?*); turning the lock off asks for Face ID (or the PIN / device passcode).
+  9. App switcher shows ScanFlow blurred (*App-Vorschau verbergen* on). *Screenshot-Schutz* on → screenshot is black + notice; off → normal screenshot, no notice.
+  10. Export PDF and JPG → share to *Dateien sichern*, Mail and AirDrop → the files arrive complete with their normal names (`.pdf` / `.jpg`).
+  11. If you used a 4-digit PIN with 1.3.0: it still unlocks after the update.
+
 ## ⏳ Phase C: OCR & searchable PDF (planned)
 *Goal: text search in the library and an invisible text layer in exported PDFs.*
 - [ ] Spike: on-device OCR that runs in Expo Go (no custom native module). Candidates: none built into Expo Go today → evaluate WebView + tesseract.js (WASM, offline, bundled language data de/en) vs. a later development build with Apple Vision. **STOP** and decide with the user before adding a dev-build requirement.
@@ -279,10 +311,11 @@ Spike result: Expo Go has no camera frame processors, so a custom live overlay w
 
 ## ⏳ Phase D: Docs, repo & release hygiene
 - [x] README, ROADMAP, CHANGELOG, AGENTS.md updated; `docs/ARCHITECTURE.md` added; doc-vs-code discrepancies corrected (v1.2.0).
-- [x] `docs/COMMITS.md` with Conventional Commit grouping for the v1.2.0 and v1.3.0 change sets.
-- [x] ESLint flat config (`eslint.config.js`) + `npm test` / `npm run test:imaging` scripts.
-- [ ] Fix the pre-existing lint error in `src/components/AppLockOverlay.tsx` (variable used before declaration) and the remaining warnings (unused variables).
-- [ ] Localize remaining hard-coded German strings (library actions, app lock, PIN setup).
+- [x] `docs/COMMITS.md` with Conventional Commit grouping for the v1.2.0, v1.3.0 and v1.4.0 change sets.
+- [x] ESLint flat config (`eslint.config.js`) + `npm test` / `npm run test:imaging` / `npm run test:security` scripts.
+- [x] Fix the pre-existing lint error in `src/components/AppLockOverlay.tsx` (v1.4.0 – file rewritten).
+- [ ] Fix the remaining lint warnings (unused variables).
+- [ ] Localize remaining hard-coded German strings (library actions). *(App lock, PIN and security settings localized in v1.4.0.)*
 - [ ] Remove the unused `react-native-webview` dependency after STOP A confirms the Skia pipeline on device.
 - [ ] Update the hard-coded release tag (`v1.1.0`) in `.github/workflows/build-ipa.yml` before the next release.
 - [ ] Optional: GitHub Action running `npx tsc --noEmit`, `npm run lint`, `npm run test:imaging` on pull requests.

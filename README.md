@@ -11,7 +11,7 @@ Designed as a clean, ad-free alternative to apps like CamScanner, ScanFlow proce
 ### Phase 1 MVP
 - **📚 Document Library:** 2-column grid and list views, instant search, folder-based categorization, date and page count badges. Reloads automatically when you return to it.
 - **📷 Camera Scanner:** Multi-page capture, flash controls, framing guides, and gallery import. *(Since v1.3.0 the iOS document scanner is the default – see Phase B below; this own camera remains as an option/fallback with manual capture.)*
-- **🔒 Privacy & Security:** Face ID / Touch ID / Passcode app lock (`expo-local-authentication` + `expo-secure-store`), PIN fallback, app-switcher veil.
+- **🔒 Privacy & Security:** Face ID / Touch ID / Passcode app lock (`expo-local-authentication` + `expo-secure-store`), ScanFlow PIN, app-switcher blur. *(Rebuilt in v1.4.0 – see below.)*
 - **🌐 Localization:** German (default) and English.
 - **🌙 Theming:** Warm Ivory light mode and OLED dark mode.
 
@@ -32,7 +32,15 @@ Designed as a clean, ad-free alternative to apps like CamScanner, ScanFlow proce
 - **⚙️ Settings → Scanner:** *iOS-Scanner* (default) or *ScanFlow-Kamera* (own camera, manual capture, edges detected after capture). If the iOS scanner is unavailable or cannot open, ScanFlow falls back to its own camera.
 - **🔍 Detector v2** for photo import and the own camera: line-based (oriented Hough + two-stage scoring); handles header bars, printed frames near the edge and sheets lying on a larger light object much better than v1.
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow and pipeline and [`docs/ROADMAP.md`](docs/ROADMAP.md) for Phases B–D.
+### Security hardening (v1.4.0)
+- **🔐 App lock without loops or resets:** locks only when ScanFlow was really in the background (*Sperren nach* Sofort / 1 Min. / 5 Min.) – Face ID, Control Center or a system alert no longer relock it. Exactly one Face ID prompt per return; your open screen (crop, editor, scanner) is still there after unlocking.
+- **🛡️ Never opens without a check:** Face ID / Touch ID, otherwise the device passcode or the ScanFlow PIN. The lock screen covers everything, including sheets, the share sheet and the iOS scanner.
+- **🔢 ScanFlow PIN:** 6 digits (or 4), obvious PINs rejected, stored salted with PBKDF2-HMAC-SHA256 in the Keychain (this device only). With a PIN, the iPhone passcode alone does not open ScanFlow. *Einrichten / Ändern / Entfernen* in Settings; PINs from older versions keep working.
+- **⏳ Attempt limit that survives restarts:** 5 wrong PINs → 30 s, then 1 min, 5 min, 15 min.
+- **🙈 Privacy:** *App-Vorschau verbergen* (blur in the app switcher, default on), *Screenshot-Schutz* (screenshots and recordings stay black; notice only while it is on), exported PDFs/JPGs are deleted as soon as the share sheet closes.
+- **🌐** Lock screen, PIN dialog and security settings in German and English.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow, the pipeline and the app lock, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phases.
 
 ### Known limitations
 - ScanFlow's *own* camera has no live edge overlay / auto-capture (Expo Go offers no camera frame processing); live detection comes from the iOS scanner.
@@ -40,7 +48,9 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow and pipelin
 - Photo import / own camera detection: if the sheet lies in a clear sleeve or the page is cut off by the image frame, the detected outline can be wrong (e.g. include the sleeve) – check the corners in *Zuschneiden*. In the iOS scanner the outline is visible live before capture and the corners can be adjusted before saving.
 - OCR / searchable PDF: **not yet** (Phase C; hook prepared in `src/imaging/pdf.ts`).
 - JPG export exports the current page only.
-- Deleting files is best-effort (iOS flash storage/APFS does not allow guaranteed secure wiping).
+- **The app lock protects the app's screens, not the files.** ScanFlow does not encrypt its database and page images itself (not possible in Expo Go); iOS Data Protection encrypts them when a **device passcode** is set. Deleted files are removed immediately, but flash storage cannot be wiped securely by an app.
+- iPhone / iCloud backups include your documents like any other app data (the PIN and lock settings are not restored to another device).
+- An alert that appears while ScanFlow is locked (e.g. an import error) can show its text above the lock screen.
 - Older (v1) pages keep their already-baked filter; they are migrated to the filter *Original* and can be re-edited from there.
 
 ---
@@ -93,6 +103,7 @@ npx tsc --noEmit
 npm run lint
 npm test                 # all tests, incl. GPU renderer tests (~5–7 min)
 npm run test:imaging     # fast subset: geometry, detection, page state, PDF, migrations
+npm run test:security    # fast subset: hashes, PIN, attempt limit, lock policy, AuthService, export cleanup
 ```
 
 Optional: write before/after sample images (synthetic photo → all filters) and a sample PDF for visual review:
@@ -123,7 +134,8 @@ ScanFlow/
 │   ├── components/           # Reusable UI components matching /design (+ ScannerProvider: scan entry)
 │   ├── db/                   # SQLite schema, migrations (user_version), client
 │   ├── imaging/              # Pure TS imaging: geometry, detection, filters, SkSL shaders, renderer, PDF
-│   ├── services/             # Repositories, storage, image pipeline, render, export, auth
+│   ├── security/             # Pure TS: SHA-256/PBKDF2, PIN records, attempt limit, lock policy
+│   ├── services/             # Repositories, storage, image pipeline, render, export, auth, privacy
 │   ├── i18n/                 # Translations (German & English)
 │   ├── theme/                # Design tokens & theme context
 │   └── types/                # TypeScript domain types

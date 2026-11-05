@@ -87,8 +87,8 @@ Development proceeds in small, verifiable steps with real persisted storage from
 ## 6. Verification & Quality Gates
 - **After every step:**
   1. Run TypeScript check: `npx tsc --noEmit`. Fix any typing errors immediately.
-  2. Run linter (`npm run lint`): fix any errors you introduce. (Known pre-existing error: `src/components/AppLockOverlay.tsx`, tracked in ROADMAP Phase D.)
-  2a. Run tests: `npm run test:imaging` (fast) and `npm test` (full, incl. headless Skia renderer, ~5–7 min) when touching `src/imaging`, `src/db` or export.
+  2. Run linter (`npm run lint`): fix any errors you introduce (0 errors since v1.4.0; the remaining unused-variable warnings are tracked in ROADMAP Phase D).
+  2a. Run tests: `npm run test:imaging` (fast) and `npm test` (full, incl. headless Skia renderer, ~5–7 min) when touching `src/imaging`, `src/db` or export; `npm run test:security` when touching `src/security`, `AuthService`, `AppLockOverlay`, `LockScreen`, `PinSetupModal`, `PrivacyService` or sharing.
   3. Update `docs/ROADMAP.md` (check off completed items).
   4. Update `CHANGELOG.md`.
   5. Commit and push to `main`.
@@ -132,3 +132,17 @@ See `docs/ARCHITECTURE.md` → "Scan flow".
 - **Native presentation timing:** the iOS scanner and the photo picker must only be presented when no modal or alert is animating (alert → short delay, RN `Modal` → `onDismiss`). Otherwise UIKit drops the presentation and the scan promise never settles.
 - Temporary scan files are deleted only via `storageService.deleteTempFile()` (restricted to the cache directory); stored page files only via the repository.
 - The iOS scanner's UI language comes from `CFBundleLocalizations` in `app.json` (de, en) – keep it when adding languages.
+
+---
+
+## 10. Security Rules (since v1.4.0)
+See `docs/ARCHITECTURE.md` → "App lock & security".
+- **Never lock on `inactive`.** iOS reports `inactive` for the Face ID prompt, Control Center, Notification Center and system alerts – the app is still on screen. Lock decisions belong in the pure state machine `src/security/lockPolicy.ts` (with tests in `__tests__/security.test.ts`), not in components.
+- **Never unlock without a check.** Only a `success` from `authService.authenticateOwner()` / `authenticateBiometric()` or `{ status: 'ok' }` from `verifyPinCode()` may unlock. Every error, cancel or missing method keeps the app locked; unreadable settings count as "lock on" (fail closed).
+- **Keep the app mounted.** `AppLockOverlay` always renders its children; the lock screen is an overlay in `FullWindowOverlay`. Never replace or unmount the navigation tree to hide content.
+- **PINs only through `AuthService`:** `setPinCode()` / `verifyPinCode()` / `removePinCode()`. Never store, log or compare a PIN elsewhere; never weaken the record format (`src/security/pinHash.ts`), the iteration count or the attempt limit (`lockout.ts`) without updating the tests and `docs/ARCHITECTURE.md`. Changing the format needs a new version prefix (`v3$…`) and an upgrade path for existing records.
+- **Secrets only in the Keychain** (`expo-secure-store`) with the *this-device-only* classes from `AuthService` (`CONFIG_OPTS`, `SECRET_OPTS`) – never in SQLite, AsyncStorage, files or logs.
+- **With a ScanFlow PIN, the device passcode must not unlock ScanFlow** (`disableDeviceFallback: true`, fallback → PIN pad).
+- **Exported files are temporary:** write them only below `storageService.exportDir` (one folder per export) and delete them after sharing (`exportService.shareDocument()` / `discardExport()`). Do not declare a share type whose preferred extension differs from the file's extension (expo-sharing would stage a hard-linked copy).
+- **Honest wording:** do not claim encryption, "secure wiping" or "zero trace" the app does not provide. The app lock protects the UI; files are protected by iOS Data Protection (device passcode).
+- **Tests for security code:** pure logic goes into `src/security/` (no Expo imports) with unit tests; service behaviour is tested with mocked `expo-secure-store` / `expo-local-authentication` (`__tests__/authService.test.ts`).

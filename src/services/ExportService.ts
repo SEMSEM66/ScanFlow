@@ -24,6 +24,19 @@ export function sanitizeFileName(title: string): string {
   return clean.length > 0 ? clean : 'Scan';
 }
 
+/**
+ * The per-export folder (`<exportDir><timestamp>/`) containing `uri`, or the
+ * file itself when it lies directly in the export directory; null for
+ * anything outside it (never delete foreign files).
+ */
+export function exportFolderOf(uri: string, exportDir: string): string | null {
+  if (!exportDir || !uri.startsWith(exportDir) || uri.includes('..')) return null;
+  const rest = uri.slice(exportDir.length);
+  if (rest.length === 0) return null;
+  const slash = rest.indexOf('/');
+  return slash > 0 ? `${exportDir}${rest.slice(0, slash + 1)}` : uri;
+}
+
 /** pdf-lib's standard fonts are WinAnsi only → drop other characters. */
 function winAnsi(text: string): string {
   return text.replace(/[^\u0020-\u007e\u00a0-\u00ff]/g, '');
@@ -107,15 +120,40 @@ img { width: 100%; height: 100%; object-fit: fill; display: block; }
     return target;
   }
 
-  /** Native iOS share sheet. */
+  /**
+   * Native iOS share sheet. The exported file is deleted as soon as the sheet
+   * is closed (expo-sharing resolves on dismissal, after the target app or
+   * "Save to Files" has taken its copy) – no readable PDF/JPG copy stays in
+   * the app cache.
+   *
+   * JPGs are shared without a declared type: expo-sharing re-stages a file
+   * whose extension differs from the type's preferred one ("public.jpeg" →
+   * .jpeg) as a hard link "Scan.jpg.jpeg" in its own cache, which would
+   * survive the deletion below until the next share. iOS derives the type
+   * from the .jpg extension.
+   */
   async shareDocument(uri: string, format: ExportFormat, dialogTitle?: string): Promise<void> {
-    const isAvailable = await Sharing.isAvailableAsync();
-    if (!isAvailable) throw new Error('Sharing is not available on this device.');
-    await Sharing.shareAsync(uri, {
-      mimeType: format === 'pdf' ? 'application/pdf' : 'image/jpeg',
-      UTI: format === 'pdf' ? 'com.adobe.pdf' : 'public.jpeg',
-      dialogTitle,
-    });
+    try {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) throw new Error('Sharing is not available on this device.');
+      await Sharing.shareAsync(
+        uri,
+        format === 'pdf' ? { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle } : { dialogTitle }
+      );
+    } finally {
+      await this.discardExport(uri);
+    }
+  }
+
+  /** Deletes an export (its whole per-export folder below the export directory). */
+  async discardExport(uri: string): Promise<void> {
+    const target = exportFolderOf(uri, storageService.exportDir);
+    if (!target) return;
+    try {
+      await FileSystem.deleteAsync(target, { idempotent: true });
+    } catch (err) {
+      console.warn('[ExportService] Could not delete the exported file:', err);
+    }
   }
 
   /** Estimated size (rough, from measured JPEG sizes per page). */

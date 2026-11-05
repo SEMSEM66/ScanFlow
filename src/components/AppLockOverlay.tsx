@@ -1,412 +1,249 @@
-import React, { useEffect, useState, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  AppState,
-  AppStateStatus,
-  Alert,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, AppState, Keyboard, Platform, StyleSheet, View } from 'react-native';
+import { FullWindowOverlay } from 'react-native-screens';
 import * as ScreenCapture from 'expo-screen-capture';
-import { useTheme } from '../theme';
 import { useTranslation } from '../i18n';
-import { authService } from '../services/AuthService';
+import {
+  authService,
+  type PinResult,
+  type SecurityConfig,
+  type UnlockCapabilities,
+} from '../services/AuthService';
+import { privacyService } from '../services/PrivacyService';
+import {
+  consumeAutoPrompt,
+  initialLockState,
+  onAppStateChange,
+  onConfigChange,
+  onUnlocked,
+  type AppStateName,
+  type LockConfig,
+  type LockState,
+} from '../security/lockPolicy';
+import { LockScreen } from './LockScreen';
+
+/**
+ * App lock + privacy (v1.4.0).
+ *
+ * - The app content always stays mounted (navigation, open editors and a
+ *   running import survive locking). While locked, the lock screen is drawn
+ *   in a FullWindowOverlay – a view on the iOS window itself – so it also
+ *   covers modal screens (crop, camera), sheets, the share sheet and the
+ *   iOS document scanner.
+ * - When to lock is decided by the pure state machine in security/lockPolicy
+ *   (`inactive` never locks → no Face ID loop).
+ * - The app-switcher preview is hidden by the native blur of
+ *   expo-screen-capture (PrivacyService), not by a JS veil.
+ * - Unknown settings (Keychain not readable yet) count as locked.
+ */
+
+interface AppLockContextValue {
+  /** null until the settings were read. */
+  config: SecurityConfig | null;
+  /** Re-read and apply the security settings (call after changing them). */
+  reload: () => Promise<void>;
+}
+
+const AppLockContext = createContext<AppLockContextValue | null>(null);
+
+export function useAppLock(): AppLockContextValue {
+  const ctx = useContext(AppLockContext);
+  if (!ctx) throw new Error('useAppLock must be used within AppLockOverlay');
+  return ctx;
+}
+
+const toLockConfig = (c: SecurityConfig): LockConfig => ({ enabled: c.lockEnabled, timeoutSec: c.lockTimeout });
+
+/** Used when the Keychain stays unreadable: lock, hide previews. */
+const FAIL_CLOSED: SecurityConfig = { lockEnabled: true, lockTimeout: 0, hidePreview: true, screenCaptureProtection: false };
+const CONFIG_RETRIES = 4;
+const CONFIG_RETRY_MS = 1500;
+
+const LOCKED_UNTIL_CONFIG: LockState = { locked: true, backgroundAt: null, autoPrompt: false };
+
+/** Above the whole iOS window (also above native modals); plain overlay elsewhere. */
+const Cover: React.FC<{ children: React.ReactNode }> = ({ children }) =>
+  Platform.OS === 'ios' ? (
+    <FullWindowOverlay>{children}</FullWindowOverlay>
+  ) : (
+    <View style={StyleSheet.absoluteFill}>{children}</View>
+  );
 
 export const AppLockOverlay: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { colors, typography, spacing, borderRadius } = useTheme();
   const { t } = useTranslation();
 
-  const [isLockEnabled, setIsLockEnabled] = useState(false);
-  const [isLocked, setIsLocked] = useState(false);
-  const [isBackgrounded, setIsBackgrounded] = useState(false);
-  const [authFailed, setAuthFailed] = useState(false);
+  const [config, setConfig] = useState<SecurityConfig | null>(null);
+  const configRef = useRef<SecurityConfig | null>(null);
+  const [lock, setLock] = useState<LockState>(LOCKED_UNTIL_CONFIG);
+  const lockRef = useRef<LockState>(LOCKED_UNTIL_CONFIG);
+  const appStateRef = useRef<AppStateName>((AppState.currentState as AppStateName | null) ?? 'unknown');
+  const [caps, setCaps] = useState<UnlockCapabilities | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const authBusyRef = useRef(false);
 
-  // PIN fallback keypad state
-  const [showPinKeypad, setShowPinKeypad] = useState(false);
-  const [enteredPin, setEnteredPin] = useState('');
-  const [hasPinConfigured, setHasPinConfigured] = useState(false);
-  const [lockoutSeconds, setLockoutSeconds] = useState(0);
-
-  const lockoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Initial check & screen capture listener
-  useEffect(() => {
-    async function initSecurity() {
-      const enabled = await authService.isAppLockEnabled();
-      setIsLockEnabled(enabled);
-      const hasPin = await authService.hasPinCode();
-      setHasPinConfigured(hasPin);
-
-      // Check screen capture protection
-      const screenCapProtected = await authService.isScreenCaptureProtectionEnabled();
-      if (screenCapProtected) {
-        await ScreenCapture.preventScreenCaptureAsync();
-      }
-
-      if (enabled) {
-        setIsLocked(true);
-        triggerBiometricAuth();
-      }
-    }
-    initSecurity();
-
-    // Screenshot listener
-    const screenshotSub = ScreenCapture.addScreenshotListener(() => {
-      Alert.alert(
-        'Sicherheitshinweis',
-        'Ein Screenshot wurde erstellt. Bitte stellen Sie sicher, dass vertrauliche Dokumente geschützt bleiben.'
-      );
-    });
-
-    return () => {
-      screenshotSub.remove();
-      if (lockoutTimerRef.current) clearInterval(lockoutTimerRef.current);
-    };
+  const refreshCaps = useCallback(async () => {
+    setCaps(await authService.getCapabilities());
   }, []);
 
-  // AppState transitions: Privacy Veil & Auto-Lock Timeout
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
-      const enabled = await authService.isAppLockEnabled();
-      setIsLockEnabled(enabled);
+  const commit = useCallback(
+    (next: LockState) => {
+      const prev = lockRef.current;
+      if (next === prev) return;
+      lockRef.current = next;
+      setLock(next);
+      if (next.locked && !prev.locked) {
+        Keyboard.dismiss();
+        refreshCaps(); // unlock methods for the lock screen
+      }
+    },
+    [refreshCaps]
+  );
 
-      if (nextState === 'inactive' || nextState === 'background') {
-        // App Switcher Privacy Veil: immediately obscure UI
-        setIsBackgrounded(true);
-        authService.recordBackgroundTimestamp();
-      } else if (nextState === 'active') {
-        setIsBackgrounded(false);
-        const shouldLock = await authService.shouldLockOnForeground();
-        if (shouldLock) {
-          setIsLocked(true);
-          setShowPinKeypad(false);
-          setEnteredPin('');
-          triggerBiometricAuth();
-        }
+  const applyConfig = useCallback(
+    (c: SecurityConfig) => {
+      const first = configRef.current === null;
+      configRef.current = c;
+      setConfig(c);
+      commit(first ? initialLockState(toLockConfig(c)) : onConfigChange(lockRef.current, toLockConfig(c)));
+      // Best effort and idempotent (PrivacyService remembers what is applied).
+      privacyService.setAppSwitcherProtection(c.hidePreview);
+      privacyService.setScreenCaptureProtection(c.screenCaptureProtection);
+    },
+    [commit]
+  );
+
+  /** Reads the settings; the first successful read decides the initial lock. */
+  const loadConfig = useCallback(async (): Promise<boolean> => {
+    try {
+      applyConfig(await authService.getSecurityConfig());
+      return true;
+    } catch (err) {
+      console.warn('[AppLock] Security settings not readable:', err);
+      return false;
+    }
+  }, [applyConfig]);
+
+  /** Face ID / Touch ID / passcode (or the PIN pad) – never unlocks without a check. */
+  const unlockWithDevice = useCallback(async () => {
+    if (authBusyRef.current || !lockRef.current.locked) return;
+    authBusyRef.current = true;
+    setAuthBusy(true);
+    try {
+      const c = await authService.getCapabilities();
+      setCaps(c);
+      const result = await authService.authenticateOwner(c, {
+        prompt: t.security.promptUnlock,
+        usePin: t.security.usePin,
+        cancel: t.common.cancel,
+      });
+      if (result === 'success') commit(onUnlocked(lockRef.current, appStateRef.current));
+      // use-pin: the PIN pad is on screen already; cancelled / unavailable: stay locked
+    } finally {
+      authBusyRef.current = false;
+      setAuthBusy(false);
+    }
+  }, [commit, t]);
+
+  /** The automatic prompt: once per lock / return, only while the app is in front. */
+  const maybeAutoPrompt = useCallback(() => {
+    const state = lockRef.current;
+    if (!configRef.current || !state.locked || !state.autoPrompt || authBusyRef.current) return;
+    const appState = appStateRef.current;
+    if (appState !== 'active' && appState !== 'unknown') return;
+    commit(consumeAutoPrompt(state));
+    unlockWithDevice();
+  }, [commit, unlockWithDevice]);
+
+  const submitPin = useCallback(
+    async (pin: string): Promise<PinResult> => {
+      const result = await authService.verifyPinCode(pin);
+      if (result.status === 'ok') commit(onUnlocked(lockRef.current, appStateRef.current));
+      if (result.status === 'no-pin') refreshCaps();
+      return result;
+    },
+    [commit, refreshCaps]
+  );
+
+  // Start: one-time Keychain migration, then the settings – fail closed if they stay unreadable.
+  useEffect(() => {
+    let alive = true;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const attempt = async () => {
+      if (!alive || configRef.current) return;
+      if (await loadConfig()) return;
+      attempts += 1;
+      if (attempts >= CONFIG_RETRIES) {
+        if (alive && !configRef.current) applyConfig(FAIL_CLOSED);
+        return;
+      }
+      timer = setTimeout(attempt, CONFIG_RETRY_MS);
+    };
+    authService.migrateKeychain().finally(attempt);
+    return () => {
+      alive = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [applyConfig, loadConfig]);
+
+  // Lock decisions on app state changes (see security/lockPolicy).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      const state = next as AppStateName;
+      appStateRef.current = state;
+      const c = configRef.current;
+      const assumed = !c || c === FAIL_CLOSED;
+      // Settings unknown: read them again now that the app is in front, then decide about the prompt.
+      if (state === 'active' && assumed) loadConfig().then(maybeAutoPrompt);
+      if (!c) return;
+      commit(onAppStateChange(lockRef.current, state, toLockConfig(c), Date.now()));
+      if (state === 'active') {
+        privacyService.setAppSwitcherProtection(c.hidePreview);
+        privacyService.setScreenCaptureProtection(c.screenCaptureProtection);
+        if (lockRef.current.locked) refreshCaps();
+        if (!assumed) maybeAutoPrompt();
       }
     });
+    return () => sub.remove();
+  }, [commit, loadConfig, maybeAutoPrompt, refreshCaps]);
 
-    return () => {
-      subscription.remove();
-    };
-  }, []);
+  // After the first settings read / a new lock while in front.
+  useEffect(() => {
+    if (lock.locked && lock.autoPrompt && config) maybeAutoPrompt();
+  }, [lock, config, maybeAutoPrompt]);
 
-  const triggerBiometricAuth = async () => {
-    if (authService.isLockedOut()) {
-      startLockoutCountdown();
-      setShowPinKeypad(true);
-      return;
-    }
+  // Screenshot notice only while screenshots are blocked (they come out black).
+  const captureProtected = config?.screenCaptureProtection === true;
+  useEffect(() => {
+    if (!captureProtected) return;
+    const sub = ScreenCapture.addScreenshotListener(() => {
+      Alert.alert(t.security.screenshotTakenTitle, t.security.screenshotTakenMessage);
+    });
+    return () => sub.remove();
+  }, [captureProtected, t]);
 
-    setAuthFailed(false);
-    const success = await authService.authenticate(t.auth.prompt);
-    if (success) {
-      setIsLocked(false);
-      setAuthFailed(false);
-      setShowPinKeypad(false);
-      setEnteredPin('');
-    } else {
-      setAuthFailed(true);
-      const hasPin = await authService.hasPinCode();
-      if (hasPin) {
-        setShowPinKeypad(true);
-      }
-    }
-  };
+  const reload = useCallback(async () => {
+    await loadConfig();
+  }, [loadConfig]);
 
-  const startLockoutCountdown = () => {
-    const remaining = authService.getRemainingLockoutSeconds();
-    setLockoutSeconds(remaining);
+  const value = useMemo(() => ({ config, reload }), [config, reload]);
+  const showCover = !config || lock.locked;
 
-    if (lockoutTimerRef.current) clearInterval(lockoutTimerRef.current);
-
-    lockoutTimerRef.current = setInterval(() => {
-      const rem = authService.getRemainingLockoutSeconds();
-      setLockoutSeconds(rem);
-      if (rem <= 0) {
-        if (lockoutTimerRef.current) clearInterval(lockoutTimerRef.current);
-      }
-    }, 1000);
-  };
-
-  const handlePinKey = async (num: string) => {
-    if (lockoutSeconds > 0 || enteredPin.length >= 4) return;
-    const nextPin = enteredPin + num;
-    setEnteredPin(nextPin);
-
-    if (nextPin.length === 4) {
-      const valid = await authService.verifyPinCode(nextPin);
-      if (valid) {
-        setIsLocked(false);
-        setShowPinKeypad(false);
-        setEnteredPin('');
-        setAuthFailed(false);
-      } else {
-        if (authService.isLockedOut()) {
-          startLockoutCountdown();
-        } else {
-          Alert.alert('Falscher Code', 'Der eingegebene Code ist nicht korrekt.');
-        }
-        setEnteredPin('');
-      }
-    }
-  };
-
-  const handlePinDelete = () => {
-    setEnteredPin((prev) => prev.slice(0, -1));
-  };
-
-  // 1. App Switcher Privacy Veil (Multitasking snapshot protection)
-  if (isBackgrounded && isLockEnabled) {
-    return (
-      <View style={[styles.privacyVeil, { backgroundColor: colors.background }]}>
-        <View style={[styles.veilIconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-          <Ionicons name="shield-checkmark" size={54} color={colors.primary} />
-        </View>
-        <Text style={[typography.title2, { color: colors.textPrimary, marginTop: 12 }]}>
-          ScanFlow Geschützt
-        </Text>
-      </View>
-    );
-  }
-
-  // 2. Locked Screen with Face ID & PIN Fallback Keypad
-  if (isLockEnabled && isLocked) {
-    return (
-      <View style={[styles.lockContainer, { backgroundColor: colors.background }]}>
-        {showPinKeypad && hasPinConfigured ? (
-          // In-App PIN Keypad Screen
-          <View style={styles.pinWrapper}>
-            <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-              <Ionicons name="lock-closed" size={44} color={colors.primary} />
-            </View>
-
-            <Text style={[typography.title2, styles.title, { color: colors.textPrimary }]}>
-              Code eingeben
-            </Text>
-
-            {lockoutSeconds > 0 ? (
-              <Text style={[typography.body, { color: colors.danger, textAlign: 'center', marginTop: 8 }]}>
-                Zu viele Fehlversuche. Bitte warten Sie {lockoutSeconds} Sekunden.
-              </Text>
-            ) : (
-              <Text style={[typography.body, styles.subtitle, { color: colors.textSecondary }]}>
-                Geben Sie Ihren 4-stelligen Sicherheits-Code ein.
-              </Text>
-            )}
-
-            {/* 4 Pin Dots */}
-            <View style={styles.dotsRow}>
-              {[0, 1, 2, 3].map((idx) => {
-                const filled = idx < enteredPin.length;
-                return (
-                  <View
-                    key={idx}
-                    style={[
-                      styles.dot,
-                      {
-                        backgroundColor: filled ? colors.primary : colors.surfaceSubdued,
-                        borderColor: filled ? colors.primary : colors.border,
-                      },
-                    ]}
-                  />
-                );
-              })}
-            </View>
-
-            {/* Keypad */}
-            <View style={styles.keypadContainer}>
-              {[
-                ['1', '2', '3'],
-                ['4', '5', '6'],
-                ['7', '8', '9'],
-                ['faceid', '0', 'del'],
-              ].map((row, rIdx) => (
-                <View key={rIdx} style={styles.keypadRow}>
-                  {row.map((item, cIdx) => {
-                    if (item === 'faceid') {
-                      return (
-                        <TouchableOpacity
-                          key={cIdx}
-                          activeOpacity={0.7}
-                          onPress={triggerBiometricAuth}
-                          style={[styles.keypadSlot, styles.keypadButton]}
-                        >
-                          <Ionicons name="scan-outline" size={26} color={colors.primary} />
-                        </TouchableOpacity>
-                      );
-                    }
-                    if (item === 'del') {
-                      return (
-                        <TouchableOpacity
-                          key={cIdx}
-                          activeOpacity={0.7}
-                          onPress={handlePinDelete}
-                          style={[styles.keypadSlot, styles.keypadButton]}
-                        >
-                          <Ionicons name="backspace-outline" size={24} color={colors.textPrimary} />
-                        </TouchableOpacity>
-                      );
-                    }
-                    return (
-                      <TouchableOpacity
-                        key={cIdx}
-                        activeOpacity={0.7}
-                        disabled={lockoutSeconds > 0}
-                        onPress={() => handlePinKey(item)}
-                        style={[
-                          styles.keypadSlot,
-                          styles.keypadButton,
-                          { backgroundColor: colors.surfaceSubdued },
-                        ]}
-                      >
-                        <Text style={[typography.title1, { color: colors.textPrimary }]}>{item}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : (
-          // Default Face ID Prompt Screen
-          <View style={styles.centerSection}>
-            <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-              <Ionicons name="lock-closed" size={56} color={colors.primary} />
-            </View>
-
-            <Text style={[typography.title1, styles.title, { color: colors.textPrimary }]}>
-              ScanFlow
-            </Text>
-
-            <Text style={[typography.body, styles.subtitle, { color: colors.textSecondary }]}>
-              {authFailed ? t.auth.failed : t.auth.prompt}
-            </Text>
-
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={triggerBiometricAuth}
-              style={[
-                styles.unlockButton,
-                {
-                  backgroundColor: colors.primary,
-                  borderRadius: borderRadius.round,
-                  marginTop: spacing.xl,
-                },
-              ]}
-            >
-              <Ionicons name="scan-outline" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={[typography.bodyBold, { color: '#FFFFFF' }]}>
-                Mit Face ID entsperren
-              </Text>
-            </TouchableOpacity>
-
-            {hasPinConfigured && (
-              <TouchableOpacity
-                onPress={() => setShowPinKeypad(true)}
-                style={[styles.secondaryButton, { marginTop: spacing.md }]}
-              >
-                <Text style={[typography.bodyMedium, { color: colors.primary }]}>
-                  Sicherheits-Code verwenden
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
-    );
-  }
-
-  return <>{children}</>;
+  return (
+    <AppLockContext.Provider value={value}>
+      {children}
+      {showCover ? (
+        <Cover>
+          <LockScreen
+            checking={!config}
+            caps={caps}
+            authBusy={authBusy}
+            onUnlock={unlockWithDevice}
+            onSubmitPin={submitPin}
+            onRefresh={refreshCaps}
+          />
+        </Cover>
+      ) : null}
+    </AppLockContext.Provider>
+  );
 };
-
-const styles = StyleSheet.create({
-  privacyVeil: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 9999,
-  },
-  veilIconCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lockContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  centerSection: {
-    alignItems: 'center',
-  },
-  pinWrapper: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  iconCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    marginBottom: 8,
-  },
-  subtitle: {
-    textAlign: 'center',
-    maxWidth: 280,
-    lineHeight: 22,
-  },
-  dotsRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginTop: 20,
-    marginBottom: 30,
-  },
-  dot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1.5,
-  },
-  keypadContainer: {
-    width: '100%',
-    paddingHorizontal: 24,
-    gap: 14,
-  },
-  keypadRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  keypadSlot: {
-    width: 68,
-    height: 68,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  keypadButton: {
-    borderRadius: 34,
-  },
-  unlockButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-  },
-  secondaryButton: {
-    padding: 8,
-  },
-});

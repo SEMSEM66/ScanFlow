@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-11-05
+
+Security hardening: app lock, ScanFlow PIN, privacy and exported files. See `docs/ARCHITECTURE.md` → "App lock & security".
+
+### Fixed
+- **Face ID loop with the app lock on:** after unlocking, ScanFlow locked itself again and asked for Face ID over and over. Cause: v1.3.0 locked whenever iOS reported the app as *inactive* – and the Face ID prompt itself makes the app inactive (so do Control Center, Notification Center and system alerts). The app now locks only after it was really in the background (`src/security/lockPolicy.ts`, with regression tests).
+- **Navigation reset after unlocking / system dialogs:** the privacy veil replaced the whole app while it was inactive, so the open screens were unmounted and you landed on *Dokumente* again. The app content now always stays mounted; the lock screen is drawn above it.
+- **The lock could open without any check:** on iPhones without Face ID / Touch ID the unlock returned "success" without asking for anything, even with a PIN set.
+- **Force-quitting reset the PIN attempt limit** (5 tries were only counted while the app was running).
+- The screenshot notice appeared on every screenshot, even with *Screenshot-Schutz* off – now only while the protection is on (screenshots are then black).
+- The lock screen, PIN dialog and security settings were German only – now German and English.
+- **JPG sharing:** expo-sharing re-staged the file under a `.jpeg` name (`Scan.jpg.jpeg`, a hard link in its own cache that stayed until the next share) because the declared type `public.jpeg` prefers the extension `.jpeg`. JPGs are now shared without a declared type; iOS uses the `.jpg` extension.
+- Lint error in `src/components/AppLockOverlay.tsx` (variable used before its declaration) – the file was rewritten.
+
+### Security
+- **No unlock without a check:** Face ID / Touch ID, otherwise the device passcode or the ScanFlow PIN. If nothing can unlock, ScanFlow stays locked, and the lock cannot be turned on until a device passcode or a ScanFlow PIN exists. Unreadable settings (Keychain) count as "locked".
+- **The lock screen covers everything:** it is drawn in a `FullWindowOverlay` (react-native-screens) on top of the iOS window, so it also covers the crop screen, open sheets, the share sheet and the iOS document scanner; the keyboard is closed when locking.
+- **Exactly one automatic Face ID prompt** per lock / return; after *Abbrechen* the lock screen offers *Mit Face ID entsperren*.
+- **PIN stored as PBKDF2-HMAC-SHA256** (5,000 iterations, 16-byte random salt, constant-time comparison) instead of a 32-bit string hash with a fixed salt. PINs from ≤ 1.3.0 keep working and are converted on the next correct entry.
+- **Persisted attempt limit:** after 5 wrong PINs a 30 s wait, then 1 min, 5 min and 15 min per further wrong PIN. Stored in the Keychain, so restarting the app does not reset it; setting the clock back restarts the wait. Face ID / Touch ID or the correct PIN reset the counter.
+- **6-digit PINs** (new default; 4 digits still possible). Obvious PINs (1111, 1234, 987654 …) are rejected.
+- **With a ScanFlow PIN the PIN replaces the device passcode:** the lock offers Face ID / Touch ID with *ScanFlow-PIN eingeben* as fallback – the iPhone passcode alone no longer opens ScanFlow.
+- **Change / remove the PIN** (Settings → *ScanFlow-PIN*) after confirming the current PIN (or *PIN vergessen? Mit Face ID bestätigen*). Turning the app lock on or off also requires a check.
+- **Keychain classes "this device only":** security settings `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`, PIN and attempt counter `WHEN_UNLOCKED_THIS_DEVICE_ONLY` – never restored to another device. Existing entries are moved once at start.
+- **App-switcher preview:** new setting *App-Vorschau verbergen* (default on, independent of the app lock) – native blur in the app switcher and behind system prompts (`expo-screen-capture`).
+- **Exported files are deleted** as soon as the share sheet closes (also after errors); the export cache is also cleared at every app start.
+
+### Changed
+- Settings → *Sicherheit & Datenschutz*: *App-Sperre* (shows the available unlock methods), *Sperren nach* Sofort / 1 Min. / 5 Min., *ScanFlow-PIN* (Einrichten / Ändern / Entfernen), *App-Vorschau verbergen*, *Screenshot-Schutz*.
+- **Deleting no longer pretends to shred:** the former "Zero-Trace" step only replaced the file with up to 8 KB of `0` characters, which on APFS (copy-on-write flash storage) never touches the old data. Files are now deleted directly; iOS Data Protection encrypts them when a device passcode is set. The *Zero-Trace Löschen* badge was replaced by an accurate storage note.
+- `NSFaceIDUsageDescription`: "ScanFlow verwendet Face ID, um die App zu entsperren." (IPA build).
+- New script `npm run test:security`.
+
+### Added
+- `src/security/` (pure TypeScript, no Expo imports): `sha256.ts` (SHA-256, HMAC, PBKDF2), `pinHash.ts`, `lockout.ts`, `lockPolicy.ts`.
+- `src/services/PrivacyService.ts`, `src/components/LockScreen.tsx`, `src/components/PinPad.tsx`; `PinSetupModal.tsx` rebuilt (create / change / verify, 4 or 6 digits); `useAppLock()` context from `AppLockOverlay.tsx`.
+- Tests: `__tests__/security.test.ts` (28: hashes vs. Node crypto, PIN records incl. the old format, attempt limit, lock policy incl. the Face ID loop), `__tests__/authService.test.ts` (22, in-memory Keychain + scripted Face ID results), `__tests__/exportCleanup.test.ts` (6).
+
+### Removed
+- i18n section `auth` (replaced by `security`).
+- `AuthService.authenticate()`, `isAppLockEnabled()`, `getLockTimeout()`, `isScreenCaptureProtectionEnabled()`, `shouldLockOnForeground()` – replaced by `getSecurityConfig()`, `authenticateOwner()`, `verifyPinCode()` and `src/security/lockPolicy.ts`.
+
+### Known limitations
+- The app lock protects the **app's screens, not the files**. ScanFlow does not encrypt the database and the page images itself (not possible in Expo Go); they are protected by iOS Data Protection, which requires a device passcode.
+- iPhone / iCloud backups contain the documents like any other app data; the PIN and the lock settings are not restored to another device.
+- A 4- or 6-digit PIN cannot withstand somebody who has a copy of the Keychain entry; the protection is the Keychain (this device only) plus the attempt limit.
+- An alert that appears while ScanFlow is locked (e.g. an import error) can show its text above the lock screen.
+- PIN checks take an estimated 0.2–0.4 s on the phone (not yet measured).
+- Not yet tested on a physical iPhone (STOP S in `docs/ROADMAP.md`) – in particular Face ID, the lock screen above the iOS scanner / share sheet and the app-switcher blur.
+
+---
+
 ## [1.3.0] - 2026-11-05
 
 Phase B – live scanner like CamScanner. See `docs/ARCHITECTURE.md` → "Scan flow".
@@ -42,7 +94,7 @@ Phase B – live scanner like CamScanner. See `docs/ARCHITECTURE.md` → "Scan f
 - In Expo Go the language of the scanner's buttons depends on Expo Go's own localizations (may be English); the IPA build uses `CFBundleLocalizations` (de, en).
 - Post-capture detection (photo import, own camera) can include a clear sleeve or binder strip around the sheet, and pages cut off by the image frame are often not detected – corners can be corrected in *Zuschneiden*.
 - The iOS scanner flow has not yet been verified on a physical iPhone (STOP B in `docs/ROADMAP.md`).
-- Pre-existing issues in `src/components/AppLockOverlay.tsx` remain (lint error; with app lock enabled the privacy veil replaces the screen content while the app is inactive, so the navigation can reset after system dialogs).
+- Pre-existing issues in `src/components/AppLockOverlay.tsx` remain (lint error; with app lock enabled the privacy veil replaces the screen content while the app is inactive, so the navigation can reset after system dialogs) – fixed in 1.4.0 (this also caused the Face ID loop).
 
 ## [1.2.0] - 2026-11-05
 
