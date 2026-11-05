@@ -317,6 +317,6 @@ Spike result: Expo Go has no camera frame processors, so a custom live overlay w
 - [ ] Fix the remaining lint warnings (unused variables).
 - [ ] Localize remaining hard-coded German strings (library actions). *(App lock, PIN and security settings localized in v1.4.0.)*
 - [ ] Remove the unused `react-native-webview` dependency after STOP A confirms the Skia pipeline on device.
-- [ ] Update the hard-coded release tag (`v1.1.0`) in `.github/workflows/build-ipa.yml` before the next release.
+- [x] Release per version instead of the hard-coded `v1.1.0` in `.github/workflows/build-ipa.yml` (v1.4.0: tag `v<package.json version>`, notes from `CHANGELOG.md`).
 - [ ] Optional: GitHub Action running `npx tsc --noEmit`, `npm run lint`, `npm run test:imaging` on pull requests.
 

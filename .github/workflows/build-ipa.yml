@@ -48,12 +48,32 @@ jobs:
         with:
           node-version: 22
 
-      - name: 4. Install Dependencies & Apply Patches
+      # Every app version gets its own GitHub release: tag v<version> from
+      # package.json (or the pushed v* tag). Pushing again without a version
+      # bump updates that version's release with the new IPA.
+      - name: 4. Read App Version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          APP_VERSION=$(node -p "require('./app.json').expo.version")
+          if [ "$VERSION" != "$APP_VERSION" ]; then
+            echo "::warning::package.json ($VERSION) and app.json ($APP_VERSION) have different versions - using package.json."
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="v$VERSION"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Release: ScanFlow $TAG"
+
+      - name: 5. Install Dependencies & Apply Patches
         run: |
           npm install
           node scripts/patch-expo-modules-jsi.js
 
-      - name: 5. Prebuild iOS Project
+      - name: 6. Prebuild iOS Project
         env:
           EXPO_DEBUG: "1"
           LANG: en_US.UTF-8
@@ -62,7 +82,7 @@ jobs:
           npx expo prebuild --platform ios --clean
           ls -la ios/
 
-      - name: 6. Verify CocoaPods Dependencies
+      - name: 7. Verify CocoaPods Dependencies
         env:
           LANG: en_US.UTF-8
           LC_ALL: en_US.UTF-8
@@ -77,7 +97,7 @@ jobs:
           fi
           ls -la ios/
 
-      - name: 7. Build Release App with Xcode
+      - name: 8. Build Release App with Xcode
         run: |
           WORKSPACE=$(find ios -name "*.xcworkspace" -maxdepth 1 | head -n 1)
           if [ -z "$WORKSPACE" ]; then
@@ -103,7 +123,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             DEVELOPMENT_TEAM=""
 
-      - name: 8. Package into Sideloadable IPA
+      - name: 9. Package into Sideloadable IPA
         run: |
           mkdir -p build/Payload
           APP_PATH=$(find build/DerivedData/Build/Products/Release-iphoneos -name "*.app" -type d | head -n 1)
@@ -122,33 +142,58 @@ jobs:
           cd ..
           ls -lh build/ScanFlow.ipa
 
-      - name: 9. Upload Artifact
+      - name: 10. Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ScanFlow-ipa
+          name: ScanFlow-${{ steps.version.outputs.tag }}-ipa
           path: build/ScanFlow.ipa
           if-no-files-found: error
 
-      - name: 10. Create or Update GitHub Release
+      - name: 11. Write Release Notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # "What's new" = the section "## [<version>]" of CHANGELOG.md
+          awk -v ver="$VERSION" '
+            { sub(/\r$/, "") }
+            index($0, "## [" ver "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found && /^---[[:space:]]*$/ { next }
+            found && /^### / { print "#" $0; next }
+            found { print }
+          ' CHANGELOG.md > build/changes.md
+          if ! grep -q '[^[:space:]]' build/changes.md; then
+            echo "No CHANGELOG.md entry for $VERSION." > build/changes.md
+          fi
+          {
+            echo "## 📄 ScanFlow $TAG — iOS Sideloadable Release"
+            echo ""
+            echo "Standalone **ScanFlow.ipa** build for sideloading on physical iPhones (built from commit ${GITHUB_SHA:0:7})."
+            echo ""
+            echo "### 📱 Sideloading Instructions:"
+            echo "1. Download \`ScanFlow.ipa\` below."
+            echo "2. Connect your iPhone to your PC via USB."
+            echo "3. Open **Sideloadly** (or **AltStore** / **TrollStore** / **Scarlet**)."
+            echo "4. Drag and drop \`ScanFlow.ipa\` into Sideloadly, enter your Apple ID, and click **Start**."
+            echo "5. On your iPhone, go to **Settings > General > VPN & Device Management** and trust your Developer App certificate."
+            echo "6. Open ScanFlow and enjoy!"
+            echo ""
+            echo "### 📝 What's new in $VERSION"
+            cat build/changes.md
+          } > build/release-notes.md
+          cat build/release-notes.md
+
+      - name: 12. Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: v1.1.0
-          name: ScanFlow v1.1.0
-          body: |
-            ## 📄 ScanFlow v1.1.0 — iOS Sideloadable Release
-            
-            This is the standalone **ScanFlow.ipa** build ready for sideloading on physical iPhones.
-            
-            ### 📱 Sideloading Instructions:
-            1. Download `ScanFlow.ipa` below.
-            2. Connect your iPhone to your PC via USB.
-            3. Open **Sideloadly** (or **AltStore** / **TrollStore** / **Scarlet**).
-            4. Drag and drop `ScanFlow.ipa` into Sideloadly, enter your Apple ID, and click **Start**.
-            5. On your iPhone, go to **Settings > General > VPN & Device Management** and trust your Developer App certificate.
-            6. Open ScanFlow and enjoy!
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ScanFlow ${{ steps.version.outputs.tag }}
+          body_path: build/release-notes.md
+          target_commitish: ${{ github.sha }}
           draft: false
           prerelease: false
           files: build/ScanFlow.ipa

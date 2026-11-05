@@ -14,7 +14,7 @@ Push once at the end: every push to `main` starts the IPA workflow
 (`.github/workflows/build-ipa.yml`), so one push = one CI run.
 
 > **Is v1.3.0 already committed?** Run `git ls-files src/services/ScanImportService.ts`.
-> If it prints the file name → use the six commits below.
+> If it prints the file name → use the seven commits below.
 > If it prints nothing (v1.2.0 / v1.3.0 were never committed) → use the
 > single commit at the end of this file instead.
 
@@ -27,7 +27,8 @@ Push once at the end: every push to `main` starts the IPA workflow
 | 3 | `fix(auth): never unlock without a check, persist PIN attempts, PBKDF2 PIN, device-only keychain` | `src/services/AuthService.ts`, `src/services/PrivacyService.ts`, `__tests__/authService.test.ts` |
 | 4 | `fix(export): delete exported files after sharing and drop pseudo-shredding` | `src/services/ExportService.ts`, `src/services/StorageService.ts`, `__tests__/exportCleanup.test.ts` |
 | 5 | `fix(app-lock): stop the Face ID loop, keep screens mounted, rebuild lock screen, PIN dialog and security settings` | `src/components/*`, `src/i18n/*`, `app/*` |
-| 6 | `docs: document app lock and security hardening for 1.4.0` | `README.md`, `CHANGELOG.md`, `AGENTS.md`, `docs/*` |
+| 6 | `ci: publish a GitHub release for every app version` | `.github/workflows/build-ipa.yml` |
+| 7 | `docs: document app lock and security hardening for 1.4.0` | `README.md`, `CHANGELOG.md`, `AGENTS.md`, `docs/*` |
 
 No files were deleted in this change set.
 
@@ -59,11 +60,14 @@ git commit -m "fix(export): delete exported files after sharing and drop pseudo-
 git add src/components src/i18n app
 git commit -m "fix(app-lock): stop the Face ID loop, keep screens mounted, rebuild lock screen, PIN dialog and security settings"
 
+git add .github/workflows/build-ipa.yml
+git commit -m "ci: publish a GitHub release for every app version"
+
 git add -A
 git commit -m "docs: document app lock and security hardening for 1.4.0"
 
 git status
-git log --oneline -6
+git log --oneline -7
 git push
 ```
 
@@ -89,6 +93,10 @@ Notes
 - If `git push` fails (credentials), stop and configure Git Credential Manager
   / a GitHub token; do not force-push.
 - Optional full test run (≈4–7 min, headless Skia): `npm test`.
+- After the push, GitHub → *Actions* builds the IPA and creates the release
+  **ScanFlow v1.4.0** (notes = the 1.4.0 section of `CHANGELOG.md`). The old
+  *v1.1.0* release is no longer touched – delete it on GitHub → *Releases* if
+  you do not need it.
 - Existing settings and an existing 4-digit PIN are kept; the PIN is
   converted to the new format the first time it is entered.
 
@@ -109,9 +117,10 @@ src/security/sha256.ts
 src/services/PrivacyService.ts
 ```
 
-Changed (18):
+Changed (19):
 
 ```text
+.github/workflows/build-ipa.yml
 AGENTS.md
 CHANGELOG.md
 README.md

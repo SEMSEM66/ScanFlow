@@ -39,6 +39,7 @@ Security hardening: app lock, ScanFlow PIN, privacy and exported files. See `doc
 - **Deleting no longer pretends to shred:** the former "Zero-Trace" step only replaced the file with up to 8 KB of `0` characters, which on APFS (copy-on-write flash storage) never touches the old data. Files are now deleted directly; iOS Data Protection encrypts them when a device passcode is set. The *Zero-Trace Löschen* badge was replaced by an accurate storage note.
 - `NSFaceIDUsageDescription`: "ScanFlow verwendet Face ID, um die App zu entsperren." (IPA build).
 - New script `npm run test:security`.
+- **A GitHub release for every version:** the IPA workflow (`.github/workflows/build-ipa.yml`) publishes each version as its own release – tag `v<version>` from `package.json` (or a pushed `v*` tag), release notes from this changelog – instead of always updating *v1.1.0*. Pushing again without a version bump updates that version's release.
 
 ### Added
 - `src/security/` (pure TypeScript, no Expo imports): `sha256.ts` (SHA-256, HMAC, PBKDF2), `pinHash.ts`, `lockout.ts`, `lockPolicy.ts`.

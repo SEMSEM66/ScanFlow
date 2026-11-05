@@ -46,6 +46,7 @@ This document contains persistent rules, operational constraints, and workflow g
   - `chore:` for tooling or config updates
 - **Push Cadence:** Push after every commit. If push fails due to git credentials/authentication, stop immediately and explain what the user needs to configure.
 - **Safety:** Never commit secrets, `.env` files, or binary artifacts that don't belong in git. Never rewrite git history.
+- **Releases:** bump `version` in `package.json`, `app.json` and the two root entries of `package-lock.json` together and add a `## [x.y.z]` section to `CHANGELOG.md`. Every push to `main` builds the IPA (`.github/workflows/build-ipa.yml`) and publishes it as GitHub release `v<package.json version>` with that changelog section as release notes; pushing again without a bump updates that release.
 
 ---
 
