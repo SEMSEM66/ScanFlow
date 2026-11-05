@@ -282,4 +282,15 @@ export const en: typeof de = {
     disabledHint: 'Text recognition is turned off.',
     enableNow: 'Turn on',
   },
+  search: {
+    title: 'Search',
+    hintTitle: 'Search all documents',
+    hintText: 'Finds words in titles and recognized text – across all folders.',
+    hintTitlesOnly: 'Finds words in document titles – across all folders.',
+  },
+  tools: {
+    title: 'Tools',
+    comingTitle: 'Document tools',
+    comingText: 'Merge PDFs, extract pages and compress.',
+  },
 };

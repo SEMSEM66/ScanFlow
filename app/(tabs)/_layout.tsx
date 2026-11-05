@@ -11,6 +11,7 @@ export default function TabLayout() {
   const { t } = useTranslation();
   const scanner = useScanner();
 
+  // Five equal slots with the camera button in the middle: two tabs on each side
   return (
     <Tabs
       screenOptions={{
@@ -26,10 +27,12 @@ export default function TabLayout() {
           borderTopWidth: 1,
           elevation: 0,
         },
+        // iOS tab bar size; not scaled with the text size (like iOS) so "Einstellungen" fits in its slot
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: '500',
         },
+        tabBarAllowFontScaling: false,
       }}
     >
       <Tabs.Screen
@@ -38,6 +41,15 @@ export default function TabLayout() {
           title: t.library.title,
           tabBarIcon: ({ focused }) => (
             <Ionicons name={focused ? 'folder' : 'folder-outline'} size={24} color={focused ? colors.primary : colors.textMuted} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: t.search.title,
+          tabBarIcon: ({ focused }) => (
+            <Ionicons name={focused ? 'search' : 'search-outline'} size={23} color={focused ? colors.primary : colors.textMuted} />
           ),
         }}
       />
@@ -70,7 +82,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="tools"
         options={{
-          title: 'Werkzeuge',
+          title: t.tools.title,
           tabBarIcon: ({ focused }) => (
             <Ionicons name={focused ? 'construct' : 'construct-outline'} size={23} color={focused ? colors.primary : colors.textMuted} />
           ),

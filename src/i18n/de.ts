@@ -280,4 +280,15 @@ export const de = {
     disabledHint: 'Die Texterkennung ist ausgeschaltet.',
     enableNow: 'Einschalten',
   },
+  search: {
+    title: 'Suchen',
+    hintTitle: 'Alle Dokumente durchsuchen',
+    hintText: 'Findet Wörter im Titel und im erkannten Text – in allen Ordnern.',
+    hintTitlesOnly: 'Findet Wörter im Dokumenttitel – in allen Ordnern.',
+  },
+  tools: {
+    title: 'Werkzeuge',
+    comingTitle: 'Dokumenten-Werkzeuge',
+    comingText: 'PDF zusammenfügen, Seiten extrahieren und komprimieren.',
+  },
 };
