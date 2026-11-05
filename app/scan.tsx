@@ -19,7 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/theme';
 import { useTranslation } from '../src/i18n';
-import { saveScan } from '../src/services';
+import { saveScan, ocrService } from '../src/services';
 import { scanDocumentTitle } from '../src/components/ScannerProvider';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -74,6 +74,7 @@ export default function ScanScreen() {
         title: scanDocumentTitle(t.scan.documentTitle, language, formatString),
         onProgress: (current, total) => setProgressText(formatString(t.scan.processing, { current, total })),
       });
+      ocrService.kick(); // recognize the text of the new pages in the background
       if (saved.created) {
         router.replace({ pathname: '/document/[id]', params: { id: saved.documentId } });
       } else {

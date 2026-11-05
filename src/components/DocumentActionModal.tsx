@@ -13,6 +13,8 @@ interface DocumentActionModalProps {
   onMove: (document: Document) => void;
   onDuplicate: (document: Document) => void;
   onDelete: (document: Document) => void;
+  /** Recognized text (copy / share); row hidden when not provided. */
+  onShowText?: (document: Document) => void;
 }
 
 export const DocumentActionModal: React.FC<DocumentActionModalProps> = ({
@@ -23,6 +25,7 @@ export const DocumentActionModal: React.FC<DocumentActionModalProps> = ({
   onMove,
   onDuplicate,
   onDelete,
+  onShowText,
 }) => {
   const { colors, typography, spacing, borderRadius } = useTheme();
   const { t } = useTranslation();
@@ -110,6 +113,21 @@ export const DocumentActionModal: React.FC<DocumentActionModalProps> = ({
                     {t.library.duplicateDocument}
                   </Text>
                 </TouchableOpacity>
+
+                {/* Recognized text */}
+                {onShowText ? (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      onClose();
+                      onShowText(document);
+                    }}
+                    style={[styles.actionRow, { borderBottomColor: colors.borderLight }]}
+                  >
+                    <Ionicons name="document-text-outline" size={20} color={colors.primary} style={styles.actionIcon} />
+                    <Text style={[typography.body, { color: colors.textPrimary }]}>{t.ocr.menuAction}</Text>
+                  </TouchableOpacity>
+                ) : null}
 
                 {/* Delete */}
                 <TouchableOpacity

@@ -10,6 +10,7 @@ import { AppLockOverlay } from '../src/components/AppLockOverlay';
 import { ScannerProvider } from '../src/components/ScannerProvider';
 import { getDatabase } from '../src/db/database';
 import { storageService } from '../src/services/StorageService';
+import { ocrService } from '../src/services/OcrService';
 
 function RootNavigation() {
   const { colors, isDark } = useTheme();
@@ -24,6 +25,8 @@ function RootNavigation() {
         await storageService.initStorageDirectory();
         // Exported PDFs/JPGs are deleted after sharing; remove leftovers of an interrupted share
         await storageService.clearCaches();
+        // Text recognition of new / changed pages in the background (installed app only)
+        ocrService.start();
       } catch (err) {
         console.error('[ScanFlow] Initialization error:', err);
       } finally {

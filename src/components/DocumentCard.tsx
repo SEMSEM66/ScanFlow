@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Document } from '../types';
+import type { Snippet } from '../ocr/text';
 import { useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 
@@ -9,12 +10,15 @@ interface DocumentCardProps {
   document: Document;
   onPress: () => void;
   onMenuPress: () => void;
+  /** Search hit in the recognized text (match highlighted). */
+  snippet?: Snippet | null;
 }
 
 export const DocumentCard: React.FC<DocumentCardProps> = ({
   document,
   onPress,
   onMenuPress,
+  snippet,
 }) => {
   const { colors, typography, spacing, borderRadius } = useTheme();
   const { t, formatString } = useTranslation();
@@ -101,6 +105,13 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
         >
           {formattedDate} · {pageText}
         </Text>
+        {snippet ? (
+          <Text numberOfLines={3} style={[typography.caption1, styles.snippet, { color: colors.textSecondary }]}>
+            {snippet.before}
+            <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{snippet.match}</Text>
+            {snippet.after}
+          </Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -177,5 +188,10 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 12,
+  },
+  snippet: {
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

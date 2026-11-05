@@ -6,6 +6,7 @@ import { useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { authService } from '../services/AuthService';
 import { documentScanner } from '../services/DocumentScannerService';
+import { ocrService } from '../services/OcrService';
 import { saveScan, type SavedScan, type ScanTarget } from '../services/ScanImportService';
 import { storageService } from '../services/StorageService';
 import type { LanguageMode } from '../types';
@@ -94,6 +95,7 @@ export const ScannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
           title: scanDocumentTitle(t.scan.documentTitle, language, formatString),
           onProgress: (current, total) => setProgress(formatString(t.scan.processing, { current, total })),
         });
+        ocrService.kick(); // recognize the text of the new pages in the background
         if (saved.created) router.push({ pathname: '/document/[id]', params: { id: saved.documentId } });
         return { status: 'saved', scan: saved };
       } catch (err) {

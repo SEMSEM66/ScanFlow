@@ -22,6 +22,7 @@ import {
   imagePipeline,
   ensurePagePreview,
   scanNotices,
+  ocrService,
 } from '../../src/services';
 import {
   Adjustments,
@@ -41,6 +42,7 @@ import {
   ExportModal,
   PageEditorModal,
   DocumentActionModal,
+  DocumentTextModal,
   MoveFolderModal,
   PromptModal,
   AdjustmentsPanel,
@@ -52,6 +54,9 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const thumbKeyOf = (p: DocumentPage) =>
   `${p.id}|${p.originalUri}|${JSON.stringify(p.corners)}|${p.rotation}|${p.pageFormat}|${JSON.stringify(p.adjustments)}`;
+
+// iOS shows one modal at a time: open the next sheet once the menu has faded out
+const MENU_HANDOFF_MS = 400;
 
 export default function DocumentDetailScreen() {
   const router = useRouter();
@@ -80,6 +85,7 @@ export default function DocumentDetailScreen() {
   const [isPageEditorVisible, setIsPageEditorVisible] = useState(false);
   const [isActionModalVisible, setIsActionModalVisible] = useState(false);
   const [isMoveModalVisible, setIsMoveModalVisible] = useState(false);
+  const [isTextVisible, setIsTextVisible] = useState(false);
   const [isAdjustVisible, setIsAdjustVisible] = useState(false);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [promptState, setPromptState] = useState<{
@@ -135,12 +141,17 @@ export default function DocumentDetailScreen() {
     }
   }, [id, router, t]);
 
-  // Reload whenever the screen gets focus (e.g. back from crop / scan)
+  // Reload whenever the screen gets focus (e.g. back from crop / scan);
+  // text recognition handles the pages of the open document first
   useFocusEffect(
     useCallback(() => {
       loadDocumentData();
       folderRepository.getAll().then(setFolders);
-    }, [loadDocumentData])
+      if (!id) return undefined;
+      ocrService.prioritize(id);
+      ocrService.kick();
+      return () => ocrService.prioritize(null);
+    }, [id, loadDocumentData])
   );
 
   const currentPage = pages[currentPageIndex] || null;
@@ -215,6 +226,7 @@ export default function DocumentDetailScreen() {
     if (!currentPage) return;
     try {
       await updateCurrent({ rotation: nextRotation(currentPage.rotation) });
+      ocrService.kick(); // the text of a rotated page is recognized again
     } catch (err) {
       console.error('[DocumentDetailScreen] Rotation error:', err);
       Alert.alert(t.common.error, t.filters.rotateFailed);
@@ -337,13 +349,22 @@ export default function DocumentDetailScreen() {
 
   const handleShare = async (format: ExportFormat, quality: ExportQuality, dpi: ExportDpi, watermark?: string) => {
     if (!document || pages.length === 0) return;
+    // no background recognition while exporting (the export recognizes missing text itself)
+    const resumeOcr = ocrService.hold();
     try {
       setIsExporting(true);
       setExportProgress({ current: 0, total: format === 'pdf' ? pages.length : 1 });
       const onProgress = (current: number, total: number) => setExportProgress({ current, total });
       const uri =
         format === 'pdf'
-          ? await exportService.generatePdf(document.title, pages, { dpi, quality, watermark, onProgress })
+          ? await exportService.generatePdf(document.title, pages, {
+              dpi,
+              quality,
+              watermark,
+              onProgress,
+              // invisible text layer → searchable PDF
+              textForPage: (page) => ocrService.linesForExport(page),
+            })
           : await exportService.generateJpg(document.title, currentPage ?? pages[0], currentPageIndex, { dpi, quality, onProgress });
       setIsExportVisible(false);
       await exportService.shareDocument(uri, format, t.export.shareTitle);
@@ -351,6 +372,7 @@ export default function DocumentDetailScreen() {
       console.error('[DocumentDetailScreen] Share error:', err);
       Alert.alert(t.common.error, t.export.failed);
     } finally {
+      resumeOcr();
       setIsExporting(false);
       setExportProgress(null);
     }
@@ -578,7 +600,10 @@ export default function DocumentDetailScreen() {
           await documentRepository.delete(document.id);
           router.replace('/(tabs)');
         }}
+        onShowText={ocrService.available ? () => setTimeout(() => setIsTextVisible(true), MENU_HANDOFF_MS) : undefined}
       />
+
+      <DocumentTextModal visible={isTextVisible} document={document} onClose={() => setIsTextVisible(false)} />
 
       <MoveFolderModal
         visible={isMoveModalVisible}

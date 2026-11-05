@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +21,7 @@ import {
   type UnlockCapabilities,
 } from '../../src/services/AuthService';
 import { privacyService } from '../../src/services/PrivacyService';
-import { storageService, documentRepository, documentScanner } from '../../src/services';
+import { storageService, documentRepository, documentScanner, ocrService, type OcrStats } from '../../src/services';
 import { ExportDpi, ExportQuality } from '../../src/types';
 import { EXPORT_DPI_PRESETS } from '../../src/imaging/pageFormat';
 import { PinSetupModal, type PinFlow } from '../../src/components/PinSetupModal';
@@ -51,6 +52,45 @@ export default function SettingsScreen() {
   const [defaultDpi, setDefaultDpiState] = useState<ExportDpi>(200);
   const [storageBytes, setStorageBytes] = useState(0);
   const [docCount, setDocCount] = useState(0);
+
+  // Text recognition (Apple Vision, installed app only)
+  const ocrAvailable = ocrService.available;
+  const [ocrEnabled, setOcrEnabled] = useState(true);
+  const [ocrStats, setOcrStats] = useState<OcrStats | null>(null);
+  const [ocrRunning, setOcrRunning] = useState(false);
+  const ocrRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadOcr = useCallback(async () => {
+    try {
+      const [on, stats] = await Promise.all([ocrService.isEnabled(), ocrService.stats()]);
+      setOcrEnabled(on);
+      setOcrStats(stats);
+      setOcrRunning(ocrService.isRunning);
+    } catch (err) {
+      console.warn('[Settings] OCR status not readable:', err);
+    }
+  }, []);
+
+  // Live progress while the settings are open (at most one refresh per 0.8 s)
+  useFocusEffect(
+    useCallback(() => {
+      loadOcr();
+      if (!ocrAvailable) return undefined;
+      const unsubscribe = ocrService.subscribe((e) => {
+        if (e.type === 'state') setOcrRunning(e.running);
+        if (ocrRefreshTimer.current) return;
+        ocrRefreshTimer.current = setTimeout(() => {
+          ocrRefreshTimer.current = null;
+          loadOcr();
+        }, 800);
+      });
+      return () => {
+        unsubscribe();
+        if (ocrRefreshTimer.current) clearTimeout(ocrRefreshTimer.current);
+        ocrRefreshTimer.current = null;
+      };
+    }, [loadOcr, ocrAvailable])
+  );
 
   const refreshCaps = useCallback(async () => {
     setCaps(await authService.getCapabilities());
@@ -260,6 +300,34 @@ export default function SettingsScreen() {
     await authService.setScannerMode(m);
   };
 
+  const handleToggleOcr = (value: boolean) => {
+    const turnOff = async (deleteText: boolean) => {
+      setOcrEnabled(false);
+      await ocrService.setEnabled(false);
+      if (deleteText) await ocrService.clearAll();
+      await loadOcr();
+    };
+    if (value) {
+      setOcrEnabled(true);
+      ocrService.setEnabled(true).then(loadOcr);
+      return;
+    }
+    Alert.alert(t.ocr.disableTitle, t.ocr.disableMessage, [
+      { text: t.common.cancel, style: 'cancel' },
+      { text: t.ocr.keepText, onPress: () => turnOff(false) },
+      { text: t.ocr.deleteText, style: 'destructive', onPress: () => turnOff(true) },
+    ]);
+  };
+
+  const ocrStatus = (() => {
+    if (!ocrAvailable) return t.ocr.unavailable;
+    if (!ocrStats) return ' ';
+    if (ocrStats.total === 0) return t.ocr.statusEmpty;
+    const counts = { done: ocrStats.recognized, total: ocrStats.total };
+    if (!ocrEnabled) return formatString(t.ocr.statusOff, counts);
+    return formatString(ocrRunning ? t.ocr.statusRunning : t.ocr.statusDone, counts);
+  })();
+
   const handleClearCache = async () => {
     Alert.alert(t.settings.clearCacheTitle, t.settings.clearCacheMessage, [
       { text: t.common.cancel, style: 'cancel' },
@@ -331,6 +399,42 @@ export default function SettingsScreen() {
               ? t.settings.scannerSystemHint
               : t.settings.scannerCameraHint}
           </Text>
+        </View>
+
+        {/* Section 0b: Text recognition (search, copy text, searchable PDF) */}
+        <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary, marginTop: spacing.lg }]}>
+          {t.ocr.section}
+        </Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleRowLeft}>
+              <View style={[styles.iconBox, { backgroundColor: colors.primarySubdued }]}>
+                <Ionicons name="document-text-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.rowText}>
+                <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>{t.ocr.enable}</Text>
+                <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
+                  {t.ocr.enableSubtitle}
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={ocrAvailable && ocrEnabled}
+              onValueChange={handleToggleOcr}
+              disabled={!ocrAvailable}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+          <View style={[styles.ocrStatusRow, styles.divided, { borderTopColor: colors.borderLight }]}>
+            {ocrAvailable && ocrEnabled && ocrRunning ? (
+              <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
+            ) : null}
+            <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]}>{ocrStatus}</Text>
+          </View>
+          <View style={[styles.securityFeatureBadge, { backgroundColor: colors.surfaceSubdued, marginTop: 12 }]}>
+            <Ionicons name="phone-portrait-outline" size={16} color={colors.success} style={{ marginRight: 8 }} />
+            <Text style={[typography.caption2, { color: colors.textSecondary, flex: 1 }]}>{t.ocr.privacyNote}</Text>
+          </View>
         </View>
 
         {/* Section 1: Security & Privacy */}
@@ -775,6 +879,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
+  },
+  ocrStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   infoRow: {
     flexDirection: 'row',

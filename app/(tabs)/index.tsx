@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,11 +16,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
-import { folderRepository, documentRepository } from '../../src/services';
+import { folderRepository, documentRepository, ocrService, pageTextRepository } from '../../src/services';
+import { snippetTerm } from '../../src/db/textSearch';
+import type { Snippet } from '../../src/ocr/text';
 import { Folder, Document } from '../../src/types';
 import {
   DocumentCard,
   DocumentActionModal,
+  DocumentTextModal,
   MoveFolderModal,
   PromptModal,
   SortModal,
@@ -43,15 +46,19 @@ export default function LibraryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+  // Text excerpts of the search hits (recognized text), by document id
+  const [snippets, setSnippets] = useState<Map<string, Snippet>>(new Map());
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('date_desc');
+  const isSearching = searchQuery.trim().length > 0;
 
   // Modals State
   const [activeDocForAction, setActiveDocForAction] = useState<Document | null>(null);
+  const [docToMove, setDocToMove] = useState<Document | null>(null);
+  const [textDoc, setTextDoc] = useState<Document | null>(null);
   const [activeFolderForOptions, setActiveFolderForOptions] = useState<Folder | null>(null);
   const [isSortModalVisible, setIsSortModalVisible] = useState(false);
-  const [docToMove, setDocToMove] = useState<Document | null>(null);
   const [promptState, setPromptState] = useState<{
     visible: boolean;
     title: string;
@@ -66,31 +73,64 @@ export default function LibraryScreen() {
     onConfirm: () => {},
   });
 
+  // Every keystroke starts a load – only the newest one may update the list
+  const loadSeq = useRef(0);
+
   const loadData = useCallback(async () => {
+    const seq = ++loadSeq.current;
     try {
+      const query = searchQuery.trim();
       const [fetchedFolders, fetchedDocs] = await Promise.all([
         folderRepository.getAll(),
         documentRepository.getAll({
           folderId: selectedFolderId,
-          searchQuery: searchQuery.length > 0 ? searchQuery : undefined,
+          searchQuery: query.length > 0 ? query : undefined,
           sortBy,
         }),
       ]);
+      const term = snippetTerm(query);
+      let found = new Map<string, Snippet>();
+      if (term.length > 0 && fetchedDocs.length > 0) {
+        try {
+          found = await pageTextRepository.snippets(
+            fetchedDocs.map((d) => d.id),
+            term
+          );
+        } catch (err) {
+          console.warn('[LibraryScreen] Could not load text excerpts:', err);
+        }
+      }
+      if (seq !== loadSeq.current) return; // a newer search is already running
       setFolders(fetchedFolders);
       setDocuments(fetchedDocs);
+      setSnippets(found);
     } catch (err) {
       console.error('[LibraryScreen] Error loading data from SQLite:', err);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (seq === loadSeq.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [selectedFolderId, searchQuery, sortBy]);
 
-  // Reload on focus: new scans, renamed documents and re-rendered thumbnails
+  // Reload on focus: new scans, renamed documents and re-rendered thumbnails;
+  // pages without text are recognized in the background
   useFocusEffect(
     useCallback(() => {
       loadData();
+      ocrService.kick();
     }, [loadData])
+  );
+
+  // While searching: show hits as soon as the text of a new page is recognized
+  useFocusEffect(
+    useCallback(() => {
+      if (!isSearching) return undefined;
+      return ocrService.subscribe((e) => {
+        if (e.type === 'page' && e.ok) loadData();
+      });
+    }, [isSearching, loadData])
   );
 
   const onRefresh = useCallback(() => {
@@ -251,12 +291,14 @@ export default function LibraryScreen() {
         <View style={[styles.searchBar, { backgroundColor: colors.searchBackground, borderRadius: borderRadius.md }]}>
           <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
           <TextInput
-            placeholder={t.library.searchPlaceholder}
+            placeholder={ocrService.available ? t.library.searchPlaceholderText : t.library.searchPlaceholder}
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             style={[styles.searchInput, { color: colors.textPrimary }]}
             clearButtonMode="while-editing"
+            autoCorrect={false}
+            returnKeyType="search"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -361,7 +403,7 @@ export default function LibraryScreen() {
                 <Ionicons name="document-text-outline" size={48} color={colors.primary} />
               </View>
               <Text style={[styles.emptyTitle, typography.title2, { color: colors.textPrimary, marginTop: spacing.base }]}>
-                {searchQuery.length > 0 ? t.common.noItems : t.library.emptyTitle}
+                {isSearching ? t.common.noItems : t.library.emptyTitle}
               </Text>
               <Text
                 style={[
@@ -370,12 +412,10 @@ export default function LibraryScreen() {
                   { color: colors.textSecondary, marginTop: spacing.xs, marginHorizontal: spacing.xl },
                 ]}
               >
-                {searchQuery.length > 0
-                  ? 'Versuchen Sie einen anderen Suchbegriff.'
-                  : t.library.emptySubtitle}
+                {isSearching ? t.library.noResultsHint : t.library.emptySubtitle}
               </Text>
 
-              {searchQuery.length === 0 && (
+              {!isSearching && (
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={() => scanner.scan()}
@@ -398,7 +438,7 @@ export default function LibraryScreen() {
                 </TouchableOpacity>
               )}
 
-              {searchQuery.length === 0 && (
+              {!isSearching && (
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={() => scanner.importFromLibrary()}
@@ -422,6 +462,7 @@ export default function LibraryScreen() {
             renderItem={({ item }) => (
               <DocumentCard
                 document={item}
+                snippet={isSearching ? snippets.get(item.id) ?? null : null}
                 onPress={() => router.push(`/document/${item.id}` as any)}
                 onMenuPress={() => setActiveDocForAction(item)}
               />
@@ -439,6 +480,7 @@ export default function LibraryScreen() {
         onMove={(doc) => setTimeout(() => setDocToMove(doc), MENU_HANDOFF_MS)}
         onDuplicate={(doc) => handleDuplicateDocument(doc)}
         onDelete={(doc) => handleDeleteDocument(doc)}
+        onShowText={ocrService.available ? (doc) => setTimeout(() => setTextDoc(doc), MENU_HANDOFF_MS) : undefined}
       />
 
       {/* Move Folder Modal */}
@@ -449,6 +491,9 @@ export default function LibraryScreen() {
         onClose={() => setDocToMove(null)}
         onSelectFolder={handleMoveFolder}
       />
+
+      {/* Recognized text (copy / share) */}
+      <DocumentTextModal visible={textDoc !== null} document={textDoc} onClose={() => setTextDoc(null)} />
 
       {/* Folder Options Modal (Rename/Delete folder) */}
       <FolderOptionsModal
