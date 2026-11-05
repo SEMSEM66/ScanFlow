@@ -244,16 +244,30 @@ All phases keep the Expo Go constraint. Technical reference: [`ARCHITECTURE.md`]
   6. Export JPG, share sheet; Settings → default resolution/quality, cache clear.
   7. Memory: 20-page document renders and exports without crash.
 
-## ⏳ Phase B: Live camera detection & real auto-capture (planned)
-*Goal: the camera shows the detected page outline live and captures automatically when the page is stable.*
-- [ ] Spike: Expo Go-compatible frame access. `expo-camera` has no frame processors in Expo Go; options to evaluate:
-  - periodic low-res `takePictureAsync({ quality: 0.1, skipProcessing: true })` or `CameraView` snapshot (~2–4 fps) → `detectDocument()` on a ≈300 px copy;
-  - measure latency/battery on a real iPhone; **STOP** and report if < 2 fps.
-- [ ] Live quad overlay (Skia canvas over `CameraView`) with smoothing (EMA over corners) and "stable for N frames" detection.
-- [ ] Real auto-capture replacing the simulated 3.5 s timer in `app/scan.tsx`; manual mode unchanged.
-- [ ] Hints: "Näher heran", "Mehr Licht", "Halten" based on area / brightness / motion.
-- [ ] Use the live quad as the initial crop (skip detection after capture).
-- [ ] Tests: smoothing + stability logic as pure functions in `src/imaging`.
+## ✅ Phase B: Live detection, auto-capture & scan flow (v1.3.0)
+*Goal: the camera shows the detected page outline live and captures automatically when the page is stable – like CamScanner.*
+
+Spike result: Expo Go has no camera frame processors, so a custom live overlay would need low-res snapshots (≈2–4 fps at best). Instead, `expo-camera` (SDK 58, included in Expo Go) exposes the **iOS document scanner** (VisionKit `VNDocumentCameraViewController`, `CameraView.scanDocumentAsync`) – the scanner of Notes / Files with live edge detection.
+
+- [x] iOS document scanner as the default scanner (`src/services/DocumentScannerService.ts`): live page outline, automatic capture when the page is stable, manual shutter, multi-page batch with thumbnail stack, corner adjustment, perspective correction, "Sichern".
+- [x] App-wide scan entry `ScannerProvider` / `useScanner()` (`src/components/ScannerProvider.tsx`): camera permission (→ iOS settings), progress overlay while storing, new document opens automatically, fallback to ScanFlow's own camera if the system scanner is unavailable or fails to open (incl. stuck-presentation watchdog).
+- [x] Settings → *Scanner*: *iOS-Scanner* (default) / *ScanFlow-Kamera*.
+- [x] Scanner pages are stored without a second detection pass (already cropped) and get filter *Auto* → white scan look.
+- [x] Document screen: *"+ Weitere Seiten hinzufügen"*; add page → *Aus Fotomediathek* / *Dokument scannen*; retake via the scanner keeps additional pages right after the retaken one.
+- [x] Photo import from the Documents tab (header button + empty state) with edge detection; review banner for pages without a detected edge → *Ecken setzen*.
+- [x] Shared store logic `saveScan()` (`src/services/ScanImportService.ts`) for scanner, own camera and photo import; temp files removed after success; tests in `__tests__/scanImport.test.ts`.
+- [x] Detector v2 (`src/imaging/edgeDetection.ts`): oriented Hough lines + two-stage quad scoring (header bars, printed frames, sheet on a light binder/sleeve, cut-off pages); used for photo import and the own camera.
+- [x] Removed the simulated 3.5 s "Auto" timer from `app/scan.tsx` (the own camera is manual capture only).
+- [x] `CFBundleLocalizations` (de, en) so the system scanner UI is German in the IPA build.
+- [ ] Live overlay in ScanFlow's *own* camera (only relevant when the iOS scanner is unavailable): snapshot-based spike, **STOP** and report if < 2 fps.
+- [ ] Hints in the own camera ("Näher heran", "Mehr Licht", "Halten").
+- [ ] **🛑 STOP B:** Test on physical iPhone (Expo Go and IPA):
+  1. FAB (+) opens the iOS scanner: the live page highlight follows the sheet, auto capture, several pages in a row, thumbnail counter, *Sichern* → progress → document opens with white, straight pages.
+  2. Document screen: *Weitere Seiten hinzufügen* adds pages to the same document; *Seite hinzufügen* → *Aus Fotomediathek* / *Dokument scannen*.
+  3. Page editor → retake a page (several pages scanned → the extra ones follow the retaken page).
+  4. Documents tab → photo import (multi-select keeps order); a photo without a visible page shows the review banner → *Ecken setzen*.
+  5. Cancel the scanner → nothing is stored; deny camera access → alert with *In iOS-Einstellungen öffnen*.
+  6. Settings → *ScanFlow-Kamera* → FAB opens the own camera; switch back to *iOS-Scanner*.
 
 ## ⏳ Phase C: OCR & searchable PDF (planned)
 *Goal: text search in the library and an invisible text layer in exported PDFs.*
@@ -265,9 +279,9 @@ All phases keep the Expo Go constraint. Technical reference: [`ARCHITECTURE.md`]
 
 ## ⏳ Phase D: Docs, repo & release hygiene
 - [x] README, ROADMAP, CHANGELOG, AGENTS.md updated; `docs/ARCHITECTURE.md` added; doc-vs-code discrepancies corrected (v1.2.0).
-- [x] `docs/COMMITS.md` with Conventional Commit grouping for the v1.2.0 change set.
+- [x] `docs/COMMITS.md` with Conventional Commit grouping for the v1.2.0 and v1.3.0 change sets.
 - [x] ESLint flat config (`eslint.config.js`) + `npm test` / `npm run test:imaging` scripts.
-- [ ] Fix the pre-existing lint error in `src/components/AppLockOverlay.tsx` (variable used before declaration) and the 16 warnings.
+- [ ] Fix the pre-existing lint error in `src/components/AppLockOverlay.tsx` (variable used before declaration) and the remaining warnings (unused variables).
 - [ ] Localize remaining hard-coded German strings (library actions, app lock, PIN setup).
 - [ ] Remove the unused `react-native-webview` dependency after STOP A confirms the Skia pipeline on device.
 - [ ] Update the hard-coded release tag (`v1.1.0`) in `.github/workflows/build-ipa.yml` before the next release.

@@ -1,30 +1,32 @@
-# v1.2.0 – Commit plan (Phase A + docs)
+# v1.3.0 – Commit plan (Phase B: live scanner)
 
-The v1.2.0 change set was prepared outside the repository (no git credentials
-in the build environment). Apply it with the PowerShell commands below. The
-commits are grouped by layer in dependency order; intermediate commits are
-**not** guaranteed to type-check on their own – the final state is verified
-(`npx tsc --noEmit`, `npm test`).
+The v1.3.0 change set was prepared outside the repository (no git credentials
+in the build environment). The delivery zip contains the **whole project**
+(without `.git`, `node_modules`, `.expo`); copy it over your clone, then
+commit with the PowerShell commands below. The commits are grouped by layer
+in dependency order; intermediate commits are **not** guaranteed to
+type-check on their own – the final state is verified (`npx tsc --noEmit`,
+`npm test`).
 
 Push once at the end: every push to `main` starts the IPA workflow
 (`.github/workflows/build-ipa.yml`), so one push = one CI run.
+
+> **Is v1.2.0 already committed?** Run `git ls-files src/imaging`.
+> If it prints files → use the five commits below.
+> If it prints nothing (Phase A was never committed) → use the single commit
+> at the end of this file instead.
 
 ## Commit groups
 
 | # | Message | Files |
 | --- | --- | --- |
-| 1 | `chore(deps): add skia, pdf-lib, slider, jest and eslint tooling; bump version to 1.2.0` | `package.json`, `package-lock.json`, `app.json`, `eslint.config.js`, `jest.config.js`, `.gitignore` |
-| 2 | `feat(imaging): add pure TypeScript imaging core with Skia renderer and pdf-lib builder` | `src/imaging/*`, `tools/prototype/enhance_prototype.py` |
-| 3 | `test(imaging): add geometry, detection, renderer, pdf, page state and migration tests` | `__tests__/*` |
-| 4 | `feat(db): add schema v2 with user_version migrations for non-destructive page state` | `src/db/*`, `src/types/index.ts` |
-| 5 | `feat(services): add image pipeline and render services, pdf-lib export and page APIs` | `src/services/*` (incl. deletion of `FilterService.ts`) |
-| 6 | `feat(crop): add perspective crop with skia overlay, loupe, detection and page format` | `app/crop.tsx` |
-| 7 | `feat(editor): non-destructive filters, adjustments, page management and export options` | `app/document/[id].tsx`, `src/components/*` (incl. deletion of `HeadlessFilterProcessor.tsx`), `src/i18n/*` |
-| 8 | `fix(scan): add and retake pages in existing documents; reload library and use real cache clear` | `app/scan.tsx`, `app/(tabs)/*` |
-| 9 | `docs: document phase A pipeline, correct earlier claims and add phase A-D roadmap` | `README.md`, `CHANGELOG.md`, `AGENTS.md`, `docs/*` |
+| 1 | `chore: bump version to 1.3.0 and declare de/en localizations` | `package.json`, `package-lock.json`, `app.json` |
+| 2 | `feat(imaging): line-based document detector v2 with hard-scene tests` | `src/imaging/edgeDetection.ts`, `src/imaging/raster.ts`, `__tests__/edgeDetection.test.ts`, `__tests__/helpers/synthetic.ts` |
+| 3 | `feat(services): add iOS document scanner service and shared saveScan import` | `src/services/*`, `__tests__/scanImport.test.ts` |
+| 4 | `feat(scan): open the iOS document scanner app-wide, add photo import, more pages and review banner` | `src/components/*`, `src/i18n/*`, `app/*` |
+| 5 | `docs: document phase B scan flow, roadmap and changelog for 1.3.0` | `README.md`, `CHANGELOG.md`, `AGENTS.md`, `docs/*` |
 
-Alternative (single commit):
-`feat: phase A scan look – perspective correction, scan filters, non-destructive editing and pdf-lib export`
+No files were deleted in this change set.
 
 ## PowerShell
 
@@ -32,8 +34,8 @@ Run in your clone (adjust the two paths). No `&&` – one command per line.
 
 ```powershell
 $Repo = "C:\Projekte\ScanFlow"
-$Zip  = "$env:USERPROFILE\Downloads\scanflow-update.zip"
-$Tmp  = Join-Path $env:TEMP "scanflow-update"
+$Zip  = "$env:USERPROFILE\Downloads\scanflow-v1.3.0.zip"
+$Tmp  = Join-Path $env:TEMP "scanflow-v1.3.0"
 
 Set-Location $Repo
 git status
@@ -44,82 +46,75 @@ Expand-Archive -Path $Zip -DestinationPath $Tmp -Force
 robocopy $Tmp $Repo /E /NFL /NDL /NJH /NJS
 Remove-Item $Tmp -Recurse -Force
 
-Remove-Item src/services/FilterService.ts, src/components/HeadlessFilterProcessor.tsx
-
 npm install
 npx expo install --check
 npx tsc --noEmit
 npm run lint
 npm run test:imaging
+npx jest __tests__/scanImport.test.ts
 
-git add package.json package-lock.json app.json eslint.config.js jest.config.js .gitignore
-git commit -m "chore(deps): add skia, pdf-lib, slider, jest and eslint tooling; bump version to 1.2.0"
+git add package.json package-lock.json app.json
+git commit -m "chore: bump version to 1.3.0 and declare de/en localizations"
 
-git add src/imaging tools/prototype/enhance_prototype.py
-git commit -m "feat(imaging): add pure TypeScript imaging core with Skia renderer and pdf-lib builder"
+git add src/imaging __tests__/edgeDetection.test.ts __tests__/helpers/synthetic.ts
+git commit -m "feat(imaging): line-based document detector v2 with hard-scene tests"
 
-git add __tests__
-git commit -m "test(imaging): add geometry, detection, renderer, pdf, page state and migration tests"
+git add src/services __tests__/scanImport.test.ts
+git commit -m "feat(services): add iOS document scanner service and shared saveScan import"
 
-git add src/db src/types
-git commit -m "feat(db): add schema v2 with user_version migrations for non-destructive page state"
-
-git add src/services
-git commit -m "feat(services): add image pipeline and render services, pdf-lib export and page APIs"
-
-git add app/crop.tsx
-git commit -m "feat(crop): add perspective crop with skia overlay, loupe, detection and page format"
-
-git add app/document src/components src/i18n
-git commit -m "feat(editor): non-destructive filters, adjustments, page management and export options"
-
-git add app/scan.tsx "app/(tabs)"
-git commit -m "fix(scan): add and retake pages in existing documents; reload library and use real cache clear"
+git add src/components src/i18n app
+git commit -m "feat(scan): open the iOS document scanner app-wide, add photo import, more pages and review banner"
 
 git add -A
-git commit -m "docs: document phase A pipeline, correct earlier claims and add phase A-D roadmap"
+git commit -m "docs: document phase B scan flow, roadmap and changelog for 1.3.0"
 
 git status
-git log --oneline -9
+git log --oneline -5
+git push
+```
+
+Single commit (only if v1.2.0 was never committed):
+
+```powershell
+git add -A
+git commit -m "feat: phase A + B - scan look, perspective correction, iOS document scanner and pdf-lib export (v1.3.0)"
 git push
 ```
 
 Notes
 
-- `robocopy` exit code 1 means "files copied" (success).
-- `Remove-Item` is needed because copying cannot delete the two removed files;
-  `git add <folder>` then stages the deletion in the matching commit (5 and 7).
+- `robocopy` exit code 1 means "files copied" (success). Drag and drop works
+  too: extract the zip, select everything *inside* the extracted folder and
+  drop it into the repo's top level (where `package.json` is), "Replace".
+- `npm run lint` reports one pre-existing error in
+  `src/components/AppLockOverlay.tsx` (not part of this change) – it does not
+  block the commits.
 - The last `git add -A` picks up the docs and anything left over; `git status`
   must be clean afterwards.
 - If `git push` fails (credentials), stop and configure Git Credential Manager
   / a GitHub token; do not force-push.
-- Optional full test run (≈5–7 min, headless Skia): `npm test`.
+- Optional full test run (≈4–7 min, headless Skia): `npm test`.
+- Restart Metro with a clean cache after updating: `npx expo start --clear`.
 
-## Files in this change set
+## Files in this change set (vs. v1.2.0)
 
 New
 
-- `__tests__/edgeDetection.test.ts`, `geometry.test.ts`, `migrations.test.ts`, `pageState.test.ts`, `pdf.test.ts`, `renderer.test.ts`, `samples.test.ts`
-- `__tests__/helpers/skia.ts`, `__tests__/helpers/synthetic.ts`
-- `docs/ARCHITECTURE.md`, `docs/COMMITS.md`
-- `eslint.config.js`, `jest.config.js`
-- `src/components/AdjustmentsPanel.tsx`
-- `src/db/migrations.ts`
-- `src/imaging/background.ts`, `edgeDetection.ts`, `filters.ts`, `geometry.ts`, `index.ts`, `pageFormat.ts`, `pageState.ts`, `pdf.ts`, `raster.ts`, `renderer.ts`, `shaders.ts`, `types.ts`
-- `src/services/ImagePipelineService.ts`, `src/services/PageRenderService.ts`
-- `tools/prototype/enhance_prototype.py`
+- `src/components/ScannerProvider.tsx`
+- `src/services/DocumentScannerService.ts`, `src/services/ScanImportService.ts`
+- `__tests__/scanImport.test.ts`
 
 Changed
 
-- `.gitignore`, `AGENTS.md`, `CHANGELOG.md`, `README.md`, `app.json`, `package.json`, `package-lock.json`, `docs/ROADMAP.md`
-- `app/(tabs)/index.tsx`, `app/(tabs)/settings.tsx`, `app/crop.tsx`, `app/document/[id].tsx`, `app/scan.tsx`
-- `src/components/DocumentBottomBar.tsx`, `ExportModal.tsx`, `FilterStrip.tsx`, `PageEditorModal.tsx`, `PromptModal.tsx`, `index.ts`
-- `src/db/database.ts`, `src/db/schema.ts`
+- `package.json`, `package-lock.json`, `app.json`
+- `src/imaging/edgeDetection.ts`, `src/imaging/raster.ts`
+- `__tests__/edgeDetection.test.ts`, `__tests__/helpers/synthetic.ts`
+- `src/services/AuthService.ts`, `DocumentRepository.ts`, `ImagePipelineService.ts`, `PageRenderService.ts`, `StorageService.ts`, `index.ts`
+- `src/components/PageEditorModal.tsx`, `src/components/index.ts`
 - `src/i18n/de.ts`, `src/i18n/en.ts`
-- `src/services/AuthService.ts`, `DocumentRepository.ts`, `ExportService.ts`, `StorageService.ts`, `index.ts`
-- `src/types/index.ts`
+- `app/_layout.tsx`, `app/(tabs)/_layout.tsx`, `app/(tabs)/index.tsx`, `app/(tabs)/settings.tsx`, `app/document/[id].tsx`, `app/scan.tsx`
+- `README.md`, `CHANGELOG.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/COMMITS.md`
 
 Deleted
 
-- `src/services/FilterService.ts`
-- `src/components/HeadlessFilterProcessor.tsx`
+- none

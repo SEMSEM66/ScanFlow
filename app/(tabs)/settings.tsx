@@ -13,8 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ScreenCapture from 'expo-screen-capture';
 import { useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
-import { authService, LockTimeoutOption } from '../../src/services/AuthService';
-import { storageService, documentRepository } from '../../src/services';
+import { authService, LockTimeoutOption, ScannerMode } from '../../src/services/AuthService';
+import { storageService, documentRepository, documentScanner } from '../../src/services';
 import { ExportDpi, ExportQuality } from '../../src/types';
 import { EXPORT_DPI_PRESETS } from '../../src/imaging/pageFormat';
 import { PinSetupModal } from '../../src/components/PinSetupModal';
@@ -29,6 +29,11 @@ export default function SettingsScreen() {
   const [lockTimeout, setLockTimeout] = useState<LockTimeoutOption>(0);
   const [screenCaptureProtection, setScreenCaptureProtection] = useState(false);
   const [isPinModalVisible, setIsPinModalVisible] = useState(false);
+
+  // Scanner preference
+  const [systemScannerAvailable] = useState(() => documentScanner.isSystemScannerAvailable());
+  const [scannerMode, setScannerModeState] = useState<ScannerMode>('system');
+  const effectiveScannerMode: ScannerMode = systemScannerAvailable ? scannerMode : 'camera';
 
   // App & Storage state
   const [defaultQuality, setDefaultQuality] = useState<ExportQuality>('medium');
@@ -49,6 +54,7 @@ export default function SettingsScreen() {
       const qual = await authService.getDefaultQuality();
       setDefaultQuality(qual);
       setDefaultDpiState(await authService.getDefaultDpi());
+      setScannerModeState(await authService.getScannerMode());
       const size = await storageService.getStorageSize();
       setStorageBytes(size);
       const docs = await documentRepository.getAll();
@@ -98,6 +104,11 @@ export default function SettingsScreen() {
     await authService.setDefaultDpi(d);
   };
 
+  const handleSetScannerMode = async (m: ScannerMode) => {
+    setScannerModeState(m);
+    await authService.setScannerMode(m);
+  };
+
   const handleClearCache = async () => {
     Alert.alert(t.settings.clearCacheTitle, t.settings.clearCacheMessage, [
       { text: t.common.cancel, style: 'cancel' },
@@ -129,8 +140,50 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingHorizontal: spacing.base }]}>
-        {/* Section 1: Security & Privacy (Prominent & Bank-Grade) */}
+        {/* Section 0: Scanner (iOS document scanner or ScanFlow camera) */}
         <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary }]}>
+          {t.settings.scanner}
+        </Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <View style={styles.segmentedRow}>
+            {(['system', 'camera'] as ScannerMode[]).map((m) => {
+              const isSelected = effectiveScannerMode === m;
+              const isDisabled = m === 'system' && !systemScannerAvailable;
+              return (
+                <TouchableOpacity
+                  key={m}
+                  activeOpacity={0.8}
+                  disabled={isDisabled}
+                  onPress={() => handleSetScannerMode(m)}
+                  style={[
+                    styles.segmentButton,
+                    isSelected && { backgroundColor: colors.primary },
+                    isDisabled && { opacity: 0.4 },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      typography.bodyMedium,
+                      { color: isSelected ? '#FFFFFF' : colors.textPrimary, fontWeight: isSelected ? '700' : '500' },
+                    ]}
+                  >
+                    {m === 'system' ? t.settings.scannerSystem : t.settings.scannerCamera}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={[typography.footnote, styles.scannerHint, { color: colors.textSecondary }]}>
+            {!systemScannerAvailable
+              ? t.settings.scannerUnavailable
+              : effectiveScannerMode === 'system'
+              ? t.settings.scannerSystemHint
+              : t.settings.scannerCameraHint}
+          </Text>
+        </View>
+
+        {/* Section 1: Security & Privacy (Prominent & Bank-Grade) */}
+        <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary, marginTop: spacing.lg }]}>
           Sicherheit & Datenschutz
         </Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -479,6 +532,10 @@ const styles = StyleSheet.create({
   segmentedRow: {
     flexDirection: 'row',
     gap: 8,
+  },
+  scannerHint: {
+    marginTop: 10,
+    paddingHorizontal: 2,
   },
   segmentButton: {
     flex: 1,

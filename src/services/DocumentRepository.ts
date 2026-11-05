@@ -174,15 +174,19 @@ export class DocumentRepository {
   /**
    * Appends pages to a document. Files outside app storage are copied in;
    * files already inside scanflow/ (pipeline imports) are used as they are.
+   * Returns the ids of the new pages (in order).
    */
-  async addPages(documentId: string, pages: NewPageInput[]): Promise<void> {
+  async addPages(documentId: string, pages: NewPageInput[]): Promise<string[]> {
     const db = await getDatabase();
     const now = Date.now();
     const last = await db.getFirstAsync<{ n: number | null }>('SELECT MAX(page_number) AS n FROM pages WHERE document_id = ?', [documentId]);
     let pageNumber = last?.n ?? 0;
+    const ids: string[] = [];
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
       pageNumber++;
+      const pageId = newId('page', i);
+      ids.push(pageId);
       const originalUri = storageService.isStored(page.originalUri)
         ? page.originalUri
         : await storageService.saveImage(page.originalUri, `doc_${documentId}_p${pageNumber}_orig`);
@@ -196,7 +200,7 @@ export class DocumentRepository {
         `INSERT INTO pages (id, document_id, page_number, original_uri, preview_uri, filter, rotation, corners, page_format, adjustments, proxy_uri, render_key, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          newId('page', i),
+          pageId,
           documentId,
           pageNumber,
           originalUri,
@@ -214,6 +218,7 @@ export class DocumentRepository {
       );
     }
     await this.refreshSummary(documentId);
+    return ids;
   }
 
   /** Recomputes page_count and thumbnail (preview of page 1). */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { detectDocument, FALLBACK_INSET } from '../src/imaging/edgeDetection';
 import type { Quad } from '../src/imaging/types';
-import { boxDownscale, cornerError, makeFlatPage, photograph, PhotoOptions } from './helpers/synthetic';
+import { boxDownscale, cornerError, makeFlatPage, paintRect, photograph, PhotoOptions, type FlatPage } from './helpers/synthetic';
 
 const page = makeFlatPage(620, 877, 3); // 75 dpi is plenty for 300 px detection
 const FW = 600;
@@ -9,8 +9,20 @@ const FH = 800;
 const q = (pts: number[][]): Quad => pts.map(([x, y]) => ({ x, y })) as Quad;
 const norm = (c: Quad): Quad => c.map((p) => ({ x: p.x / FW, y: p.y / FH })) as Quad;
 
-function run(o: Omit<PhotoOptions, 'frameWidth' | 'frameHeight'>) {
-  const photo = photograph(page, { frameWidth: FW, frameHeight: FH, ...o });
+// page with a dark blue header bar across the top (part of the document)
+const headerPage: FlatPage = makeFlatPage(620, 877, 5);
+paintRect(headerPage, 0, 0, 620, 70, [0.1, 0.17, 0.36]);
+// page with a printed frame line close to the paper edge
+const framedPage: FlatPage = makeFlatPage(620, 877, 6);
+for (const [x, y, w, h] of [
+  [22, 22, 576, 3],
+  [22, 852, 576, 3],
+  [22, 22, 3, 833],
+  [595, 22, 3, 833],
+]) paintRect(framedPage, x, y, w, h, [0.15, 0.15, 0.16]);
+
+function run(o: Omit<PhotoOptions, 'frameWidth' | 'frameHeight'>, p: FlatPage = page) {
+  const photo = photograph(p, { frameWidth: FW, frameHeight: FH, ...o });
   const small = boxDownscale(photo, 2); // 300×400, like the app's detection input
   const t0 = Date.now();
   const res = detectDocument(small);
@@ -32,6 +44,29 @@ describe('detectDocument', () => {
     const err = cornerError(res.corners, norm(opts.corners));
     expect(err).toBeLessThan(0.02);
     expect(ms).toBeLessThan(1500);
+  });
+
+  // Scenes the line-based detector must not get wrong: inner lines that look
+  // like page edges (header bar boundary, printed frame) and a sheet lying on
+  // a larger light object (the reference scanners pick the sheet).
+  const hard: [string, Omit<PhotoOptions, 'frameWidth' | 'frameHeight'>, FlatPage][] = [
+    ['dark header bar is part of the page', { corners: q([[120, 100], [500, 110], [525, 705], [95, 690]]), background: 'wood' }, headerPage],
+    ['printed frame near the paper edge', { corners: q([[105, 90], [495, 105], [520, 700], [90, 690]]), background: 'dark' }, framedPage],
+    [
+      'sheet on a light binder → the sheet',
+      {
+        corners: q([[110, 110], [470, 120], [480, 640], [100, 630]]),
+        background: 'wood',
+        underlay: { corners: q([[80, 80], [540, 90], [560, 720], [70, 705]]), color: [0.7, 0.72, 0.76] },
+      },
+      page,
+    ],
+  ];
+
+  it.each(hard)('%s', (_name, opts, p) => {
+    const { res } = run(opts, p);
+    expect(res.detected).toBe(true);
+    expect(cornerError(res.corners, norm(opts.corners))).toBeLessThan(0.02);
   });
 
   it('falls back to an inset rectangle on a blank image', () => {

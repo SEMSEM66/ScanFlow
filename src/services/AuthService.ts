@@ -7,8 +7,12 @@ const DEFAULT_DPI_KEY = 'scanflow_default_dpi';
 const PIN_CODE_KEY = 'scanflow_security_pin';
 const LOCK_TIMEOUT_KEY = 'scanflow_lock_timeout_sec';
 const SCREEN_CAPTURE_KEY = 'scanflow_prevent_screen_capture';
+const SCANNER_MODE_KEY = 'scanflow_scanner_mode';
 
 export type LockTimeoutOption = 0 | 60 | 300; // 0 = Immediately, 60 = 1 min, 300 = 5 min
+
+/** 'system' = iOS document scanner (VisionKit), 'camera' = ScanFlow's own camera screen. */
+export type ScannerMode = 'system' | 'camera';
 
 class AuthService {
   private failedAttempts: number = 0;
@@ -246,6 +250,24 @@ class AuthService {
       await SecureStore.setItemAsync(DEFAULT_QUALITY_KEY, quality);
     } catch (err) {
       console.warn('[AuthService] Error saving default quality:', err);
+    }
+  }
+
+  // Scanner preference (default: iOS document scanner)
+  async getScannerMode(): Promise<ScannerMode> {
+    try {
+      const val = await SecureStore.getItemAsync(SCANNER_MODE_KEY);
+      return val === 'camera' ? 'camera' : 'system';
+    } catch {
+      return 'system';
+    }
+  }
+
+  async setScannerMode(mode: ScannerMode): Promise<void> {
+    try {
+      await SecureStore.setItemAsync(SCANNER_MODE_KEY, mode);
+    } catch (err) {
+      console.warn('[AuthService] Error saving scanner mode:', err);
     }
   }
 }

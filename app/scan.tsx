@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,12 +19,19 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/theme';
 import { useTranslation } from '../src/i18n';
-import { documentRepository, importPages } from '../src/services';
+import { saveScan } from '../src/services';
+import { scanDocumentTitle } from '../src/components/ScannerProvider';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type FlashMode = 'off' | 'on' | 'auto';
-type CaptureMode = 'auto' | 'manual';
+
+/**
+ * ScanFlow's own camera (setting "ScanFlow-Kamera", or fallback when the iOS
+ * document scanner is unavailable): manual capture, multi-page batch and
+ * photo import. Document edges are detected after capture (pipeline) and can
+ * be corrected in the crop screen.
+ */
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -42,7 +49,6 @@ export default function ScanScreen() {
 
   // Scan state
   const [flash, setFlash] = useState<FlashMode>('off');
-  const [mode, setMode] = useState<CaptureMode>('manual');
   const [isCapturing, setIsCapturing] = useState(false);
   const [capturedPages, setCapturedPages] = useState<string[]>([]);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
@@ -59,36 +65,20 @@ export default function ScanScreen() {
     if (uris.length === 0 || isSaving) return;
     try {
       setIsSaving(true);
-      const newPages = await importPages(uris, (current, total) =>
-        setProgressText(formatString(t.scan.processing, { current, total }))
-      );
-
-      if (replacePageId) {
-        const old = await documentRepository.getPage(replacePageId);
-        const p = newPages[0];
-        await documentRepository.replacePageSource(
-          replacePageId,
-          { originalUri: p.originalUri, proxyUri: p.proxyUri ?? null },
-          { corners: p.corners ?? null, rotation: 0, filter: old?.filter ?? 'auto' }
-        );
-        router.back();
-        return;
-      }
-
-      if (documentId) {
-        await documentRepository.addPages(documentId, newPages);
-        router.back();
-        return;
-      }
-
-      const now = new Date();
-      const locale = language === 'de' ? 'de-DE' : 'en-US';
-      const title = formatString(t.scan.documentTitle, {
-        date: now.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        time: now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
+      setProgressText(formatString(t.scan.processing, { current: 1, total: uris.length }));
+      const saved = await saveScan({
+        uris,
+        detect: true,
+        documentId,
+        replacePageId,
+        title: scanDocumentTitle(t.scan.documentTitle, language, formatString),
+        onProgress: (current, total) => setProgressText(formatString(t.scan.processing, { current, total })),
       });
-      const newDoc = await documentRepository.create({ title, pages: newPages });
-      router.replace(`/document/${newDoc.id}` as never);
+      if (saved.created) {
+        router.replace({ pathname: '/document/[id]', params: { id: saved.documentId } });
+      } else {
+        router.back();
+      }
     } catch (err) {
       console.error('[ScanScreen] Error saving scanned document:', err);
       Alert.alert(t.common.error, t.scan.saveFailed);
@@ -128,21 +118,6 @@ export default function ScanScreen() {
       setIsCapturing(false);
     }
   };
-
-  // Auto capture simulation timer
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    if (mode === 'auto' && !isCapturing && !isSaving) {
-      // Simulate automatic document detection snap after 3.5 seconds
-      timer = setTimeout(() => {
-        handleCapture();
-      }, 3500);
-    }
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, isCapturing, isSaving, capturedPages.length]);
 
   const handleGalleryImport = async () => {
     try {
@@ -333,47 +308,6 @@ export default function ScanScreen() {
 
       {/* Bottom Controls Sheet matching Scannen.png */}
       <View style={styles.bottomSheet}>
-        {/* Auto / Manuell Mode Toggle */}
-        <View style={styles.modeToggleContainer}>
-          <View style={styles.modeTogglePill}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => setMode('auto')}
-              style={[
-                styles.modeButton,
-                mode === 'auto' && { backgroundColor: colors.primary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.modeButtonText,
-                  { color: mode === 'auto' ? '#FFFFFF' : '#A0A0A0' },
-                ]}
-              >
-                {t.scan.auto}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => setMode('manual')}
-              style={[
-                styles.modeButton,
-                mode === 'manual' && { backgroundColor: colors.primary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.modeButtonText,
-                  { color: mode === 'manual' ? '#FFFFFF' : '#A0A0A0' },
-                ]}
-              >
-                {t.scan.manual}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {/* Bottom Actions Row: Thumbnail stack / Shutter / Fertig button */}
         <SafeAreaView edges={['bottom']} style={styles.shutterRow}>
           {/* Left: Thumbnail preview stack with page count badge */}
@@ -644,27 +578,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(18, 18, 20, 0.95)',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingTop: 14,
+    paddingTop: 20,
     paddingBottom: 8,
-  },
-  modeToggleContainer: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modeTogglePill: {
-    flexDirection: 'row',
-    backgroundColor: '#26262A',
-    borderRadius: 20,
-    padding: 3,
-  },
-  modeButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  modeButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   shutterRow: {
     flexDirection: 'row',

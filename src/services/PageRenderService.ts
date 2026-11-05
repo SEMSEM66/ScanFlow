@@ -1,6 +1,6 @@
 import type { DocumentPage, NewPageInput } from '../types';
 import { documentRepository } from './DocumentRepository';
-import { imagePipeline } from './ImagePipelineService';
+import { imagePipeline, type ImportOptions } from './ImagePipelineService';
 import { storageService } from './StorageService';
 
 /**
@@ -32,25 +32,41 @@ export async function ensurePagePreview(pageId: string): Promise<DocumentPage | 
 }
 
 /**
- * Imports camera / library images through the pipeline (EXIF bake, proxy,
- * edge detection). Default filter for new scans: Auto.
+ * Imports camera / library / scanner images through the pipeline (EXIF bake,
+ * proxy, optional edge detection). Default filter for new scans: Auto.
+ * Pages without a detected document keep the full image (corners = null).
+ * If one image fails, the files of the pages imported so far are removed.
  */
 export async function importPages(
   uris: string[],
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  options: ImportOptions = {}
 ): Promise<NewPageInput[]> {
   const out: NewPageInput[] = [];
-  for (let i = 0; i < uris.length; i++) {
-    onProgress?.(i + 1, uris.length);
-    const img = await imagePipeline.importImage(uris[i]);
-    out.push({
-      originalUri: img.originalUri,
-      proxyUri: img.proxyUri,
-      corners: img.detection.detected ? img.detection.corners : null,
-      filter: 'auto',
-      rotation: 0,
-      pageFormat: 'auto',
-    });
+  try {
+    for (let i = 0; i < uris.length; i++) {
+      onProgress?.(i + 1, uris.length);
+      const img = await imagePipeline.importImage(uris[i], options);
+      out.push({
+        originalUri: img.originalUri,
+        proxyUri: img.proxyUri,
+        corners: img.detection?.detected ? img.detection.corners : null,
+        filter: 'auto',
+        rotation: 0,
+        pageFormat: 'auto',
+      });
+    }
+  } catch (err) {
+    await discardImportedPages(out);
+    throw err;
   }
   return out;
+}
+
+/** Deletes the stored files of imported pages that never made it into the database. */
+export async function discardImportedPages(pages: NewPageInput[]): Promise<void> {
+  for (const p of pages) {
+    await storageService.deleteFile(p.originalUri);
+    if (p.proxyUri && p.proxyUri !== p.originalUri) await storageService.deleteFile(p.proxyUri);
+  }
 }

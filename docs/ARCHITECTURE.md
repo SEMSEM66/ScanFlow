@@ -1,8 +1,9 @@
-# ScanFlow – Image Pipeline Architecture (Phase A)
+# ScanFlow – Scan & Image Pipeline Architecture (Phase A + B)
 
-This document describes how ScanFlow turns a phone photo into a page that looks
-like a real scanned PDF page, how page state is stored, and how the pieces are
-tested. It is the reference for anybody changing `src/imaging/`.
+This document describes how ScanFlow captures pages (iOS document scanner or
+its own camera), turns a phone photo into a page that looks like a real
+scanned PDF page, how page state is stored, and how the pieces are tested. It
+is the reference for anybody changing `src/imaging/` or the scan flow.
 
 ---
 
@@ -29,7 +30,7 @@ src/imaging/            Pure, framework-free TypeScript (testable in Node)
   geometry.ts           Homography (DLT), quad validation (convexity, angles, area), ordering
   pageFormat.ts         A4 595.28×841.89 pt, Letter 612×792 pt, auto-snap (±4 %), DPI → pixels
   raster.ts             Small RGBA helpers (resize, blur, luminance, morphology)
-  edgeDetection.ts      Document corner detection (Canny-style edges + Otsu brightness)
+  edgeDetection.ts      Document corner detection (gradient edges → oriented Hough lines → scored quads)
   background.ts         Paper/illumination estimation + border mask (≈128 px)
   filters.ts            7 filter presets → shader uniforms; CPU reference implementation
   shaders.ts            SkSL: WARP_SKSL (perspective), ENHANCE_SKSL (normalize/clean/sharpen/mode)
@@ -39,10 +40,15 @@ src/imaging/            Pure, framework-free TypeScript (testable in Node)
 
 src/services/
   ImagePipelineService.ts  File IO + Skia + serial job queue + render cache (bridge app ↔ imaging)
-  PageRenderService.ts     ensurePagePreview() (stale-safe), importPages()
+  PageRenderService.ts     ensurePagePreview() (stale-safe), importPages() (+ cleanup on failure)
+  DocumentScannerService.ts iOS document scanner (VisionKit via expo-camera), camera permission
+  ScanImportService.ts     saveScan(): new document / add pages / retake, temp cleanup, scan notices
   ExportService.ts         PDF (pdf-lib, expo-print fallback), JPG, share, size estimate
   DocumentRepository.ts    Pages CRUD incl. non-destructive state, reorder, replace, delete
   StorageService.ts        Sandboxed file areas, export cache, best-effort deletion
+
+src/components/ScannerProvider.tsx  App-wide scan entry (useScanner): scanner choice, permission,
+                                    progress overlay, fallback to the ScanFlow camera
 
 src/db/migrations.ts    PRAGMA user_version based migrations (v1 → v2)
 tools/prototype/        Python/OpenCV prototype of the enhancement algorithm (not bundled)
@@ -58,7 +64,7 @@ Camera / Library photo
    │  importImage(): ImageManipulator re-encode (bakes EXIF orientation,
    │  drops metadata, long side ≤ 4096, JPEG 0.92)
    ▼
-original.jpg ──► proxy.jpg (≤ 2000 px) ──► detection copy (≤ 300 px RGBA)
+original.jpg ──► proxy.jpg (≤ 2000 px) ──► detection copy (≤ 400 px RGBA)
                                               │ detectDocument()
                                               ▼
                                    corners (normalized 0..1) or null
@@ -106,7 +112,55 @@ sharpness (−1…+1) and denoise (on/off). Defaults are stored as `NULL`.
 
 ---
 
-## 4. Data model (SQLite schema v2)
+## 4. Scan flow (v1.3.0)
+
+```text
+FAB (+) · "Weitere Seiten hinzufügen" · Seite hinzufügen → "Dokument scannen" · page editor → retake
+   │  useScanner().scan(target)          target = {} | {documentId} | {documentId, replacePageId}
+   ▼
+ScannerProvider
+   ├─ Settings "Scanner" = ScanFlow-Kamera, or iOS scanner unavailable
+   │     → router.push('/scan', target)  (own camera, manual shutter, batch, photo import)
+   │        → saveScan({detect: true}) → new doc: router.replace(document) / else router.back()
+   └─ iOS-Scanner (default)
+         1. camera permission (Camera.get/requestCameraPermissionsAsync; denied → "Einstellungen")
+         2. CameraView.scanDocumentAsync({quality: 0.95})  – VisionKit VNDocumentCameraViewController:
+            live page outline, auto capture, multi-page, corner adjustment, perspective correction
+         3. pages (cropped JPEGs in the cache) → saveScan({detect: false}) with progress overlay
+         4. new document → router.push('/document/[id]'); target document → caller reloads
+Photo import (Documents tab: header button / empty state; add page → "Aus Fotomediathek")
+   → ImagePicker (multi-select, ordered) → saveScan({detect: true})
+```
+
+- **`saveScan()`** (`ScanImportService`) runs every image through
+  `importPages()` (re-encode, proxy, optional detection, filter *Auto*) and
+  stores the pages: new document, appended to `documentId`, or – retake – the
+  first image replaces `replacePageId` (keeps its filter, rotation 0) and
+  further images are inserted right after it. Temporary source files (cache
+  directory only) are deleted after success. If an image cannot be imported,
+  the sources are kept and the page files imported so far are removed again.
+- **Scan notices:** `saveScan()` leaves `{pageIds, undetectedPageIds}` for the
+  document; the document screen takes it on its next load, jumps to the first
+  new page and shows the review banner (*"Auf Seite 2 wurde kein
+  Dokumentrand erkannt." – Ecken setzen*) for imported pages without detected
+  corners.
+- **Presentation timing:** VisionKit is presented natively on the top-most
+  view controller. UIKit refuses a presentation while a modal / alert is still
+  animating, and the promise then never settles. Therefore: alerts and the
+  page editor start the scanner only after they are fully dismissed (alert:
+  300 ms delay, editor: `Modal.onDismiss` + 900 ms fallback). If a scan is
+  "running" for > 1.5 s while the app UI is usable, the next tap offers the
+  ScanFlow camera instead.
+- **Why VisionKit pages skip detection:** they are already cropped and
+  de-warped; a second detection pass could only crop them wrongly. The crop
+  screen still allows manual corners on them.
+- **Language of the scanner UI:** VisionKit uses the app's localizations
+  (`CFBundleLocalizations` = de, en in `app.json`, effective in the IPA build).
+  In Expo Go it depends on Expo Go's own localizations (may be English).
+
+---
+
+## 5. Data model (SQLite schema v2)
 
 `pages` gains the following columns (migration `src/db/migrations.ts`):
 
@@ -132,7 +186,7 @@ pages are created lazily on first open.
 
 ---
 
-## 5. PDF structure
+## 6. PDF structure
 
 - One page per scan, MediaBox exactly A4 (595.28×841.89 pt) / Letter
   (612×792 pt) or the cropped aspect; image drawn full-page (no margins).
@@ -159,7 +213,7 @@ estimate, not a guarantee.
 
 ---
 
-## 6. Acceptance criteria (automated)
+## 7. Acceptance criteria (automated)
 
 Checked by `__tests__/renderer.test.ts` and `edgeDetection.test.ts` on
 synthetic phone photos (perspective, uneven light, soft shadow, colour cast,
@@ -167,7 +221,7 @@ noise, blur, JPEG) with known ground truth:
 
 | Criterion | Threshold |
 | --- | --- |
-| Corner detection error (5 scenes) | ≤ 2 % of the image diagonal |
+| Corner detection error (5 scenes + 3 hard scenes: header bar, printed frame, sheet on a light binder) | ≤ 2 % of the image diagonal |
 | Paper brightness (mean) – all filters except Original, 3 scenes | ≥ 245 |
 | Remaining illumination gradient on paper | ≤ 8 grey levels |
 | Border (former table) brightness, p1 | ≥ 235 |
@@ -187,7 +241,9 @@ cached previews).
 
 ---
 
-## 7. Not in Phase A (see ROADMAP)
+## 8. Not yet implemented (see ROADMAP)
 
-- Live edge detection in the camera preview and real auto-capture (Phase B).
+- Live edge overlay / auto-capture in ScanFlow's *own* camera (`app/scan.tsx`).
+  Live detection and auto-capture are provided by the iOS document scanner
+  (default); Expo Go offers no camera frame processors for a custom overlay.
 - OCR / searchable PDF (Phase C, hook prepared in `buildPdf`).

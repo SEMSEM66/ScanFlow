@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ThemeProvider, useTheme } from '../src/theme';
 import { I18nProvider } from '../src/i18n';
 import { AppLockOverlay } from '../src/components/AppLockOverlay';
+import { ScannerProvider } from '../src/components/ScannerProvider';
 import { getDatabase } from '../src/db/database';
 import { storageService } from '../src/services/StorageService';
 
@@ -38,39 +39,43 @@ function RootNavigation() {
     );
   }
 
+  // ScannerProvider sits outside the lock overlay so a running scan import
+  // survives the privacy veil (it replaces its children while inactive).
   return (
-    <AppLockOverlay>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.background },
-          animation: 'slide_from_right',
-        }}
-      >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="scan"
-          options={{
-            presentation: 'fullScreenModal',
+    <ScannerProvider>
+      <AppLockOverlay>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <Stack
+          screenOptions={{
             headerShown: false,
+            contentStyle: { backgroundColor: colors.background },
+            animation: 'slide_from_right',
           }}
-        />
-        <Stack.Screen
-          name="crop"
-          options={{
-            presentation: 'fullScreenModal',
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="document/[id]"
-          options={{
-            headerShown: false,
-          }}
-        />
-      </Stack>
-    </AppLockOverlay>
+        >
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="scan"
+            options={{
+              presentation: 'fullScreenModal',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="crop"
+            options={{
+              presentation: 'fullScreenModal',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="document/[id]"
+            options={{
+              headerShown: false,
+            }}
+          />
+        </Stack>
+      </AppLockOverlay>
+    </ScannerProvider>
   );
 }
 

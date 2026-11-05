@@ -4,3 +4,5 @@ export * from './DocumentRepository';
 export * from './ImagePipelineService';
 export * from './PageRenderService';
 export * from './ExportService';
+export * from './ScanImportService';
+export * from './DocumentScannerService';

@@ -130,6 +130,21 @@ class StorageService {
     }
   }
 
+  /**
+   * Removes a temporary file from the app's cache directory (camera photos,
+   * document-scanner pages, picker copies) once it has been imported. Files
+   * outside the cache directory are never touched.
+   */
+  async deleteTempFile(fileUri: string): Promise<void> {
+    const cacheDir = FileSystem.cacheDirectory;
+    if (!cacheDir || !fileUri.startsWith(cacheDir) || fileUri.includes('..')) return;
+    try {
+      await FileSystem.deleteAsync(fileUri, { idempotent: true });
+    } catch (err) {
+      console.warn(`[StorageService] Failed to delete temporary file: ${fileUri}`, err);
+    }
+  }
+
   /** Total size of app storage in bytes (recursive: originals, proxies, renders). */
   async getStorageSize(): Promise<number> {
     try {

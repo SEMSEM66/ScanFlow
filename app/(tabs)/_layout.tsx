@@ -1,14 +1,15 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
+import { useScanner } from '../../src/components/ScannerProvider';
 
 export default function TabLayout() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
-  const router = useRouter();
+  const scanner = useScanner();
 
   return (
     <Tabs
@@ -48,7 +49,10 @@ export default function TabLayout() {
             <View style={styles.floatingButtonContainer}>
               <TouchableOpacity
                 activeOpacity={0.85}
-                onPress={() => router.push('/scan')}
+                onPress={() => scanner.scan()}
+                disabled={scanner.busy}
+                accessibilityRole="button"
+                accessibilityLabel={t.scan.title}
                 style={[
                   styles.floatingButton,
                   {

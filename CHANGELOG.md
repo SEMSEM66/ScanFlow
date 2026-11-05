@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2026-11-05
+
+Phase B – live scanner like CamScanner. See `docs/ARCHITECTURE.md` → "Scan flow".
+
+### Added
+- **iOS document scanner as the default scanner** (VisionKit `VNDocumentCameraViewController` via `expo-camera` `CameraView.scanDocumentAsync`, no extra package): live page outline, automatic capture, manual shutter, multi-page batch, corner adjustment and perspective correction. Pages are stored without a second detection pass and get filter *Auto*.
+- `src/components/ScannerProvider.tsx` (`useScanner()`): one scan entry for the FAB, the empty library, the document screen and retakes – camera permission check (alert → iOS settings), progress overlay while storing, new documents open automatically, fallback to the ScanFlow camera if the system scanner is unavailable, fails or does not appear.
+- `src/services/DocumentScannerService.ts` and `src/services/ScanImportService.ts` (`saveScan()`: new document / append / retake, temp-file cleanup, scan notice for the document screen).
+- **Settings → Scanner:** *iOS-Scanner* (default) / *ScanFlow-Kamera*.
+- **Document screen:** *"+ Weitere Seiten hinzufügen"* below the page; after adding pages the first new page is shown; review banner for imported pages without a detected edge (*Ecken setzen* → crop screen).
+- **Photo import from the Documents tab** (header button and *Aus Fotos importieren* in the empty state), multi-select in selection order, with edge detection.
+- **Detector v2** (`src/imaging/edgeDetection.ts`): luminance + chroma gradients, orientation-restricted Hough lines, two-stage quad scoring (paper vs. other surface, T-junctions, image-border sides), prefers a sheet lying on a larger light object; detection input 400 px (was 300 px).
+- `CFBundleLocalizations` (de, en) in `app.json` so system UI such as the scanner follows the device language in the IPA build.
+- Tests: `__tests__/scanImport.test.ts` (7 tests), 3 hard detection scenes (dark header bar, printed frame near the edge, sheet on a light binder).
+
+### Changed
+- The **+** button opens the iOS scanner instead of ScanFlow's camera (switchable in Settings).
+- *Seite hinzufügen* offers *Aus Fotomediathek* / *Dokument scannen*; retake in the page editor uses the selected scanner. If several pages are scanned during a retake, the first replaces the page and the others are inserted right after it (the replaced page keeps its filter).
+- *Seite hinzufügen* / retake from the page editor first closes the editor, then opens the scanner or photo picker (the iOS scanner cannot be presented while a modal is animating).
+- ScanFlow's own camera is manual capture only; it now shares the store logic (`saveScan()`) with the scanner and the photo import.
+- `ImagePipelineService.importImage(uri, { detect })`, `importPages(uris, onProgress, { detect })`; `DocumentRepository.addPages()` returns the new page ids.
+
+### Fixed
+- The camera's *Auto* mode was a simulated 3.5 s timer without any detection – removed (real auto-capture comes from the iOS scanner).
+- Temporary camera / picker / scanner images stayed in the cache – they are deleted after a successful import; page files of a failed import are removed again.
+- A failing edge detection aborted the whole import – the page now keeps the full image (review banner); a failed proxy no longer leaves the original file behind.
+
+### Removed
+- *Auto / Manuell* toggle and i18n keys `scan.auto`, `scan.manual` of the own camera.
+
+### Known limitations
+- ScanFlow's own camera has no live edge overlay (Expo Go provides no camera frame processing); live detection is available through the iOS scanner.
+- In Expo Go the language of the scanner's buttons depends on Expo Go's own localizations (may be English); the IPA build uses `CFBundleLocalizations` (de, en).
+- Post-capture detection (photo import, own camera) can include a clear sleeve or binder strip around the sheet, and pages cut off by the image frame are often not detected – corners can be corrected in *Zuschneiden*.
+- The iOS scanner flow has not yet been verified on a physical iPhone (STOP B in `docs/ROADMAP.md`).
+- Pre-existing issues in `src/components/AppLockOverlay.tsx` remain (lint error; with app lock enabled the privacy veil replaces the screen content while the app is inactive, so the navigation can reset after system dialogs).
+
 ## [1.2.0] - 2026-11-05
 
 Phase A – "real scanned PDF" look. See `docs/ARCHITECTURE.md`.
@@ -53,7 +90,7 @@ Phase A – "real scanned PDF" look. See `docs/ARCHITECTURE.md`.
 - [0.x] The Skia perspective-warp check in the roadmap was ticked but never performed; it is done in 1.2.0 (Skia is used in Expo Go).
 
 ### Known limitations
-- Camera auto-capture is still a simulated timer; live edge detection is Phase B.
+- Camera auto-capture is still a simulated timer; live edge detection is Phase B. *(Resolved in 1.3.0.)*
 - No OCR / searchable PDF yet (Phase C).
 - JPG export exports the current page only.
 - Pre-existing lint error in `src/components/AppLockOverlay.tsx` remains.

@@ -106,7 +106,7 @@ Development proceeds in small, verifiable steps with real persisted storage from
 - Digital signatures (e-signature)
 - ID-card scanning mode
 - QR code scanner
-- Live edge detection in the camera preview / real auto-capture (planned: ROADMAP Phase B; post-capture detection exists since v1.2.0)
+- Live edge overlay / auto-capture in ScanFlow's *own* camera (`app/scan.tsx`). Live detection and auto-capture are provided by the iOS document scanner since v1.3.0 (ROADMAP Phase B).
 - Cloud sync & user accounts
 - Subscriptions / In-App Purchases
 
@@ -123,3 +123,12 @@ See `docs/ARCHITECTURE.md` for details.
 - **Acceptance numbers** (paper ≥ 245, gradient ≤ 8, border p1 ≥ 235, text ≤ 70, detection ≤ 2 %) must stay green; do not loosen thresholds without documenting why in `docs/ARCHITECTURE.md`.
 - Tests import Jest globals from `@jest/globals` (TS 6 `types: []`); Node-only helpers use `/// <reference types="node" />`.
 
+---
+
+## 9. Scan Flow Rules (since v1.3.0)
+See `docs/ARCHITECTURE.md` → "Scan flow".
+- **Every scan entry point** (FAB, empty state, "Weitere Seiten hinzufügen", add page, retake) calls `useScanner().scan(target)` / `importFromLibrary(target)` from `src/components/ScannerProvider.tsx`. Do not `router.push('/scan')` directly – the provider decides between the iOS document scanner (default) and the ScanFlow camera (setting / fallback).
+- **Storing pages** from any source goes through `saveScan()` (`src/services/ScanImportService.ts`): `detect: false` for iOS scanner pages (already cropped), `detect: true` for photos. It handles new document / append / retake, temp-file cleanup and the scan notice for the document screen.
+- **Native presentation timing:** the iOS scanner and the photo picker must only be presented when no modal or alert is animating (alert → short delay, RN `Modal` → `onDismiss`). Otherwise UIKit drops the presentation and the scan promise never settles.
+- Temporary scan files are deleted only via `storageService.deleteTempFile()` (restricted to the cache directory); stored page files only via the repository.
+- The iOS scanner's UI language comes from `CFBundleLocalizations` in `app.json` (de, en) – keep it when adding languages.

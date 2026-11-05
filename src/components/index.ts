@@ -11,3 +11,4 @@ export * from './PageEditorModal';
 export * from './AppLockOverlay';
 export * from './PinSetupModal';
 export * from './AdjustmentsPanel';
+export * from './ScannerProvider';

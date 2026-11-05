@@ -13,7 +13,6 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import {
@@ -22,7 +21,7 @@ import {
   exportService,
   imagePipeline,
   ensurePagePreview,
-  importPages,
+  scanNotices,
 } from '../../src/services';
 import {
   Adjustments,
@@ -45,6 +44,8 @@ import {
   MoveFolderModal,
   PromptModal,
   AdjustmentsPanel,
+  useScanner,
+  type ScanOutcome,
 } from '../../src/components';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -58,6 +59,7 @@ export default function DocumentDetailScreen() {
 
   const { colors, typography, borderRadius } = useTheme();
   const { t, formatString } = useTranslation();
+  const scanner = useScanner();
 
   // Document & Pages state
   const [loading, setLoading] = useState(true);
@@ -65,11 +67,11 @@ export default function DocumentDetailScreen() {
   const [pages, setPages] = useState<DocumentPage[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [isRendering, setIsRendering] = useState(false);
-  const [isBusy, setIsBusy] = useState(false);
-  const [busyText, setBusyText] = useState<string | null>(null);
   const [thumbState, setThumbState] = useState<{ key: string; map: Partial<Record<FilterType, string>> }>({ key: '', map: {} });
   const [area, setArea] = useState<{ w: number; h: number } | null>(null);
   const [aspect, setAspect] = useState(1 / Math.SQRT2);
+  // Freshly imported pages without a detected document edge (review banner)
+  const [reviewIds, setReviewIds] = useState<string[]>([]);
 
   // Modals
   const [isExportVisible, setIsExportVisible] = useState(false);
@@ -116,9 +118,16 @@ export default function DocumentDetailScreen() {
         return;
       }
       if (!mounted.current) return;
+      // Pages just added by a scan / import: show the first one, offer a review of undetected ones
+      const notice = scanNotices.take(id);
       setDocument(data.document);
       setPages(data.pages);
-      setCurrentPageIndex((idx) => Math.min(idx, Math.max(0, data.pages.length - 1)));
+      const jumpTo = notice ? data.pages.findIndex((p) => notice.pageIds.includes(p.id)) : -1;
+      if (jumpTo >= 0) setCurrentPageIndex(jumpTo);
+      else setCurrentPageIndex((idx) => Math.min(idx, Math.max(0, data.pages.length - 1)));
+      if (notice && notice.undetectedPageIds.length > 0) {
+        setReviewIds((prev) => Array.from(new Set([...prev, ...notice.undetectedPageIds])));
+      }
     } catch (err) {
       console.error('[DocumentDetailScreen] Error loading document:', err);
     } finally {
@@ -268,42 +277,52 @@ export default function DocumentDetailScreen() {
     ]);
   };
 
+  const afterScan = async (outcome: ScanOutcome) => {
+    // the scan flows leave a notice (new pages, undetected pages) that the reload picks up
+    if (outcome.status === 'saved' && mounted.current) await loadDocumentData();
+  };
+
+  /** Scanner (iOS document scanner or ScanFlow camera) – adds pages or retakes one. */
+  const scanPages = async (replacePageId?: string) => {
+    if (!document) return;
+    await afterScan(await scanner.scan(replacePageId ? { documentId: document.id, replacePageId } : { documentId: document.id }));
+  };
+
+  const importPagesFromLibrary = async () => {
+    if (!document) return;
+    await afterScan(await scanner.importFromLibrary({ documentId: document.id }));
+  };
+
   const handleAddPage = () => {
     Alert.alert(t.filters.addPage, t.filters.addPageSource, [
       { text: t.common.cancel, style: 'cancel' },
-      {
-        text: t.filters.fromLibrary,
-        onPress: async () => {
-          const res = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsMultipleSelection: true,
-            quality: 1,
-            exif: false,
-          });
-          if (res.canceled || !res.assets?.length || !document) return;
-          try {
-            setIsBusy(true);
-            const newPages = await importPages(
-              res.assets.map((a) => a.uri),
-              (current, total) => setBusyText(formatString(t.scan.processing, { current, total }))
-            );
-            await documentRepository.addPages(document.id, newPages);
-            await loadDocumentData();
-            setCurrentPageIndex(pages.length);
-          } catch (err) {
-            console.error('[DocumentDetailScreen] add page error', err);
-            Alert.alert(t.common.error, t.scan.importFailed);
-          } finally {
-            setIsBusy(false);
-            setBusyText(null);
-          }
-        },
-      },
-      {
-        text: t.filters.fromCamera,
-        onPress: () => router.push({ pathname: '/scan', params: { documentId: id } }),
-      },
+      // short delay: let the alert finish closing before a native picker / scanner is presented
+      { text: t.filters.fromLibrary, onPress: () => setTimeout(importPagesFromLibrary, 300) },
+      { text: t.filters.fromCamera, onPress: () => setTimeout(() => scanPages(), 300) },
     ]);
+  };
+
+  // The page editor is a modal: native pickers / the scanner can only be presented once it is gone.
+  const editorAction = useRef<(() => void) | null>(null);
+  const runEditorAction = () => {
+    const action = editorAction.current;
+    editorAction.current = null;
+    action?.();
+  };
+  const closeEditorThen = (action: () => void) => {
+    editorAction.current = action;
+    setIsPageEditorVisible(false);
+    setTimeout(runEditorAction, 900); // fallback if onDismiss is not delivered
+  };
+
+  const reviewPages = pages.filter((p) => reviewIds.includes(p.id) && p.corners === null);
+  const handleReview = () => {
+    const page = reviewPages[0];
+    if (!page) return;
+    setReviewIds((prev) => prev.filter((pid) => pid !== page.id));
+    const idx = pages.findIndex((p) => p.id === page.id);
+    if (idx >= 0) setCurrentPageIndex(idx);
+    router.push({ pathname: '/crop', params: { pageId: page.id, documentId: id } });
   };
 
   const handleMovePage = async (from: number, to: number) => {
@@ -358,7 +377,7 @@ export default function DocumentDetailScreen() {
       })()
     : { width: SCREEN_WIDTH * 0.8, height: (SCREEN_WIDTH * 0.8) / aspect };
   const showUri = isPreviewCurrent || currentPage.previewUri !== currentPage.originalUri ? currentPage.previewUri : null;
-  const busy = isBusy || isExporting;
+  const busy = isExporting;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -382,6 +401,34 @@ export default function DocumentDetailScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Review hint: imported pages where no document edge was found */}
+      {reviewPages.length > 0 ? (
+        <View
+          style={[
+            styles.reviewBanner,
+            { backgroundColor: colors.primarySubdued, borderColor: colors.primaryBorder, borderRadius: borderRadius.md },
+          ]}
+        >
+          <Ionicons name="crop-outline" size={18} color={colors.primary} />
+          <Text numberOfLines={2} style={[typography.footnote, styles.reviewText, { color: colors.textPrimary }]}>
+            {reviewPages.length === 1
+              ? formatString(t.scan.reviewOne, { page: pages.indexOf(reviewPages[0]) + 1 })
+              : formatString(t.scan.reviewMany, { count: reviewPages.length })}
+          </Text>
+          <TouchableOpacity onPress={handleReview} disabled={busy} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={[typography.footnote, { color: colors.primary, fontWeight: '700' }]}>{t.scan.reviewAction}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setReviewIds([])}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel={t.common.close}
+            style={styles.reviewClose}
+          >
+            <Ionicons name="close" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* Page viewer */}
       <View style={styles.pageViewerContainer}>
@@ -414,7 +461,7 @@ export default function DocumentDetailScreen() {
               <View style={styles.processingOverlay}>
                 <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 8 }]}>
-                  {busyText ?? t.filters.rendering}
+                  {t.filters.rendering}
                 </Text>
               </View>
             ) : null}
@@ -444,6 +491,16 @@ export default function DocumentDetailScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => scanPages()}
+          disabled={busy || scanner.busy}
+          style={[styles.addMoreButton, { opacity: busy || scanner.busy ? 0.5 : 1 }]}
+        >
+          <Ionicons name="add-circle" size={20} color={colors.primary} />
+          <Text style={[typography.subhead, styles.addMoreText, { color: colors.primary }]}>{t.scan.addMorePages}</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Filter strip with rendered thumbnails */}
@@ -490,11 +547,11 @@ export default function DocumentDetailScreen() {
         onMovePage={handleMovePage}
         onDeletePage={deletePageAt}
         onRetakePage={(idx) => {
-          setIsPageEditorVisible(false);
           const page = pages[idx];
-          if (page) router.push({ pathname: '/scan', params: { documentId: id, replacePageId: page.id } });
+          if (page) closeEditorThen(() => scanPages(page.id));
         }}
-        onAddPage={handleAddPage}
+        onAddPage={() => closeEditorThen(handleAddPage)}
+        onDismiss={runEditorAction}
       />
 
       <DocumentActionModal
@@ -630,5 +687,32 @@ const styles = StyleSheet.create({
   },
   arrowButton: {
     padding: 6,
+  },
+  addMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  addMoreText: {
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  reviewBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    marginHorizontal: 16,
+    marginBottom: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  reviewText: {
+    flex: 1,
+  },
+  reviewClose: {
+    padding: 2,
   },
 });

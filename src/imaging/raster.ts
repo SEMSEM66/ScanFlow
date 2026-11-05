@@ -1,6 +1,6 @@
 /**
  * Small, allocation-conscious raster helpers on Float32 planes.
- * Used by edge detection (≈300 px images) and background estimation (≈128 px).
+ * Used by edge detection (≈300–400 px images) and background estimation (≈128 px).
  */
 
 export type Plane = Float32Array;

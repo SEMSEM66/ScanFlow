@@ -23,6 +23,8 @@ interface PageEditorModalProps {
   onDeletePage: (pageIndex: number) => void;
   onRetakePage: (pageIndex: number) => void;
   onAddPage: () => void;
+  /** iOS: called once the modal is fully dismissed. */
+  onDismiss?: () => void;
 }
 
 export const PageEditorModal: React.FC<PageEditorModalProps> = ({
@@ -33,6 +35,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
   onDeletePage,
   onRetakePage,
   onAddPage,
+  onDismiss,
 }) => {
   const { colors, typography, spacing, borderRadius } = useTheme();
   const { t, formatString } = useTranslation();
@@ -53,6 +56,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
       transparent
       animationType="slide"
       onRequestClose={onClose}
+      onDismiss={onDismiss}
     >
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Top Header */}

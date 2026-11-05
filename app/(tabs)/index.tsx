@@ -26,12 +26,14 @@ import {
   SortModal,
   SortOption,
   FolderOptionsModal,
+  useScanner,
 } from '../../src/components';
 
 export default function LibraryScreen() {
   const { colors, typography, spacing, borderRadius } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
+  const scanner = useScanner();
 
   // Data State
   const [loading, setLoading] = useState(true);
@@ -220,13 +222,25 @@ export default function LibraryScreen() {
         <Text style={[styles.largeTitle, typography.largeTitle, { color: colors.textPrimary }]}>
           {t.library.title}
         </Text>
-        <TouchableOpacity
-          style={[styles.headerIconButton, { backgroundColor: colors.surfaceSubdued }]}
-          activeOpacity={0.7}
-          onPress={() => setIsSortModalVisible(true)}
-        >
-          <Ionicons name="ellipsis-horizontal" size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.headerIconButton, { backgroundColor: colors.surfaceSubdued }]}
+            activeOpacity={0.7}
+            onPress={() => scanner.importFromLibrary()}
+            disabled={scanner.busy}
+            accessibilityRole="button"
+            accessibilityLabel={t.scan.importPhotos}
+          >
+            <Ionicons name="images-outline" size={19} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.headerIconButton, { backgroundColor: colors.surfaceSubdued, marginLeft: spacing.sm }]}
+            activeOpacity={0.7}
+            onPress={() => setIsSortModalVisible(true)}
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color={colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search Bar */}
@@ -361,7 +375,8 @@ export default function LibraryScreen() {
               {searchQuery.length === 0 && (
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  onPress={() => router.push('/scan')}
+                  onPress={() => scanner.scan()}
+                  disabled={scanner.busy}
                   style={[
                     styles.scanButton,
                     {
@@ -377,6 +392,18 @@ export default function LibraryScreen() {
                   <Text style={[styles.scanButtonText, { color: '#FFFFFF' }]}>
                     {t.library.startScan}
                   </Text>
+                </TouchableOpacity>
+              )}
+
+              {searchQuery.length === 0 && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => scanner.importFromLibrary()}
+                  disabled={scanner.busy}
+                  style={[styles.importButton, { marginTop: spacing.md }]}
+                >
+                  <Ionicons name="images-outline" size={18} color={colors.primary} style={{ marginRight: spacing.xs }} />
+                  <Text style={[typography.bodyMedium, { color: colors.primary }]}>{t.scan.importPhotos}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -463,12 +490,22 @@ const styles = StyleSheet.create({
   largeTitle: {
     letterSpacing: -0.5,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   headerIconButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  importButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   searchContainer: {
     flexDirection: 'row',

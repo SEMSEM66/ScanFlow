@@ -29,6 +29,16 @@ export const INK: [number, number, number] = [0.12, 0.12, 0.13];
 export const STAMP: [number, number, number] = [0.78, 0.12, 0.16];
 export const LOGO: [number, number, number] = [0.08, 0.31, 0.78];
 
+/** Paints a filled rectangle (page px) onto a flat page, e.g. a coloured header bar or a printed frame line. */
+export function paintRect(page: FlatPage, x0: number, y0: number, w: number, h: number, color: [number, number, number]): void {
+  for (let y = Math.max(0, Math.round(y0)); y < Math.min(page.height, Math.round(y0 + h)); y++)
+    for (let x = Math.max(0, Math.round(x0)); x < Math.min(page.width, Math.round(x0 + w)); x++) {
+      const i = y * page.width + x;
+      page.rgb.set(color, i * 3);
+      page.ink[i] = 1;
+    }
+}
+
 /** Flat "invoice" page: text bars, heading, red stamp ring, blue logo. */
 export function makeFlatPage(width: number, height: number, seed = 1): FlatPage {
   const r = rng(seed);
@@ -96,6 +106,21 @@ export interface PhotoOptions {
   seed?: number;
   /** extra bright distractor rectangle (sticky note) */
   distractor?: { x: number; y: number; w: number; h: number };
+  /** object below the page (binder, sleeve, next sheet of a stack): convex quad in frame px + colour */
+  underlay?: { corners: Quad; color: [number, number, number] };
+}
+
+function insideConvex(q: Quad, x: number, y: number): boolean {
+  let sign = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = q[i];
+    const b = q[(i + 1) % 4];
+    const z = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+    const s = z > 0 ? 1 : -1;
+    if (sign === 0) sign = s;
+    else if (s !== sign) return false;
+  }
+  return true;
 }
 
 /** Projects the flat page into a camera frame with lighting, shadow and noise (2×2 supersampled). */
@@ -110,6 +135,7 @@ export function photograph(page: FlatPage, o: PhotoOptions): RgbaImage {
       const d = o.distractor;
       if (x >= d.x && x < d.x + d.w && y >= d.y && y < d.y + d.h) return [0.95, 0.92, 0.55];
     }
+    if (o.underlay && insideConvex(o.underlay.corners, x, y)) return o.underlay.color;
     if (o.background === 'dark') return [0.16, 0.15, 0.15];
     if (o.background === 'light') return [0.74, 0.73, 0.71];
     const g = 0.5 + 0.5 * Math.sin(x / 9 + 3 * Math.sin(y / 140));

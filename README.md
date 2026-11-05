@@ -10,13 +10,13 @@ Designed as a clean, ad-free alternative to apps like CamScanner, ScanFlow proce
 
 ### Phase 1 MVP
 - **📚 Document Library:** 2-column grid and list views, instant search, folder-based categorization, date and page count badges. Reloads automatically when you return to it.
-- **📷 Camera Scanner:** Multi-page capture, flash controls, framing guides, and gallery import. *(The "Auto" capture mode is still a simulated timer – real live detection is Phase B.)*
+- **📷 Camera Scanner:** Multi-page capture, flash controls, framing guides, and gallery import. *(Since v1.3.0 the iOS document scanner is the default – see Phase B below; this own camera remains as an option/fallback with manual capture.)*
 - **🔒 Privacy & Security:** Face ID / Touch ID / Passcode app lock (`expo-local-authentication` + `expo-secure-store`), PIN fallback, app-switcher veil.
 - **🌐 Localization:** German (default) and English.
 - **🌙 Theming:** Warm Ivory light mode and OLED dark mode.
 
 ### Phase A – "Real scanned PDF" look (v1.2.0)
-- **🔍 Automatic page detection** after capture/import (pure TypeScript, ≈300 px analysis copy). Falls back to the full image if no page is found.
+- **🔍 Automatic page detection** after capture/import (pure TypeScript, ≤ 400 px analysis copy). Falls back to the full image if no page is found.
 - **✂️ Real perspective correction:** 4 draggable corners with magnifier loupe, *Erkennen* / *Ganzes Bild* / *Zurücksetzen*, validation (convex, min. area). The page is de-warped on the GPU with Skia – no more bounding-box crop.
 - **📄 Page formats:** Auto (snaps to A4/Letter when the aspect is within 4 %), A4, Letter. Exact PDF page sizes, no white margins.
 - **🎨 7 scan filters:** Original, Auto (default), Magic Color, Schatten entfernen, Aufhellen, Graustufen, Schwarzweiß – white paper, dark text, shadow/gradient removal, removal of the table border.
@@ -25,10 +25,19 @@ Designed as a clean, ad-free alternative to apps like CamScanner, ScanFlow proce
 - **📑 Page editor fixes:** add pages (camera or library) to the *same* document, retake replaces the page in place, reorder is persisted, delete removes the page and its files.
 - **📤 PDF export with pdf-lib:** 150 / 200 / 300 dpi, quality Klein / Standard / Hoch with size estimate, title metadata, optional watermark, progress indicator. Rendered from the full-resolution original.
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the pipeline and [`docs/ROADMAP.md`](docs/ROADMAP.md) for Phases B–D.
+### Phase B – Live scanner like CamScanner (v1.3.0)
+- **🟦 iOS document scanner (default):** tap **+** → the detected page is highlighted live in the camera image (iOS draws it in blue, CamScanner in green), **automatic capture** when the page is steady (or manual shutter), several pages in a row with a thumbnail counter, corner adjustment and perspective correction – Apple's VisionKit scanner (as in Notes / Files), opened via `expo-camera`. *Sichern* stores all pages and opens the document with the white scan look (filter *Auto*).
+- **➕ "Weitere Seiten hinzufügen"** in the document screen; *Seite hinzufügen* offers *Aus Fotomediathek* / *Dokument scannen*; *retake* in the page editor replaces the page (extra scanned pages are inserted right after it).
+- **🖼️ Photo import** from the Documents tab (header button and empty state), multi-select in selection order, with automatic edge detection; a banner points to pages without a detected edge → *Ecken setzen*.
+- **⚙️ Settings → Scanner:** *iOS-Scanner* (default) or *ScanFlow-Kamera* (own camera, manual capture, edges detected after capture). If the iOS scanner is unavailable or cannot open, ScanFlow falls back to its own camera.
+- **🔍 Detector v2** for photo import and the own camera: line-based (oriented Hough + two-stage scoring); handles header bars, printed frames near the edge and sheets lying on a larger light object much better than v1.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow and pipeline and [`docs/ROADMAP.md`](docs/ROADMAP.md) for Phases B–D.
 
 ### Known limitations
-- Live edge overlay in the camera and real auto-capture: **not yet** (Phase B).
+- ScanFlow's *own* camera has no live edge overlay / auto-capture (Expo Go offers no camera frame processing); live detection comes from the iOS scanner.
+- The language of the iOS scanner's buttons follows the app's localizations: German/English in the IPA build; in Expo Go it depends on Expo Go (may be English).
+- Photo import / own camera detection: if the sheet lies in a clear sleeve or the page is cut off by the image frame, the detected outline can be wrong (e.g. include the sleeve) – check the corners in *Zuschneiden*. In the iOS scanner the outline is visible live before capture and the corners can be adjusted before saving.
 - OCR / searchable PDF: **not yet** (Phase C; hook prepared in `src/imaging/pdf.ts`).
 - JPG export exports the current page only.
 - Deleting files is best-effort (iOS flash storage/APFS does not allow guaranteed secure wiping).
@@ -107,11 +116,11 @@ ScanFlow/
 ├── app/                      # expo-router file-based routing
 │   ├── (tabs)/               # Tabs: Dokumente (index), Werkzeuge (tools), Einstellungen (settings)
 │   ├── document/[id].tsx     # Document editor: filters, adjustments, pages, export
-│   ├── scan.tsx              # Camera scanning screen (new doc / add page / retake)
+│   ├── scan.tsx              # ScanFlow camera (setting / fallback): new doc, add page, retake
 │   ├── crop.tsx              # 4-corner crop with Skia overlay, loupe, page format
 │   └── _layout.tsx           # Root layout, theme, i18n & app lock
 ├── src/
-│   ├── components/           # Reusable UI components matching /design
+│   ├── components/           # Reusable UI components matching /design (+ ScannerProvider: scan entry)
 │   ├── db/                   # SQLite schema, migrations (user_version), client
 │   ├── imaging/              # Pure TS imaging: geometry, detection, filters, SkSL shaders, renderer, PDF
 │   ├── services/             # Repositories, storage, image pipeline, render, export, auth

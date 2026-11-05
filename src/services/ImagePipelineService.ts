@@ -24,7 +24,7 @@ import { storageService } from './StorageService';
 /** Long side of the stored proxy (crop UI, previews, thumbnails). */
 export const PROXY_LONG_SIDE = 2000;
 /** Long side of the detection input. */
-export const DETECT_LONG_SIDE = 300;
+export const DETECT_LONG_SIDE = 400;
 /** Long side of rendered previews (document screen). */
 export const PREVIEW_LONG_SIDE = 1600;
 export const PREVIEW_JPEG_QUALITY = 85;
@@ -38,7 +38,13 @@ export interface ImportedImage {
   proxyUri: string;
   width: number;
   height: number;
-  detection: DetectionResult;
+  /** null when detection was skipped (pages from the system document scanner are already cropped). */
+  detection: DetectionResult | null;
+}
+
+export interface ImportOptions {
+  /** Run edge detection on the imported image (default true). */
+  detect?: boolean;
 }
 
 export interface RenderedPage {
@@ -108,11 +114,12 @@ class ImagePipelineService {
   }
 
   /**
-   * Imports a camera / library image: bakes EXIF orientation into the pixels and
-   * re-encodes without metadata (GPS etc.), stores original + proxy and runs
-   * edge detection on a small copy.
+   * Imports a camera / library / scanner image: bakes EXIF orientation into the
+   * pixels and re-encodes without metadata (GPS etc.), stores original + proxy
+   * and (unless `detect: false`) runs edge detection on a small copy.
    */
-  importImage(sourceUri: string): Promise<ImportedImage> {
+  importImage(sourceUri: string, options: ImportOptions = {}): Promise<ImportedImage> {
+    const detect = options.detect ?? true;
     return this.enqueue(async () => {
       const ctx = ImageManipulator.manipulate(sourceUri, {
         maxWidth: ORIGINAL_MAX_LONG_SIDE,
@@ -123,8 +130,22 @@ class ImagePipelineService {
       ref.release?.();
       ctx.release?.();
       const originalUri = await storageService.moveInto(baked.uri, 'orig');
-      const proxyUri = await this.makeProxy(originalUri, baked.width, baked.height);
-      const detection = await this.detectOn(proxyUri);
+      let proxyUri: string;
+      try {
+        proxyUri = await this.makeProxy(originalUri, baked.width, baked.height);
+      } catch (err) {
+        await storageService.deleteFile(originalUri); // not referenced by any page yet
+        throw err;
+      }
+      // a failing detection must not fail the import: the page keeps the full image (review banner)
+      let detection: DetectionResult | null = null;
+      if (detect) {
+        try {
+          detection = await this.detectOn(proxyUri);
+        } catch (err) {
+          console.warn('[ImagePipeline] edge detection failed', err);
+        }
+      }
       return { originalUri, proxyUri, width: baked.width, height: baked.height, detection };
     });
   }
@@ -162,7 +183,7 @@ class ImagePipelineService {
     });
   }
 
-  /** Edge detection on an image file (uses a ≤ 300 px copy). */
+  /** Edge detection on an image file (uses a ≤ 400 px copy). */
   detect(uri: string): Promise<DetectionResult> {
     return this.enqueue(() => this.detectOn(uri));
   }
