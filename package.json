@@ -1,6 +1,6 @@
 {
   "name": "scanflow",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "main": "expo-router/entry",
   "scripts": {
     "postinstall": "node scripts/patch-expo-modules-jsi.js",
@@ -13,7 +13,8 @@
     "lint": "expo lint",
     "test": "jest",
     "test:security": "jest __tests__/security.test.ts __tests__/authService.test.ts __tests__/exportCleanup.test.ts",
-    "test:imaging": "jest __tests__/geometry.test.ts __tests__/edgeDetection.test.ts __tests__/pageState.test.ts __tests__/pdf.test.ts __tests__/migrations.test.ts"
+    "test:imaging": "jest __tests__/geometry.test.ts __tests__/edgeDetection.test.ts __tests__/pageState.test.ts __tests__/pdf.test.ts __tests__/migrations.test.ts",
+    "test:ocr": "jest __tests__/ocr.test.ts __tests__/ocrScheduler.test.ts __tests__/pdfTextLayer.test.ts __tests__/textSearch.test.ts __tests__/migrations.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -21,6 +22,7 @@
     "@shopify/react-native-skia": "2.14.0",
     "expo": "~58.0.23",
     "expo-camera": "~58.0.14",
+    "expo-clipboard": "~58.0.4",
     "expo-constants": "~58.0.15",
     "expo-file-system": "~58.0.13",
     "expo-font": "~58.0.11",
