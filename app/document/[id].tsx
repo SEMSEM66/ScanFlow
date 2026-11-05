@@ -46,6 +46,7 @@ import {
   MoveFolderModal,
   PromptModal,
   AdjustmentsPanel,
+  ModalHandoff,
   useScanner,
   type ScanOutcome,
 } from '../../src/components';
@@ -80,8 +81,12 @@ export default function DocumentDetailScreen() {
 
   // Modals
   const [isExportVisible, setIsExportVisible] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  // generating: the export sheet shows the progress · sharing: the sheet closes, then the share sheet is open
+  const [exportPhase, setExportPhase] = useState<'idle' | 'generating' | 'sharing'>('idle');
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
+  const exportRunning = useRef(false);
+  // The share sheet may only be presented once the export sheet is gone (see modalHandoff.ts)
+  const [exportSheet] = useState(() => new ModalHandoff());
   const [isPageEditorVisible, setIsPageEditorVisible] = useState(false);
   const [isActionModalVisible, setIsActionModalVisible] = useState(false);
   const [isMoveModalVisible, setIsMoveModalVisible] = useState(false);
@@ -348,14 +353,18 @@ export default function DocumentDetailScreen() {
   };
 
   const handleShare = async (format: ExportFormat, quality: ExportQuality, dpi: ExportDpi, watermark?: string) => {
-    if (!document || pages.length === 0) return;
-    // no background recognition while exporting (the export recognizes missing text itself)
+    if (!document || pages.length === 0 || exportRunning.current) return;
+    exportRunning.current = true;
+    setExportPhase('generating');
+    setExportProgress({ current: 0, total: format === 'pdf' ? pages.length : 1 });
+    const onProgress = (current: number, total: number) => setExportProgress({ current, total });
+
+    // 1. Create the file while the export sheet shows the progress. No background
+    //    recognition meanwhile (the export recognizes missing text itself).
+    let uri: string;
     const resumeOcr = ocrService.hold();
     try {
-      setIsExporting(true);
-      setExportProgress({ current: 0, total: format === 'pdf' ? pages.length : 1 });
-      const onProgress = (current: number, total: number) => setExportProgress({ current, total });
-      const uri =
+      uri =
         format === 'pdf'
           ? await exportService.generatePdf(document.title, pages, {
               dpi,
@@ -366,15 +375,39 @@ export default function DocumentDetailScreen() {
               textForPage: (page) => ocrService.linesForExport(page),
             })
           : await exportService.generateJpg(document.title, currentPage ?? pages[0], currentPageIndex, { dpi, quality, onProgress });
-      setIsExportVisible(false);
+    } catch (err) {
+      console.error('[DocumentDetailScreen] Export error:', err);
+      exportRunning.current = false;
+      if (mounted.current) {
+        setExportPhase('idle');
+        setExportProgress(null);
+        Alert.alert(t.common.error, t.export.failed);
+      }
+      return;
+    } finally {
+      resumeOcr();
+    }
+
+    try {
+      // 2. Close the export sheet and wait until it is gone: iOS drops a share sheet
+      //    presented while the sheet is still sliding out, and the share never finishes.
+      setExportPhase('sharing');
+      await exportSheet.close(() => setIsExportVisible(false));
+      if (!mounted.current) {
+        await exportService.discardExport(uri); // screen left meanwhile
+        return;
+      }
+      // 3. Share sheet; the file is deleted when it closes
       await exportService.shareDocument(uri, format, t.export.shareTitle);
     } catch (err) {
       console.error('[DocumentDetailScreen] Share error:', err);
-      Alert.alert(t.common.error, t.export.failed);
+      if (mounted.current) Alert.alert(t.common.error, t.export.failed);
     } finally {
-      resumeOcr();
-      setIsExporting(false);
-      setExportProgress(null);
+      exportRunning.current = false;
+      if (mounted.current) {
+        setExportPhase('idle');
+        setExportProgress(null);
+      }
     }
   };
 
@@ -399,7 +432,7 @@ export default function DocumentDetailScreen() {
       })()
     : { width: SCREEN_WIDTH * 0.8, height: (SCREEN_WIDTH * 0.8) / aspect };
   const showUri = isPreviewCurrent || currentPage.previewUri !== currentPage.originalUri ? currentPage.previewUri : null;
-  const busy = isExporting;
+  const busy = exportPhase !== 'idle';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -415,10 +448,20 @@ export default function DocumentDetailScreen() {
         </Text>
 
         <View style={styles.headerRightActions}>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => setIsExportVisible(true)} style={styles.headerCircleBtn}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setIsExportVisible(true)}
+            disabled={busy}
+            style={styles.headerCircleBtn}
+          >
             <Ionicons name="share-outline" size={20} color={colors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => setIsActionModalVisible(true)} style={styles.headerCircleBtn}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setIsActionModalVisible(true)}
+            disabled={busy}
+            style={styles.headerCircleBtn}
+          >
             <Ionicons name="ellipsis-horizontal" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
@@ -479,7 +522,7 @@ export default function DocumentDetailScreen() {
                 }}
               />
             ) : null}
-            {isRendering || busy || !showUri ? (
+            {isRendering || !showUri ? (
               <View style={styles.processingOverlay}>
                 <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 8 }]}>
@@ -558,8 +601,9 @@ export default function DocumentDetailScreen() {
         pageCount={pages.length}
         onClose={() => setIsExportVisible(false)}
         onShare={handleShare}
-        isGenerating={isExporting}
+        isGenerating={exportPhase !== 'idle'}
         progress={exportProgress}
+        onDismiss={exportSheet.onDismiss}
       />
 
       <PageEditorModal

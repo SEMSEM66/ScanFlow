@@ -23,9 +23,12 @@ interface ExportModalProps {
   pageCount: number;
   onClose: () => void;
   onShare: (format: ExportFormat, quality: ExportQuality, dpi: ExportDpi, watermark?: string) => Promise<void>;
+  /** True while the file is created and handed to the share sheet – the sheet cannot be closed then. */
   isGenerating?: boolean;
   /** Export progress (pages rendered). */
   progress?: { current: number; total: number } | null;
+  /** Called once the sheet has fully disappeared (iOS: after the slide-out animation). */
+  onDismiss?: () => void;
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
@@ -36,6 +39,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   onShare,
   isGenerating = false,
   progress = null,
+  onDismiss,
 }) => {
   const { colors, typography, spacing, borderRadius } = useTheme();
   const { t, formatString, language } = useTranslation();
@@ -57,6 +61,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     language
   );
 
+  // While the file is created the sheet stays open (progress); it closes itself before the share sheet opens
+  const requestClose = () => {
+    if (!isGenerating) onClose();
+  };
+
   const handleSharePress = async () => {
     const watermarkText = includeWatermark ? t.export.watermarkText : undefined;
     await onShare(format, quality, dpi, watermarkText);
@@ -67,9 +76,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={onClose}
+      onRequestClose={requestClose}
+      onDismiss={onDismiss}
     >
-      <TouchableWithoutFeedback onPress={onClose}>
+      <TouchableWithoutFeedback onPress={requestClose}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
             <View
