@@ -318,17 +318,35 @@ Spike result / decision: Expo Go contains no OCR engine; tesseract.js in a WebVi
 - [ ] Optional: normalized title search (umlaut case), more recognition languages (setting), embedded Unicode font for non-WinAnsi text in the PDF layer.
 - [ ] **🛑 STOP C:** Test on physical iPhone (**IPA** v1.5.1; then a short check in Expo Go):
   1. Update from 1.4.0: documents, folders and settings are still there. Settings → *Texterkennung* shows *Text wird erkannt … x von y Seiten*, after a while *y von y Seiten erkannt*. While it runs, scrolling, opening documents and editing stay smooth.
-  2. Scan a letter or an invoice → after a few seconds the search finds a word from the body text (not from the title), with the excerpt and the word in bold. Also try `muller` for *Müller*, `strasse` for *Straße*, two words, a word hyphenated at a line end.
+  2. Scan a letter or an invoice → after a few seconds the search finds a word from the body text (not from the title), with the excerpt and the word in bold. Also try `muller` for *Müller*, `strasse` for *Straße*, two words, a word hyphenated at a line end. *(Recognition on the iPhone is confirmed indirectly – the exported PDF was searchable in Files, see item 6; the in-app search is still open.)*
   3. Small print (footer, fine print): is it found? If not, report which size is missing (setting `OCR_MIN_TEXT_HEIGHT`).
   4. Document menu (*…*) → *Text kopieren*: text per page in a sensible reading order; *Kopieren*, *Alles kopieren*, paste in Notes; *Text teilen*.
   5. Rotate a page or change its corners → the text is recognized again (search still finds it; *Text kopieren* shows the new text).
-  6. Export a PDF → the export sheet slides down, then the share sheet appears (fixed in 1.5.1) → *In Dateien sichern* → open in Files: search for a word (it is highlighted at the right place), select and copy text; also open in Preview on a Mac/PC or Acrobat if available. Export a JPG → the share sheet appears as well → *In Dateien sichern*.
+  6. Export a PDF → the export sheet slides down, then the share sheet appears (fixed in 1.5.1) → *In Dateien sichern* → open in Files: search for a word (it is highlighted at the right place), select and copy text; also open in Preview on a Mac/PC or Acrobat if available. Export a JPG → the share sheet appears as well → *In Dateien sichern*. ✅ *Confirmed by the user on 1.5.1: PDF and JPG export, share sheet, word search in the PDF in Files, editing afterwards.*
   7. Settings → *Text erkennen* off → *Text behalten*: search still finds text, new scans are not recognized; off → *Text löschen*: text search finds nothing anymore; on again → everything is recognized again.
   8. Duplicate a document → the copy is found by its text immediately. Delete a document → its text is gone from the search.
   9. Library → *…* → *In Ordner verschieben* opens the folder list and moves the document (fixed in 1.5.0).
   10. Expo Go: the app starts and works; *Texterkennung* in Settings says it is only available in the installed app; *Text kopieren* is not offered; title search works.
 
 > ⚠️ **Correction (v1.5.1, found in STOP C):** PDF and JPG export hung on *Seite wird berechnet …* – the share sheet was presented while the export sheet was still sliding out, iOS dropped it and `shareAsync()` never settled. Now the document screen closes the export sheet first (`ModalHandoff`: `Modal.onDismiss`, 1.5 s fallback) and then opens the share sheet; the sheet cannot be closed while the file is created; the OCR pause ends when the file is ready. Covered by STOP C item 6.
+
+## ✅ Phase U: iOS-style panels & navigation (v1.6.0)
+Requested by the user after STOP C: the dark background of *Anpassen* slid up together with the panel, and the tab bar looked unbalanced (camera button left of the middle with 4 tabs).
+
+- [x] `BottomSheet` (`src/components/BottomSheet.tsx`): the RN `Modal` is presented without animation; the backdrop opacity is derived from the sheet offset (fades in while the sheet glides up with a spring, damping ratio ≈ 0.81), close with an iOS curve (0.28 s). Pull down to close (distance or flick), rubber band upwards, tap the backdrop, VoiceOver escape. `onDismiss` once the modal is gone (1 s fallback). Only `Animated` (native driver) + `PanResponder` → no new dependency, runs in Expo Go.
+- [x] Motion and state machine in `src/components/sheetMotion.ts` (pure TS, driver injected): `__tests__/sheetMotion.test.ts` (26).
+- [x] All bottom panels use it: *Anpassen* (dim 0.35, pull at handle/title), *Exportieren* (not closable while the file is created; `ModalHandoff` → share sheet unchanged), document and folder *…* menus, *Sortieren*, *In Ordner verschieben* (pull at handle/title). Menus keep their content while gliding out.
+- [x] Menus run the chosen entry in `onDismiss` (next sheet, prompt or alert only once the menu is gone) – the fixed `MENU_HANDOFF_MS` delays are removed.
+- [x] Tab bar: five equal slots, camera button exactly in the middle (*Dokumente*, *Suchen*, camera, *Werkzeuge*, *Einstellungen*); labels 10 pt without font scaling (like iOS).
+- [x] New *Suchen* tab (`app/(tabs)/search.tsx`): all folders, title + recognized text, hits with thumbnail, date, pages, folder and excerpt; refreshes on focus and when a page is recognized.
+- [x] *Werkzeuge* localized (`t.tools`).
+- [ ] **🛑 STOP U:** Test on physical iPhone (**IPA** v1.6.0; Expo Go works as well):
+  1. Document → *Anpassen*: the background darkens gently (no dark block sliding up), the panel glides up with a soft bounce. Sliders and *Rauschen reduzieren* work; pull the handle down → closes; pull only a little → springs back; tap the dark area → closes; *Fertig* closes.
+  2. *Teilen* (export panel) opens and closes the same way; pull it down → closes. Export a PDF → the panel glides down, then the share sheet appears; while the file is created, the panel cannot be pulled down or closed by tapping outside.
+  3. Library → *…* on a document: *Dokument umbenennen* (name prompt), *In Ordner verschieben* (folder list → moves the document), *Duplizieren*, *Text kopieren*, *Dokument löschen* (confirmation) – each opens right after the menu has closed. Same in the *…* menu of the document screen – except *Dokument löschen*: there it deletes at once without asking (unchanged; open issue below).
+  4. Library → sort button (*…* at the top) and long-press on a folder (*Bearbeiten*, *Ordner löschen*): the panels behave the same.
+  5. Tab bar: the camera button is exactly in the middle, no label is cut off (*Einstellungen*); the camera button starts the scanner; all four tabs open.
+  6. *Suchen*: type a word → hits from all folders, with folder name and excerpt (word in bold); tap a hit → the document opens; back → the results are still there. Rename or delete a document → the results are updated when you come back. Clear the search → the hint is shown again.
 
 ## ⏳ Phase D: Docs, repo & release hygiene
 - [x] README, ROADMAP, CHANGELOG, AGENTS.md updated; `docs/ARCHITECTURE.md` added; doc-vs-code discrepancies corrected (v1.2.0).
@@ -338,6 +356,7 @@ Spike result / decision: Expo Go contains no OCR engine; tesseract.js in a WebVi
 - [ ] Fix the remaining lint warnings (unused variables).
 - [ ] Localize remaining hard-coded German strings (library actions). *(App lock, PIN and security settings localized in v1.4.0.)*
 - [ ] Remove the unused `react-native-webview` dependency after STOP A confirms the Skia pipeline on device.
+- [ ] Document screen: *…* → *Dokument löschen* deletes at once, without the confirmation the library shows – add the same confirmation (found while preparing v1.6.0).
 - [x] Release per version instead of the hard-coded `v1.1.0` in `.github/workflows/build-ipa.yml` (v1.4.0: tag `v<package.json version>`, notes from `CHANGELOG.md`).
 - [ ] Optional: GitHub Action running `npx tsc --noEmit`, `npm run lint`, `npm run test:imaging` on pull requests.
 

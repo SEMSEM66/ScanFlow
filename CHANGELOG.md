@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.0] - 2026-11-05
+
+Smoother bottom panels and a symmetric tab bar with a new *Suchen* tab.
+
+### Changed
+- **Bottom panels glide in like on the iPhone** (*Anpassen*, *Exportieren*, the *…* menus of documents and folders, *Sortieren*, *In Ordner verschieben*): the background darkens gently while the panel glides up with a soft bounce, and both disappear together when it closes. Before, *Anpassen* and *Exportieren* slid up together with the dark background, and the other panels only faded in.
+- **Close a panel by pulling it down** (a short flick is enough) or by tapping the dark area. A panel that is not pulled far enough springs back. *Anpassen* and *In Ordner verschieben* are pulled at the handle or title, so the sliders and the folder list keep working. While an export file is created, the export panel cannot be closed (as before).
+- **Menus hand over without a fixed delay:** an entry of a *…* menu (*Dokument umbenennen*, *In Ordner verschieben*, *Duplizieren*, *Text kopieren*, *Dokument löschen*, folder *Bearbeiten* / *Ordner löschen*) now runs as soon as the menu is gone. Before, some entries waited a fixed 0.4 s and others opened while the menu was still closing.
+- **Symmetric tab bar:** five equal places – *Dokumente*, *Suchen*, the camera button exactly in the middle, *Werkzeuge*, *Einstellungen*. Labels use the iOS tab bar size (10 pt) and, like in iOS, do not grow with the iOS text size, so *Einstellungen* always fits.
+- *Werkzeuge* (tab and screen) is translated (English: *Tools*).
+
+### Added
+- **Suchen tab:** searches all documents in all folders – titles and, in the installed app, the recognized text. Each hit shows the thumbnail, date, pages, folder and the excerpt with the found word in bold; tap it to open the document. The results update when a page has been recognized and when you come back to the tab.
+- `BottomSheet` (`src/components/BottomSheet.tsx`) with its motion and state logic in `src/components/sheetMotion.ts` (pure TypeScript). It uses only React Native's `Animated` (native driver) and `PanResponder`, so there is no new dependency and it works in Expo Go. Tests: `__tests__/sheetMotion.test.ts` (26).
+
+### Known limitations
+- The motion and state logic of the panels is covered by automated tests; how the animations look and feel can only be checked on the iPhone (STOP U in `docs/ROADMAP.md`).
+
+---
+
 ## [1.5.1] - 2026-11-05
 
 Bug fix for exporting PDFs and JPGs: the share sheet now opens reliably.

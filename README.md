@@ -48,7 +48,12 @@ Designed as a clean, ad-free alternative to apps like CamScanner, ScanFlow proce
 - **⚙️ Settings → Texterkennung:** on/off with progress; when turning it off, keep or delete the recognized text.
 - Needs the IPA build (local native module `modules/scanflow-ocr`); in Expo Go the app works as before without text recognition.
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow, the pipeline, the app lock and the text recognition, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phases.
+### iOS-style panels & navigation (v1.6.0)
+- **🪟 Bottom panels like on the iPhone:** the background darkens gently while the panel glides up with a soft bounce; pull it down or tap outside to close it (*Anpassen*, *Exportieren*, *…* menus, *Sortieren*, *In Ordner verschieben*).
+- **🧭 Symmetric tab bar:** *Dokumente*, *Suchen*, the camera button in the middle, *Werkzeuge*, *Einstellungen*.
+- **🔎 Suchen tab:** searches titles and recognized text (installed app) in all folders, with folder name and excerpt for every hit.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow, the pipeline, the app lock, the text recognition and the bottom panels, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phases.
 
 ### Known limitations
 - ScanFlow's *own* camera has no live edge overlay / auto-capture (Expo Go offers no camera frame processing); live detection comes from the iOS scanner.
@@ -136,7 +141,7 @@ python tools/prototype/enhance_prototype.py --out .tmp/prototype
 ```text
 ScanFlow/
 ├── app/                      # expo-router file-based routing
-│   ├── (tabs)/               # Tabs: Dokumente (index), Werkzeuge (tools), Einstellungen (settings)
+│   ├── (tabs)/               # Tabs: Dokumente (index), Suchen (search), camera button, Werkzeuge (tools), Einstellungen (settings)
 │   ├── document/[id].tsx     # Document editor: filters, adjustments, pages, export
 │   ├── scan.tsx              # ScanFlow camera (setting / fallback): new doc, add page, retake
 │   ├── crop.tsx              # 4-corner crop with Skia overlay, loupe, page format

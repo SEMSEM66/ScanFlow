@@ -1,5 +1,21 @@
 # Commit groups per release
 
+## v1.6.0 – iOS-style panels & symmetric tab bar
+
+Committed on `main` and pushed once → one IPA build and the release
+`v1.6.0`. Verified: `npx tsc --noEmit`, `npm run lint` 0 errors, `npm test`
+(191 passed / 1 skipped) and `npm run test:security` (56 passed). No new
+packages.
+
+| # | Message | Files |
+| --- | --- | --- |
+| 1 | `feat(ui): iOS-style bottom sheets with fading backdrop and pull-to-close` | `src/components/sheetMotion.ts`, `src/components/BottomSheet.tsx`, `__tests__/sheetMotion.test.ts`, `src/components/AdjustmentsPanel.tsx`, `ExportModal.tsx`, `DocumentActionModal.tsx`, `FolderOptionsModal.tsx`, `SortModal.tsx`, `MoveFolderModal.tsx`, `src/components/index.ts`, `src/components/modalHandoff.ts`, `app/(tabs)/index.tsx`, `app/document/[id].tsx` |
+| 2 | `feat(nav): symmetric five-slot tab bar with a search tab` | `app/(tabs)/_layout.tsx`, `app/(tabs)/search.tsx`, `app/(tabs)/tools.tsx`, `src/i18n/de.ts`, `src/i18n/en.ts` |
+| 3 | `docs: bottom sheets, tab bar and search tab (v1.6.0)` | `CHANGELOG.md`, `README.md`, `AGENTS.md`, `docs/*` |
+| 4 | `chore(release): 1.6.0` | `package.json`, `package-lock.json`, `app.json` |
+
+---
+
 ## v1.5.1 – Export fix (share sheet)
 
 Committed on `main` and pushed once → one IPA build and the release
