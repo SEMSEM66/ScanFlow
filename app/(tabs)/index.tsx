@@ -29,6 +29,9 @@ import {
   useScanner,
 } from '../../src/components';
 
+// iOS shows one modal at a time: open the next sheet once the menu has faded out
+const MENU_HANDOFF_MS = 400;
+
 export default function LibraryScreen() {
   const { colors, typography, spacing, borderRadius } = useTheme();
   const { t } = useTranslation();
@@ -48,7 +51,7 @@ export default function LibraryScreen() {
   const [activeDocForAction, setActiveDocForAction] = useState<Document | null>(null);
   const [activeFolderForOptions, setActiveFolderForOptions] = useState<Folder | null>(null);
   const [isSortModalVisible, setIsSortModalVisible] = useState(false);
-  const [isMoveModalVisible, setIsMoveModalVisible] = useState(false);
+  const [docToMove, setDocToMove] = useState<Document | null>(null);
   const [promptState, setPromptState] = useState<{
     visible: boolean;
     title: string;
@@ -206,9 +209,9 @@ export default function LibraryScreen() {
   };
 
   const handleMoveFolder = async (folderId: string | null) => {
-    if (!activeDocForAction) return;
+    if (!docToMove) return;
     try {
-      await documentRepository.moveToFolder(activeDocForAction.id, folderId);
+      await documentRepository.moveToFolder(docToMove.id, folderId);
       loadData();
     } catch (err) {
       Alert.alert(t.common.error, 'Dokument konnte nicht verschoben werden.');
@@ -433,17 +436,17 @@ export default function LibraryScreen() {
         document={activeDocForAction}
         onClose={() => setActiveDocForAction(null)}
         onRename={(doc) => handleRenameDocument(doc)}
-        onMove={() => setIsMoveModalVisible(true)}
+        onMove={(doc) => setTimeout(() => setDocToMove(doc), MENU_HANDOFF_MS)}
         onDuplicate={(doc) => handleDuplicateDocument(doc)}
         onDelete={(doc) => handleDeleteDocument(doc)}
       />
 
       {/* Move Folder Modal */}
       <MoveFolderModal
-        visible={isMoveModalVisible}
-        document={activeDocForAction}
+        visible={docToMove !== null}
+        document={docToMove}
         folders={folders}
-        onClose={() => setIsMoveModalVisible(false)}
+        onClose={() => setDocToMove(null)}
         onSelectFolder={handleMoveFolder}
       />
 
