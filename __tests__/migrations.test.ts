@@ -3,6 +3,9 @@ import { describe, expect, it } from '@jest/globals';
 import { MigrationDb, SCHEMA_VERSION, runMigrations } from '../src/db/migrations';
 import { CREATE_DOCUMENTS_TABLE, CREATE_FOLDERS_TABLE, CREATE_INDEXES, CREATE_PAGES_TABLE } from '../src/db/schema';
 
+const tableNames = async (db: MigrationDb) =>
+  (await db.getAllAsync<{ name: string }>(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`)).map((r) => r.name);
+
 /* eslint-disable @typescript-eslint/no-require-imports */
 // Real SQLite (Node ≥ 22 built-in) behind the expo-sqlite-like adapter.
 function openDb(): MigrationDb {
@@ -54,12 +57,35 @@ describe('migrations', () => {
     expect(again).toEqual(rows);
   });
 
-  it('fresh installs only bump the version', async () => {
+  it('fresh installs get the additive tables and the current version', async () => {
     const db = openDb();
     for (const s of [CREATE_FOLDERS_TABLE, CREATE_DOCUMENTS_TABLE, CREATE_PAGES_TABLE, CREATE_INDEXES]) await db.execAsync(s);
     expect(await runMigrations(db)).toEqual({ from: 0, to: SCHEMA_VERSION });
     const v = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
     expect(v?.user_version).toBe(SCHEMA_VERSION);
+    expect(SCHEMA_VERSION).toBe(3);
+    expect(await tableNames(db)).toEqual(['documents', 'folders', 'page_text', 'pages']);
+  });
+
+  it('v2 → v3 adds page_text and keeps all data', async () => {
+    const db = openDb();
+    for (const s of [CREATE_FOLDERS_TABLE, CREATE_DOCUMENTS_TABLE, CREATE_PAGES_TABLE, CREATE_INDEXES]) await db.execAsync(s);
+    await db.execAsync('PRAGMA user_version = 2;');
+    await db.runAsync(`INSERT INTO documents VALUES ('d1','Vertrag',NULL,1,NULL,1,1)`);
+    await db.runAsync(
+      `INSERT INTO pages (id, document_id, page_number, original_uri, preview_uri, filter, rotation, corners, created_at, updated_at)
+       VALUES ('p1','d1',1,'o.jpg','v.jpg','auto',90,'[{"x":0.1,"y":0.1},{"x":0.9,"y":0.1},{"x":0.9,"y":0.9},{"x":0.1,"y":0.9}]',1,1)`
+    );
+    const before = await db.getAllAsync<Record<string, unknown>>('SELECT * FROM pages');
+    expect(await runMigrations(db)).toEqual({ from: 2, to: 3 });
+    // v2 data untouched (no v1 → v2 rewrite of rotation / filter / uris)
+    expect(await db.getAllAsync<Record<string, unknown>>('SELECT * FROM pages')).toEqual(before);
+    expect(await tableNames(db)).toContain('page_text');
+    const cols = (await db.getAllAsync<{ name: string }>('PRAGMA table_info(page_text)')).map((c) => c.name);
+    expect(cols).toEqual(['page_id', 'ocr_key', 'engine', 'languages', 'text', 'search_text', 'lines', 'created_at']);
+    const fk = await db.getAllAsync<{ table: string; on_delete: string }>('PRAGMA foreign_key_list(page_text)');
+    expect(fk).toEqual([expect.objectContaining({ table: 'pages', on_delete: 'CASCADE' })]);
+    expect(await runMigrations(db)).toEqual({ from: 3, to: 3 });
   });
 
   it('rolls back on failure', async () => {

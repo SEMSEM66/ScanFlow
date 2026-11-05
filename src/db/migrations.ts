@@ -5,6 +5,8 @@
  * (see __tests__/migrations.test.ts). The adapter interface is the subset of
  * expo-sqlite's SQLiteDatabase that we need.
  */
+import { CREATE_PAGE_TEXT_TABLE } from './schema';
+
 export interface MigrationDb {
   execAsync(sql: string): Promise<void>;
   runAsync(sql: string): Promise<unknown>;
@@ -12,7 +14,7 @@ export interface MigrationDb {
   getFirstAsync<T>(sql: string): Promise<T | null>;
 }
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 async function columnNames(db: MigrationDb, table: string): Promise<Set<string>> {
   const rows = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
@@ -62,12 +64,21 @@ async function migrateToV2(db: MigrationDb): Promise<void> {
   );
 }
 
-const STEPS: { version: number; up: (db: MigrationDb) => Promise<void> }[] = [{ version: 2, up: migrateToV2 }];
+/** v2 → v3: recognized text per page (OCR). Purely additive. */
+async function migrateToV3(db: MigrationDb): Promise<void> {
+  await db.execAsync(CREATE_PAGE_TEXT_TABLE);
+}
+
+const STEPS: { version: number; up: (db: MigrationDb) => Promise<void> }[] = [
+  { version: 2, up: migrateToV2 },
+  { version: 3, up: migrateToV3 },
+];
 
 /**
- * Runs all pending migrations inside one transaction. Tables must already
- * exist (CREATE TABLE IF NOT EXISTS). Fresh installs created with the v2
- * schema just get their user_version bumped.
+ * Runs all pending migrations inside one transaction. The base tables must
+ * already exist (CREATE TABLE IF NOT EXISTS). Fresh installs created with the
+ * current pages schema only get the additive steps (page_text) and their
+ * user_version bumped.
  */
 export async function runMigrations(db: MigrationDb): Promise<{ from: number; to: number }> {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');

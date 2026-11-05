@@ -18,7 +18,10 @@ import {
   serializeAdjustments,
   serializeCorners,
 } from '../imaging/pageState';
+import { documentSearchClauses } from '../db/textSearch';
+import { ocrKey } from '../ocr/text';
 import { storageService } from './StorageService';
+import { pageTextRepository } from './PageTextRepository';
 
 interface PageRow {
   id: string;
@@ -79,10 +82,10 @@ export class DocumentRepository {
       params.push(options.folderId);
     }
 
-    if (options?.searchQuery && options.searchQuery.trim().length > 0) {
-      whereClauses.push('title LIKE ?');
-      params.push(`%${options.searchQuery.trim()}%`);
-    }
+    // Every word of the query must occur in the title or in the recognized text of a page.
+    const search = documentSearchClauses(options?.searchQuery);
+    whereClauses.push(...search.clauses);
+    params.push(...search.params);
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
@@ -300,7 +303,22 @@ export class DocumentRepository {
         adjustments: p.adjustments,
       });
     }
-    return this.create({ title: `${document.title} (${copySuffix})`, folderId: document.folderId, pages: copied });
+    const created = await this.create({ title: `${document.title} (${copySuffix})`, folderId: document.folderId, pages: copied });
+    // the copies show the same image content → reuse the recognized text instead of running OCR again
+    try {
+      const copy = await this.getById(created.id);
+      if (copy) {
+        await pageTextRepository.copy(
+          pages
+            .map((p, i) => ({ p, np: copy.pages[i] }))
+            .filter(({ np }) => !!np)
+            .map(({ p, np }) => ({ from: p.id, fromKey: ocrKey(p), to: np.id, key: ocrKey(np) }))
+        );
+      }
+    } catch (err) {
+      console.warn('[DocumentRepository] Recognized text not copied:', err);
+    }
+    return created;
   }
 
   /** Updates the edit state of a page (does not touch files). */
