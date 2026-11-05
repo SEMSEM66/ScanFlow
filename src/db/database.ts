@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { runMigrations } from './migrations';
 import { CREATE_FOLDERS_TABLE, CREATE_DOCUMENTS_TABLE, CREATE_PAGES_TABLE, CREATE_INDEXES } from './schema';
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
@@ -20,6 +21,8 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   await db.execAsync(CREATE_DOCUMENTS_TABLE);
   await db.execAsync(CREATE_PAGES_TABLE);
   await db.execAsync(CREATE_INDEXES);
+  // Versioned, transactional migrations (v1 → v2: non-destructive page model)
+  await runMigrations(db);
 
   // Check if default folders exist, if not seed them
   const existingFolders = await db.getAllAsync<{ count: number }>(

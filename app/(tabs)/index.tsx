@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { folderRepository, documentRepository } from '../../src/services';
@@ -81,9 +81,12 @@ export default function LibraryScreen() {
     }
   }, [selectedFolderId, searchQuery, sortBy]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  // Reload on focus: new scans, renamed documents and re-rendered thumbnails
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -171,7 +174,7 @@ export default function LibraryScreen() {
 
   const handleDuplicateDocument = async (doc: Document) => {
     try {
-      await documentRepository.duplicate(doc.id);
+      await documentRepository.duplicate(doc.id, t.common.copySuffix);
       loadData();
     } catch (err) {
       Alert.alert(t.common.error, 'Dokument konnte nicht dupliziert werden.');

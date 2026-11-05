@@ -7,6 +7,7 @@ import { useTranslation } from '../i18n';
 interface DocumentBottomBarProps {
   onRotate: () => void;
   onCrop: () => void;
+  onAdjust: () => void;
   onDeletePage: () => void;
   onAddPage: () => void;
   disabled?: boolean;
@@ -15,6 +16,7 @@ interface DocumentBottomBarProps {
 export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
   onRotate,
   onCrop,
+  onAdjust,
   onDeletePage,
   onAddPage,
   disabled = false,
@@ -62,6 +64,21 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
         </View>
         <Text style={[typography.caption2, styles.label, { color: colors.textPrimary }]}>
           {t.filters.crop}
+        </Text>
+      </TouchableOpacity>
+
+      {/* Anpassen (Adjustments) */}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        disabled={disabled}
+        onPress={onAdjust}
+        style={styles.actionItem}
+      >
+        <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
+          <Ionicons name="options-outline" size={22} color={colors.textPrimary} />
+        </View>
+        <Text style={[typography.caption2, styles.label, { color: colors.textPrimary }]}>
+          {t.filters.adjust}
         </Text>
       </TouchableOpacity>
 

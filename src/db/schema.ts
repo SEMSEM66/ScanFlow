@@ -20,6 +20,13 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 `;
 
+/**
+ * pages (schema v2, see migrations.ts):
+ * - original_uri: untouched source photo (EXIF orientation baked, metadata stripped)
+ * - preview_uri: cached render (crop + filter + rotation) for the current render_key,
+ *   equals original_uri until the first render
+ * - corners / page_format / filter / rotation / adjustments: non-destructive edit state
+ */
 export const CREATE_PAGES_TABLE = `
 CREATE TABLE IF NOT EXISTS pages (
   id TEXT PRIMARY KEY NOT NULL,
@@ -29,6 +36,12 @@ CREATE TABLE IF NOT EXISTS pages (
   preview_uri TEXT NOT NULL,
   filter TEXT NOT NULL DEFAULT 'original',
   rotation INTEGER NOT NULL DEFAULT 0,
+  corners TEXT,
+  page_format TEXT NOT NULL DEFAULT 'auto',
+  adjustments TEXT,
+  proxy_uri TEXT,
+  render_key TEXT,
+  legacy_original_uri TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE

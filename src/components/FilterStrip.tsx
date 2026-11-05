@@ -1,32 +1,40 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { FilterType } from '../types';
+import { FILTER_ORDER } from '../imaging/filters';
 import { useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 
 interface FilterStripProps {
   activeFilter: FilterType;
-  thumbnailUri: string;
+  /** Rendered thumbnail per filter (data: URIs); missing entries show a spinner. */
+  thumbnails: Partial<Record<FilterType, string>>;
+  /** Shown while a filter thumbnail is not rendered yet. */
+  fallbackUri?: string;
   onSelectFilter: (filter: FilterType) => void;
   disabled?: boolean;
 }
 
 export const FilterStrip: React.FC<FilterStripProps> = ({
   activeFilter,
-  thumbnailUri,
+  thumbnails,
+  fallbackUri,
   onSelectFilter,
   disabled = false,
 }) => {
   const { colors, typography, spacing, borderRadius } = useTheme();
   const { t } = useTranslation();
 
-  const filterOptions: { id: FilterType; label: string }[] = [
-    { id: 'original', label: t.filters.original },
-    { id: 'auto', label: t.filters.auto },
-    { id: 'blackAndWhite', label: t.filters.blackAndWhite },
-    { id: 'grayscale', label: t.filters.grayscale },
-    { id: 'magicColor', label: t.filters.magicColor },
-  ];
+  const label = (f: FilterType): string =>
+    ({
+      original: t.filters.original,
+      auto: t.filters.auto,
+      magicColor: t.filters.magicColor,
+      removeShadows: t.filters.removeShadows,
+      lighten: t.filters.lighten,
+      grayscale: t.filters.grayscale,
+      blackAndWhite: t.filters.blackAndWhite,
+    })[f];
 
   return (
     <View style={styles.container}>
@@ -35,17 +43,20 @@ export const FilterStrip: React.FC<FilterStripProps> = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingHorizontal: spacing.base }]}
       >
-        {filterOptions.map((opt) => {
-          const isSelected = activeFilter === opt.id;
+        {FILTER_ORDER.map((id) => {
+          const isSelected = activeFilter === id;
+          const uri = thumbnails[id];
           return (
             <TouchableOpacity
-              key={opt.id}
+              key={id}
               activeOpacity={0.75}
               disabled={disabled}
-              onPress={() => onSelectFilter(opt.id)}
+              onPress={() => onSelectFilter(id)}
               style={styles.itemWrapper}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSelected }}
+              accessibilityLabel={label(id)}
             >
-              {/* Thumbnail Container matching Dokumente.png */}
               <View
                 style={[
                   styles.thumbnailBox,
@@ -57,19 +68,17 @@ export const FilterStrip: React.FC<FilterStripProps> = ({
                   },
                 ]}
               >
-                {thumbnailUri ? (
+                {uri || fallbackUri ? (
                   <Image
-                    source={{ uri: thumbnailUri }}
-                    style={[styles.thumbnailImage, { borderRadius: borderRadius.md - 2 }]}
+                    source={{ uri: uri ?? fallbackUri }}
+                    style={[styles.thumbnailImage, { borderRadius: borderRadius.md - 2, opacity: uri ? 1 : 0.35 }]}
                     resizeMode="cover"
                   />
-                ) : (
-                  <View style={styles.placeholder} />
-                )}
+                ) : null}
+                {!uri ? <ActivityIndicator style={StyleSheet.absoluteFill} size="small" color={colors.primary} /> : null}
               </View>
-
-              {/* Filter Label */}
               <Text
+                numberOfLines={2}
                 style={[
                   typography.caption1,
                   styles.label,
@@ -79,7 +88,7 @@ export const FilterStrip: React.FC<FilterStripProps> = ({
                   },
                 ]}
               >
-                {opt.label}
+                {label(id)}
               </Text>
             </TouchableOpacity>
           );
@@ -95,12 +104,12 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
   },
   itemWrapper: {
     alignItems: 'center',
-    width: 66,
+    width: 70,
   },
   thumbnailBox: {
     width: 62,
@@ -115,9 +124,6 @@ const styles = StyleSheet.create({
   thumbnailImage: {
     width: '100%',
     height: '100%',
-  },
-  placeholder: {
-    flex: 1,
   },
   label: {
     marginTop: 6,

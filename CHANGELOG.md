@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-11-05
+
+Phase A – "real scanned PDF" look. See `docs/ARCHITECTURE.md`.
+
+### Added
+- **Imaging core (`src/imaging`, pure TypeScript):** homography & quad validation, page formats (A4 595.28×841.89 pt, Letter 612×792 pt, auto-snap ±4 %), raster helpers, paper-background estimation, filter presets with CPU reference, SkSL shaders, Skia `PageRenderer`, pdf-lib `buildPdf`, page-state serialisation + `RENDER_VERSION`/`renderKey`.
+- **Automatic page detection** after capture and library import (Canny-style edges + Otsu brightness, multi-level; falls back to the full image).
+- **Perspective correction on the GPU** (`@shopify/react-native-skia`) instead of bounding-box cropping.
+- **Crop screen:** Skia overlay with dimmed outside, 4 handles, 2.5× loupe, *Erkennen* / *Ganzes Bild* / *Zurücksetzen*, invalid-shape warning, page format Auto / A4 / Letter.
+- **Scan filters:** Original, Auto (new default), Magic Color, Schatten entfernen, Aufhellen, Graustufen, Schwarzweiß – white paper, dark text, shadow/gradient and table-border removal.
+- **Adjustments panel:** brightness, contrast, sharpness, denoise; "apply to all pages".
+- **PDF export via pdf-lib:** resolution 150 / 200 / 300 dpi, JPEG quality Klein / Standard / Hoch, size estimate, title metadata, progress indicator, exact page sizes without margins; `expo-print` fallback.
+- **Settings:** default export resolution (200 dpi) next to default quality.
+- **Database migrations** with `PRAGMA user_version` (schema v2: corners, page format, adjustments, proxy, render key, legacy original), transactional with rollback.
+- **Tests:** Jest suite (geometry, detection, page state, migrations on `node:sqlite`, renderer on headless Skia, PDF structure), optional sample renderer; Python prototype `tools/prototype/enhance_prototype.py`.
+- **Tooling:** `eslint.config.js` (expo flat config), `jest.config.js`, scripts `npm test`, `npm run test:imaging`.
+- `docs/ARCHITECTURE.md`, `docs/COMMITS.md`; Phase A–D plan in `docs/ROADMAP.md`.
+
+### Changed
+- Editing is **non-destructive**: originals stay untouched; crop, rotation, filter, adjustments and format are stored per page and rendered on demand (preview 1600 px, thumbnails, export from the original).
+- Imported photos are re-encoded once with `expo-image-manipulator` (bakes EXIF orientation, long side ≤ 4096 px).
+- Export dialog: quality labels *Klein / Standard / Hoch* (EN: *Small / Standard / High*), new resolution row, defaults from Settings; watermark text localized.
+- Default quality is now *Standard*; new scans use filter *Auto*.
+- Exports are written to `<cache>/scanflow-export/`; "Cache leeren" really deletes that folder.
+- Storage size is calculated recursively.
+- More UI strings localized (scan, crop, editor, export, settings).
+
+### Fixed
+- Filters were applied to the unrotated original (rotation lost when switching filters).
+- Export quality had no effect; PDF pages had white margins (`object-fit: contain`).
+- Crop handles used stale closures; crop was only a bounding box.
+- Deleting a page left its database row; page editor deleted the current page instead of the selected one.
+- "Seite hinzufügen" created a new document; retake opened a new scan instead of replacing the page.
+- Page reorder was not persisted.
+- Default quality setting was not used.
+- Library did not reload when returning from other screens; duplicate now copies page files.
+
+### Removed
+- `src/services/FilterService.ts` and `src/components/HeadlessFilterProcessor.tsx` (WebView-canvas filters).
+
+### Corrections to earlier entries
+- [1.1.0] *EXIF Metadata Stripping* was **not implemented** in 1.1.0. Since 1.2.0 every imported photo is re-encoded by `expo-image-manipulator`, which normally drops EXIF/GPS – not yet verified on a device.
+- [1.1.0] *Zero-Trace File Shredding* overwrote files with a short text before deleting; on iOS flash storage (APFS, copy-on-write) this gives **no** recovery guarantee. Deletion is now documented as best-effort.
+- [0.x] The Skia perspective-warp check in the roadmap was ticked but never performed; it is done in 1.2.0 (Skia is used in Expo Go).
+
+### Known limitations
+- Camera auto-capture is still a simulated timer; live edge detection is Phase B.
+- No OCR / searchable PDF yet (Phase C).
+- JPG export exports the current page only.
+- Pre-existing lint error in `src/components/AppLockOverlay.tsx` remains.
+
 ## [1.1.0] - 2026-11-04
 
 ### Added

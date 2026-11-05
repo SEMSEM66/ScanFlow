@@ -8,7 +8,7 @@ This roadmap outlines the complete implementation plan for **ScanFlow**, an offl
 
 1. **Expo Go Only:** All dependencies and APIs must run in standard Expo Go without custom native build steps (`npx expo run:ios`).
 2. **Offline-First & Persistent Data From Day One:** All files stored in app container via `expo-file-system`; all metadata and folder structures managed in SQLite via `expo-sqlite`. No mock data.
-3. **Repository Pattern:** UI layers never directly invoke raw file or database operations; all interactions pass through typed services (`StorageService`, `DocumentRepository`, `FolderRepository`, `FilterService`, `ExportService`).
+3. **Repository Pattern:** UI layers never directly invoke raw file or database operations; all interactions pass through typed services (`StorageService`, `DocumentRepository`, `FolderRepository`, `ImagePipelineService`, `PageRenderService`, `ExportService`). *(v1.2.0: `FilterService` was replaced by the Skia pipeline in `src/imaging` + `ImagePipelineService`.)*
 4. **Design Accuracy:** Pixel-accurate replication of design screenshots in `/design` (`bearbeiten.png`, `Scannen.png`, `Dokumente.png`, `Exportieren.png`).
 5. **Strict Typing:** 100% TypeScript with `"strict": true`; no untyped `any`.
 6. **Commit & Push Cadence:** Commit with Conventional Commits and push to `main` after every single step.
@@ -110,6 +110,8 @@ Development pauses at each of these 5 checkpoints for physical verification on y
 - [x] **Git:** Commit and push to `main`.
 - [ ] **🛑 STOP 3:** Instruct user to test 4-corner crop handles on physical iPhone.
 
+> ⚠️ **Correction (v1.2.0 code review):** the items above were ticked, but the code only did a *bounding-box* crop of the 4 points (no perspective warp), the Skia check was never performed, and the handles used stale closures. Real perspective correction with Skia, a working loupe and validation were implemented in **Phase A** (see below).
+
 ---
 
 ## 📋 Step 4: Filters & Image Adjustments (`Dokumente.png`)
@@ -133,6 +135,8 @@ Development pauses at each of these 5 checkpoints for physical verification on y
 - [x] **Git:** Commit and push to `main`.
 - [ ] **🛑 STOP 4:** Instruct user to test filter switching and rotation on physical iPhone.
 
+> ⚠️ **Correction (v1.2.0 code review):** filters were baked destructively via a hidden WebView canvas and applied to the *unrotated* original (rotation was lost when switching filters). Phase A replaces this with non-destructive GPU rendering (7 filters + adjustments).
+
 ---
 
 ## 📋 Step 5: Multi-Page Document Editor
@@ -143,6 +147,8 @@ Development pauses at each of these 5 checkpoints for physical verification on y
 - [x] Add new page (from camera or gallery) at specific position.
 - [x] Rename document inline or via modal with SQLite update.
 - [x] Page count update and SQLite synchronization.
+
+> ⚠️ **Correction (v1.2.0 code review):** reorder was not persisted, retake opened a new scan/document, "add page" created a new document, and deleting a page left its DB row. All fixed in Phase A.
 - [x] **Verification:** Run `npx tsc --noEmit` + linter.
 - [x] **Git:** Commit and push to `main`.
 
@@ -165,6 +171,8 @@ Development pauses at each of these 5 checkpoints for physical verification on y
 - [x] **Git:** Commit and push to `main`.
 - [ ] **🛑 STOP 5:** Instruct user to test PDF/JPG export and iOS share sheet on physical iPhone.
 
+> ⚠️ **Correction (v1.2.0 code review):** the quality setting had no effect on the output and `object-fit: contain` produced white margins. Phase A exports with pdf-lib (exact A4/Letter, 150/200/300 dpi, JPEG quality Klein/Standard/Hoch).
+
 ---
 
 ## 📋 Step 7: Settings & App Lock
@@ -181,13 +189,15 @@ Development pauses at each of these 5 checkpoints for physical verification on y
   - Secure state stored with `expo-secure-store`.
   - App state listener (`AppState`): locks screen when app is sent to background or restarted.
 - [x] Storage info (total scan count and disk space consumed) + "Daten bereinigen" (Cache clear).
+
+> ⚠️ **Correction (v1.2.0):** the default quality setting was stored but not used; "cache clear" deleted nothing (it only recalculated the size). Now: default resolution + quality are used by the export dialog, and cache clear deletes the export folder.
 - [x] **Verification:** Run `npx tsc --noEmit` + linter.
 - [x] **Git:** Commit and push to `main`.
 
 ---
 
 ## 📋 Step 8: Final Verification & Release Polish
-- [x] Full end-to-end regression test on physical iPhone via Expo Go.
+- [ ] Full end-to-end regression test on physical iPhone via Expo Go. *(Was ticked, but STOP gates 1–5 above were never confirmed – unticked in v1.2.0.)*
 - [x] Verify light mode and dark mode theme switching across all screens.
 - [x] Verify German and English localization strings across all screens.
 - [x] Verify TypeScript strict type check passes with 0 errors (`npx tsc --noEmit`).
@@ -202,3 +212,64 @@ Development pauses at each of these 5 checkpoints for physical verification on y
 - **Cloud Sync Adapter:** `ISyncAdapter` placeholder for WebDAV / iCloud / Nextcloud.
 - **E-Signature:** Signature canvas overlay placeholder.
 - **ID-Card Dual Mode:** Multi-slot page template architecture.
+
+---
+
+# 🧭 Phase A–D: From "photo of a page" to "real scanned PDF"
+
+*Added in v1.2.0. The plan below extends the roadmap; Steps 0–8 above stay as history.
+All phases keep the Expo Go constraint. Technical reference: [`ARCHITECTURE.md`](ARCHITECTURE.md).*
+
+## ✅ Phase A: Scan look, perspective & export (v1.2.0)
+- [x] Pure TypeScript imaging core in `src/imaging` (geometry, homography, page formats, raster helpers).
+- [x] Automatic page detection after capture/import (Canny-style edges + Otsu brightness, multi-level, fallback to full image).
+- [x] Skia perspective de-warp (SkSL `WARP_SKSL`) – replaces the bounding-box crop.
+- [x] Crop screen: Skia overlay, 4 handles (fixed stale closures), loupe 2.5×, *Erkennen* / *Ganzes Bild* / *Zurücksetzen*, convexity/area validation.
+- [x] Page formats Auto (snap ±4 %) / A4 / Letter with exact PDF sizes, no margins.
+- [x] Scan enhancement shader (`ENHANCE_SKSL`) with paper-background estimation: white paper, dark text, shadow & gradient removal, table border removal.
+- [x] 7 filters: Original, Auto (default), Magic Color, Schatten entfernen, Aufhellen, Graustufen, Schwarzweiß.
+- [x] Adjustments: brightness, contrast, sharpness, denoise; "apply to all pages".
+- [x] Non-destructive page state in SQLite (schema v2 + `PRAGMA user_version` migration with rollback; legacy pages migrated safely).
+- [x] Render cache (`renderKey`, `RENDER_VERSION`), serial render queue, LRU of decoded images.
+- [x] Editor fixes: add page to same document, retake in place, persisted reorder, delete page incl. files, delete by index, library reload on focus.
+- [x] PDF export with pdf-lib: 150/200/300 dpi, JPEG Klein/Standard/Hoch, metadata (title), watermark, progress; expo-print fallback.
+- [x] Settings: default resolution + quality used by export; cache clear deletes the export folder.
+- [x] Jest test suite (geometry, detection, page state, migrations, renderer on headless Skia, PDF structure) + Python prototype.
+- [ ] **🛑 STOP A:** Test on physical iPhone (Expo Go):
+  1. App starts, existing documents still open (migration v1 → v2).
+  2. Scan a page on a table → crop screen shows detected corners; drag handles + loupe; *Ganzes Bild* / *Erkennen* / *Zurücksetzen*.
+  3. Document screen: white paper, no table border, straight page; switch all 7 filters; rotate; adjustments + "apply to all".
+  4. Add page (camera + library), retake page, reorder, delete page → state survives app restart.
+  5. Export PDF at 150/200/300 dpi × Klein/Standard/Hoch → opens in Files/Mail, A4 without margins, size close to estimate; watermark on/off.
+  6. Export JPG, share sheet; Settings → default resolution/quality, cache clear.
+  7. Memory: 20-page document renders and exports without crash.
+
+## ⏳ Phase B: Live camera detection & real auto-capture (planned)
+*Goal: the camera shows the detected page outline live and captures automatically when the page is stable.*
+- [ ] Spike: Expo Go-compatible frame access. `expo-camera` has no frame processors in Expo Go; options to evaluate:
+  - periodic low-res `takePictureAsync({ quality: 0.1, skipProcessing: true })` or `CameraView` snapshot (~2–4 fps) → `detectDocument()` on a ≈300 px copy;
+  - measure latency/battery on a real iPhone; **STOP** and report if < 2 fps.
+- [ ] Live quad overlay (Skia canvas over `CameraView`) with smoothing (EMA over corners) and "stable for N frames" detection.
+- [ ] Real auto-capture replacing the simulated 3.5 s timer in `app/scan.tsx`; manual mode unchanged.
+- [ ] Hints: "Näher heran", "Mehr Licht", "Halten" based on area / brightness / motion.
+- [ ] Use the live quad as the initial crop (skip detection after capture).
+- [ ] Tests: smoothing + stability logic as pure functions in `src/imaging`.
+
+## ⏳ Phase C: OCR & searchable PDF (planned)
+*Goal: text search in the library and an invisible text layer in exported PDFs.*
+- [ ] Spike: on-device OCR that runs in Expo Go (no custom native module). Candidates: none built into Expo Go today → evaluate WebView + tesseract.js (WASM, offline, bundled language data de/en) vs. a later development build with Apple Vision. **STOP** and decide with the user before adding a dev-build requirement.
+- [ ] `IOcrService` interface + implementation; run in background per page, store words + boxes (normalized to the rendered page) in a new `page_text` table (migration v3).
+- [ ] Use the `textLayer` hook in `src/imaging/pdf.ts` to draw invisible text (render mode 3) at the word boxes → searchable/copyable PDFs.
+- [ ] Library search over OCR text; "Text kopieren" action.
+- [ ] Tests: text-layer placement via pdf-lib roundtrip; OCR on synthetic pages.
+
+## ⏳ Phase D: Docs, repo & release hygiene
+- [x] README, ROADMAP, CHANGELOG, AGENTS.md updated; `docs/ARCHITECTURE.md` added; doc-vs-code discrepancies corrected (v1.2.0).
+- [x] `docs/COMMITS.md` with Conventional Commit grouping for the v1.2.0 change set.
+- [x] ESLint flat config (`eslint.config.js`) + `npm test` / `npm run test:imaging` scripts.
+- [ ] Fix the pre-existing lint error in `src/components/AppLockOverlay.tsx` (variable used before declaration) and the 16 warnings.
+- [ ] Localize remaining hard-coded German strings (library actions, app lock, PIN setup).
+- [ ] Remove the unused `react-native-webview` dependency after STOP A confirms the Skia pipeline on device.
+- [ ] Update the hard-coded release tag (`v1.1.0`) in `.github/workflows/build-ipa.yml` before the next release.
+- [ ] Optional: GitHub Action running `npx tsc --noEmit`, `npm run lint`, `npm run test:imaging` on pull requests.
+

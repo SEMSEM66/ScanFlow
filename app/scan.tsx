@@ -12,14 +12,14 @@ import {
   Modal,
   ScrollView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/theme';
 import { useTranslation } from '../src/i18n';
-import { documentRepository, storageService } from '../src/services';
+import { documentRepository, importPages } from '../src/services';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -28,8 +28,11 @@ type CaptureMode = 'auto' | 'manual';
 
 export default function ScanScreen() {
   const router = useRouter();
+  // documentId: append pages to an existing document; replacePageId: retake one page
+  const { documentId, replacePageId } = useLocalSearchParams<{ documentId?: string; replacePageId?: string }>();
   const { colors, typography, spacing, borderRadius } = useTheme();
-  const { t } = useTranslation();
+  const { t, formatString, language } = useTranslation();
+  const [progressText, setProgressText] = useState<string | null>(null);
 
   // Camera & Media Library Permissions
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -48,6 +51,84 @@ export default function ScanScreen() {
   // Shutter flash effect
   const [isFlashing, setIsFlashing] = useState(false);
 
+  /**
+   * Runs every captured image through the pipeline (EXIF bake, proxy, edge
+   * detection, default filter "Auto") and stores the pages.
+   */
+  const finishWith = async (uris: string[]) => {
+    if (uris.length === 0 || isSaving) return;
+    try {
+      setIsSaving(true);
+      const newPages = await importPages(uris, (current, total) =>
+        setProgressText(formatString(t.scan.processing, { current, total }))
+      );
+
+      if (replacePageId) {
+        const old = await documentRepository.getPage(replacePageId);
+        const p = newPages[0];
+        await documentRepository.replacePageSource(
+          replacePageId,
+          { originalUri: p.originalUri, proxyUri: p.proxyUri ?? null },
+          { corners: p.corners ?? null, rotation: 0, filter: old?.filter ?? 'auto' }
+        );
+        router.back();
+        return;
+      }
+
+      if (documentId) {
+        await documentRepository.addPages(documentId, newPages);
+        router.back();
+        return;
+      }
+
+      const now = new Date();
+      const locale = language === 'de' ? 'de-DE' : 'en-US';
+      const title = formatString(t.scan.documentTitle, {
+        date: now.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        time: now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
+      });
+      const newDoc = await documentRepository.create({ title, pages: newPages });
+      router.replace(`/document/${newDoc.id}` as never);
+    } catch (err) {
+      console.error('[ScanScreen] Error saving scanned document:', err);
+      Alert.alert(t.common.error, t.scan.saveFailed);
+      setIsSaving(false);
+    } finally {
+      setProgressText(null);
+    }
+  };
+
+  const handleFinishScan = () => finishWith(capturedPages);
+
+  const handleCapture = async () => {
+    if (!cameraRef.current || isCapturing) return;
+
+    try {
+      setIsCapturing(true);
+      setIsFlashing(true);
+      setTimeout(() => setIsFlashing(false), 120);
+
+      const picture = await cameraRef.current.takePictureAsync({
+        quality: 0.95,
+        exif: false,
+      });
+
+      if (picture && picture.uri) {
+        if (replacePageId) {
+          // Retake: one photo replaces the page right away
+          await finishWith([picture.uri]);
+          return;
+        }
+        setCapturedPages((prev) => [...prev, picture.uri]);
+      }
+    } catch (err) {
+      console.error('[ScanScreen] Error taking photo:', err);
+      Alert.alert(t.common.error, t.scan.captureFailed);
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
   // Auto capture simulation timer
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -60,30 +141,8 @@ export default function ScanScreen() {
     return () => {
       if (timer) clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, isCapturing, isSaving, capturedPages.length]);
-
-  const handleCapture = async () => {
-    if (!cameraRef.current || isCapturing) return;
-
-    try {
-      setIsCapturing(true);
-      setIsFlashing(true);
-      setTimeout(() => setIsFlashing(false), 120);
-
-      const picture = await cameraRef.current.takePictureAsync({
-        quality: 0.9,
-      });
-
-      if (picture && picture.uri) {
-        setCapturedPages((prev) => [...prev, picture.uri]);
-      }
-    } catch (err) {
-      console.error('[ScanScreen] Error taking photo:', err);
-      Alert.alert(t.common.error, 'Foto konnte nicht aufgenommen werden.');
-    } finally {
-      setIsCapturing(false);
-    }
-  };
 
   const handleGalleryImport = async () => {
     try {
@@ -104,52 +163,22 @@ export default function ScanScreen() {
 
       const pickerResult = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsMultipleSelection: true,
-        quality: 0.9,
+        allowsMultipleSelection: !replacePageId,
+        quality: 1,
+        exif: false,
       });
 
       if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets.length > 0) {
         const uris = pickerResult.assets.map((asset) => asset.uri);
+        if (replacePageId) {
+          await finishWith(uris.slice(0, 1));
+          return;
+        }
         setCapturedPages((prev) => [...prev, ...uris]);
       }
     } catch (err) {
       console.error('[ScanScreen] Gallery import error:', err);
-      Alert.alert(t.common.error, 'Bilder konnten nicht importiert werden.');
-    }
-  };
-
-  const handleFinishScan = async () => {
-    if (capturedPages.length === 0 || isSaving) return;
-
-    try {
-      setIsSaving(true);
-      const now = new Date();
-      const dateFormatted = now.toLocaleDateString('de-DE', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      });
-      const timeFormatted = now.toLocaleTimeString('de-DE', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      const title = `Scan ${dateFormatted} ${timeFormatted}`;
-
-      const newDoc = await documentRepository.create({
-        title,
-        pages: capturedPages.map((uri) => ({
-          originalUri: uri,
-          filter: 'original',
-          rotation: 0,
-        })),
-      });
-
-      // Navigate to the newly created document viewer
-      router.replace(`/document/${newDoc.id}` as any);
-    } catch (err) {
-      console.error('[ScanScreen] Error saving scanned document:', err);
-      Alert.alert(t.common.error, 'Dokument konnte nicht gespeichert werden.');
-      setIsSaving(false);
+      Alert.alert(t.common.error, t.scan.importFailed);
     }
   };
 
@@ -408,6 +437,14 @@ export default function ScanScreen() {
         </SafeAreaView>
       </View>
 
+      {/* Processing overlay (pipeline import) */}
+      {isSaving ? (
+        <View style={styles.processingOverlay} pointerEvents="auto">
+          <ActivityIndicator size="large" color="#FFFFFF" />
+          {progressText ? <Text style={styles.processingText}>{progressText}</Text> : null}
+        </View>
+      ) : null}
+
       {/* Captured Pages Review Modal */}
       <Modal
         visible={isReviewOpen}
@@ -453,7 +490,7 @@ export default function ScanScreen() {
               onPress={() => setIsReviewOpen(false)}
               style={[styles.continueScanButton, { backgroundColor: 'rgba(255,255,255,0.2)' }]}
             >
-              <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>Weiter scannen</Text>
+              <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>{t.scan.continueScanning}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -476,6 +513,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  processingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  processingText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 12,
   },
   shutterFlash: {
     position: 'absolute',

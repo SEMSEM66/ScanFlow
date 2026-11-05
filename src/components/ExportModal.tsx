@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,16 +12,20 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { useTranslation } from '../i18n';
-import { ExportFormat, ExportQuality } from '../types';
+import { ExportDpi, ExportFormat, ExportQuality } from '../types';
 import { exportService } from '../services/ExportService';
+import { authService } from '../services/AuthService';
+import { EXPORT_DPI_PRESETS } from '../imaging/pageFormat';
 
 interface ExportModalProps {
   visible: boolean;
   documentTitle: string;
   pageCount: number;
   onClose: () => void;
-  onShare: (format: ExportFormat, quality: ExportQuality, watermark?: string) => Promise<void>;
+  onShare: (format: ExportFormat, quality: ExportQuality, dpi: ExportDpi, watermark?: string) => Promise<void>;
   isGenerating?: boolean;
+  /** Export progress (pages rendered). */
+  progress?: { current: number; total: number } | null;
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
@@ -31,19 +35,31 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   onClose,
   onShare,
   isGenerating = false,
+  progress = null,
 }) => {
   const { colors, typography, spacing, borderRadius } = useTheme();
-  const { t, formatString } = useTranslation();
+  const { t, formatString, language } = useTranslation();
 
   const [format, setFormat] = useState<ExportFormat>('pdf');
-  const [quality, setQuality] = useState<ExportQuality>('high');
+  const [quality, setQuality] = useState<ExportQuality>('medium');
+  const [dpi, setDpi] = useState<ExportDpi>(200);
   const [includeWatermark, setIncludeWatermark] = useState(false);
 
-  const estimatedSize = exportService.estimateSize(pageCount, format, quality);
+  // Defaults from the settings each time the sheet opens
+  useEffect(() => {
+    if (!visible) return;
+    authService.getDefaultQuality().then(setQuality);
+    authService.getDefaultDpi().then(setDpi);
+  }, [visible]);
+
+  const estimatedSize = exportService.formatBytes(
+    exportService.estimateBytes(format === 'pdf' ? pageCount : 1, format, dpi, quality),
+    language
+  );
 
   const handleSharePress = async () => {
-    const watermarkText = includeWatermark ? 'VERTRAULICH' : undefined;
-    await onShare(format, quality, watermarkText);
+    const watermarkText = includeWatermark ? t.export.watermarkText : undefined;
+    await onShare(format, quality, dpi, watermarkText);
   };
 
   return (
@@ -137,6 +153,51 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   </TouchableOpacity>
                 </View>
 
+                {format === 'jpg' && (
+                  <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 6 }]}>
+                    {t.export.jpgCurrentPage}
+                  </Text>
+                )}
+
+                {/* Section: Auflösung */}
+                <Text
+                  style={[
+                    typography.subhead,
+                    styles.sectionHeader,
+                    { color: colors.textSecondary, marginTop: spacing.md },
+                  ]}
+                >
+                  {t.export.resolution}
+                </Text>
+                <View style={[styles.qualityContainer, { backgroundColor: colors.surfaceSubdued }]}>
+                  {EXPORT_DPI_PRESETS.map((d) => {
+                    const isSelected = dpi === d;
+                    return (
+                      <TouchableOpacity
+                        key={d}
+                        activeOpacity={0.8}
+                        onPress={() => setDpi(d)}
+                        style={[
+                          styles.qualityOption,
+                          isSelected && [styles.qualityOptionSelected, { backgroundColor: colors.surface }],
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            typography.bodyMedium,
+                            {
+                              color: isSelected ? colors.primary : colors.textSecondary,
+                              fontWeight: isSelected ? '700' : '500',
+                            },
+                          ]}
+                        >
+                          {formatString(t.export.dpi, { dpi: d })}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
                 {/* Section: Qualität */}
                 <Text
                   style={[
@@ -190,7 +251,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     <View style={styles.watermarkTextWrap}>
                       <Ionicons name="shield-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
                       <Text style={[typography.body, { color: colors.textPrimary }]}>
-                        Wasserzeichen „VERTRAULICH“
+                        {t.export.watermark} {language === 'de' ? `„${t.export.watermarkText}“` : `“${t.export.watermarkText}”`}
                       </Text>
                     </View>
                     <Switch
@@ -225,7 +286,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   ]}
                 >
                   {isGenerating ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      {progress ? (
+                        <Text style={[typography.bodyMedium, { color: '#FFFFFF', marginLeft: 10 }]}>
+                          {formatString(t.export.progress, { current: progress.current, total: progress.total })}
+                        </Text>
+                      ) : null}
+                    </View>
                   ) : (
                     <>
                       <Ionicons name="share-outline" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />

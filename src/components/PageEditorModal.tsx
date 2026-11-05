@@ -35,7 +35,17 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
   onAddPage,
 }) => {
   const { colors, typography, spacing, borderRadius } = useTheme();
-  const { t } = useTranslation();
+  const { t, formatString } = useTranslation();
+  const filterLabel = (f: DocumentPage['filter']) =>
+    ({
+      original: t.filters.original,
+      auto: t.filters.auto,
+      magicColor: t.filters.magicColor,
+      removeShadows: t.filters.removeShadows,
+      lighten: t.filters.lighten,
+      grayscale: t.filters.grayscale,
+      blackAndWhite: t.filters.blackAndWhite,
+    })[f];
 
   return (
     <Modal
@@ -51,7 +61,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
             <Text style={[typography.bodyBold, { color: colors.primary }]}>{t.common.done}</Text>
           </TouchableOpacity>
           <Text style={[typography.headline, { color: colors.textPrimary }]}>
-            {pages.length} {t.common.pages} verwalten
+            {formatString(t.filters.managePages, { count: pages.length })}
           </Text>
           <TouchableOpacity onPress={onAddPage} style={styles.headerButton}>
             <Ionicons name="add" size={24} color={colors.primary} />
@@ -78,7 +88,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
                   {t.common.page} {index + 1}
                 </Text>
                 <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
-                  Filter: {page.filter} · {page.rotation}°
+                  {formatString(t.filters.pageInfo, { filter: filterLabel(page.filter), rotation: page.rotation })}
                 </Text>
 
                 {/* Move Controls */}
@@ -122,7 +132,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
                   <TouchableOpacity
                     onPress={() => {
                       if (pages.length <= 1) {
-                        Alert.alert('Hinweis', 'Ein Dokument muss mindestens eine Seite enthalten.');
+                        Alert.alert(t.common.hint, t.filters.minOnePage);
                         return;
                       }
                       onDeletePage(index);

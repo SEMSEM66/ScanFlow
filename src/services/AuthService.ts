@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 
 const APP_LOCK_KEY = 'scanflow_app_lock_enabled';
 const DEFAULT_QUALITY_KEY = 'scanflow_default_quality';
+const DEFAULT_DPI_KEY = 'scanflow_default_dpi';
 const PIN_CODE_KEY = 'scanflow_security_pin';
 const LOCK_TIMEOUT_KEY = 'scanflow_lock_timeout_sec';
 const SCREEN_CAPTURE_KEY = 'scanflow_prevent_screen_capture';
@@ -216,9 +217,27 @@ class AuthService {
       if (val === 'low' || val === 'medium' || val === 'high') {
         return val;
       }
-      return 'high';
+      return 'medium';
     } catch {
-      return 'high';
+      return 'medium';
+    }
+  }
+
+  // Export resolution preference (150 / 200 / 300 dpi)
+  async getDefaultDpi(): Promise<150 | 200 | 300> {
+    try {
+      const val = Number(await SecureStore.getItemAsync(DEFAULT_DPI_KEY));
+      return val === 150 || val === 300 ? val : 200;
+    } catch {
+      return 200;
+    }
+  }
+
+  async setDefaultDpi(dpi: 150 | 200 | 300): Promise<void> {
+    try {
+      await SecureStore.setItemAsync(DEFAULT_DPI_KEY, String(dpi));
+    } catch (err) {
+      console.warn('[AuthService] Error saving default dpi:', err);
     }
   }
 

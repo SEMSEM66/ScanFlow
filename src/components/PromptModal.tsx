@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -35,10 +35,12 @@ export const PromptModal: React.FC<PromptModalProps> = ({
   const { colors, typography, spacing, borderRadius } = useTheme();
   const { t } = useTranslation();
   const [value, setValue] = useState(initialValue);
-
-  useEffect(() => {
+  // Reset the text whenever the prompt opens / gets a new initial value
+  const [synced, setSynced] = useState({ initialValue, visible });
+  if (synced.initialValue !== initialValue || synced.visible !== visible) {
+    setSynced({ initialValue, visible });
     setValue(initialValue);
-  }, [initialValue, visible]);
+  }
 
   const handleConfirm = () => {
     if (value.trim().length > 0) {

@@ -8,18 +8,34 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
-  ScrollView,
+  LayoutChangeEvent,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
-import { documentRepository, folderRepository, storageService } from '../../src/services';
-import { filterService } from '../../src/services/FilterService';
-import { exportService } from '../../src/services/ExportService';
-import { Document, DocumentPage, FilterType, Folder, ExportFormat, ExportQuality } from '../../src/types';
+import {
+  documentRepository,
+  folderRepository,
+  exportService,
+  imagePipeline,
+  ensurePagePreview,
+  importPages,
+} from '../../src/services';
+import {
+  Adjustments,
+  Document,
+  DocumentPage,
+  ExportDpi,
+  FilterType,
+  Folder,
+  ExportFormat,
+  ExportQuality,
+} from '../../src/types';
+import { FILTER_ORDER } from '../../src/imaging/filters';
+import { nextRotation } from '../../src/imaging/pageState';
 import {
   FilterStrip,
   DocumentBottomBar,
@@ -28,34 +44,41 @@ import {
   DocumentActionModal,
   MoveFolderModal,
   PromptModal,
-  HeadlessFilterProcessor,
-  FilterProcessorHandle,
+  AdjustmentsPanel,
 } from '../../src/components';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const thumbKeyOf = (p: DocumentPage) =>
+  `${p.id}|${p.originalUri}|${JSON.stringify(p.corners)}|${p.rotation}|${p.pageFormat}|${JSON.stringify(p.adjustments)}`;
 
 export default function DocumentDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, borderRadius } = useTheme();
   const { t, formatString } = useTranslation();
-
-  const processorRef = useRef<FilterProcessorHandle | null>(null);
 
   // Document & Pages state
   const [loading, setLoading] = useState(true);
   const [document, setDocument] = useState<Document | null>(null);
   const [pages, setPages] = useState<DocumentPage[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  const [isProcessingFilter, setIsProcessingFilter] = useState(false);
+  const [isRendering, setIsRendering] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+  const [busyText, setBusyText] = useState<string | null>(null);
+  const [thumbState, setThumbState] = useState<{ key: string; map: Partial<Record<FilterType, string>> }>({ key: '', map: {} });
+  const [area, setArea] = useState<{ w: number; h: number } | null>(null);
+  const [aspect, setAspect] = useState(1 / Math.SQRT2);
 
   // Modals
   const [isExportVisible, setIsExportVisible] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   const [isPageEditorVisible, setIsPageEditorVisible] = useState(false);
   const [isActionModalVisible, setIsActionModalVisible] = useState(false);
   const [isMoveModalVisible, setIsMoveModalVisible] = useState(false);
+  const [isAdjustVisible, setIsAdjustVisible] = useState(false);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [promptState, setPromptState] = useState<{
     visible: boolean;
@@ -69,208 +92,254 @@ export default function DocumentDetailScreen() {
     onConfirm: () => {},
   });
 
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      imagePipeline.releaseMemory();
+    };
+  }, []);
+
+  const replacePage = useCallback((page: DocumentPage) => {
+    if (!mounted.current) return;
+    setPages((prev) => prev.map((p) => (p.id === page.id ? page : p)));
+  }, []);
+
   const loadDocumentData = useCallback(async () => {
     if (!id) return;
     try {
-      setLoading(true);
       const data = await documentRepository.getById(id);
       if (!data) {
-        Alert.alert(t.common.error, 'Dokument wurde nicht gefunden.');
+        Alert.alert(t.common.error, t.common.notFound);
         router.back();
         return;
       }
+      if (!mounted.current) return;
       setDocument(data.document);
       setPages(data.pages);
-      if (currentPageIndex >= data.pages.length) {
-        setCurrentPageIndex(Math.max(0, data.pages.length - 1));
-      }
+      setCurrentPageIndex((idx) => Math.min(idx, Math.max(0, data.pages.length - 1)));
     } catch (err) {
       console.error('[DocumentDetailScreen] Error loading document:', err);
     } finally {
-      setLoading(false);
+      if (mounted.current) setLoading(false);
     }
-  }, [id, currentPageIndex]);
+  }, [id, router, t]);
 
-  useEffect(() => {
-    loadDocumentData();
-    folderRepository.getAll().then(setFolders);
-  }, [loadDocumentData]);
+  // Reload whenever the screen gets focus (e.g. back from crop / scan)
+  useFocusEffect(
+    useCallback(() => {
+      loadDocumentData();
+      folderRepository.getAll().then(setFolders);
+    }, [loadDocumentData])
+  );
 
   const currentPage = pages[currentPageIndex] || null;
+  const previewKey = currentPage ? imagePipeline.previewKey(currentPage) : null;
+  const isPreviewCurrent = !!currentPage && currentPage.renderKey === previewKey && currentPage.previewUri !== currentPage.originalUri;
 
-  // Filter application handler
-  const handleSelectFilter = async (newFilter: FilterType) => {
-    if (!currentPage || isProcessingFilter || currentPage.filter === newFilter) return;
-
-    try {
-      setIsProcessingFilter(true);
-
-      let updatedPreviewUri: string;
-      if (newFilter === 'original') {
-        updatedPreviewUri = currentPage.originalUri;
-      } else {
-        // Process image via headless canvas
-        updatedPreviewUri = await processorRef.current?.applyFilter(currentPage.originalUri, newFilter) || currentPage.originalUri;
+  // Render the current page preview + filter thumbnails, then the other pages in the background.
+  useEffect(() => {
+    if (!currentPage) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!isPreviewCurrent) {
+          setIsRendering(true);
+          const updated = await ensurePagePreview(currentPage.id);
+          if (!cancelled && updated) replacePage(updated);
+        }
+      } catch (err) {
+        console.error('[DocumentDetailScreen] render error', err);
+        if (!cancelled) Alert.alert(t.common.error, t.filters.renderFailed);
+      } finally {
+        if (!cancelled && mounted.current) setIsRendering(false);
       }
+      try {
+        const page = (await documentRepository.getPage(currentPage.id)) ?? currentPage;
+        const th = await imagePipeline.renderThumbnails(page, FILTER_ORDER);
+        if (!cancelled && mounted.current) setThumbState({ key: thumbKeyOf(page), map: th });
+      } catch (err) {
+        console.warn('[DocumentDetailScreen] thumbnails failed', err);
+      }
+      // background: keep the other previews (page list, library thumbnail) up to date
+      for (const p of pages) {
+        if (cancelled) break;
+        if (p.id === currentPage.id || p.renderKey === imagePipeline.previewKey(p)) continue;
+        try {
+          const updated = await ensurePagePreview(p.id);
+          if (!cancelled && updated) replacePage(updated);
+        } catch {
+          // shown again when the page is opened
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage?.id, previewKey, pages.length]);
 
-      await documentRepository.updatePage(currentPage.id, {
-        filter: newFilter,
-        previewUri: updatedPreviewUri,
-      });
+  // Thumbnails belong to one page geometry / adjustment state
+  const thumbKey = currentPage ? thumbKeyOf(currentPage) : '';
+  const thumbnails = thumbState.key === thumbKey ? thumbState.map : {};
 
-      // Update local state
-      setPages((prev) =>
-        prev.map((p, idx) =>
-          idx === currentPageIndex ? { ...p, filter: newFilter, previewUri: updatedPreviewUri } : p
-        )
-      );
+  const updateCurrent = async (patch: Partial<Pick<DocumentPage, 'filter' | 'rotation' | 'adjustments'>>) => {
+    if (!currentPage) return;
+    const next = { ...currentPage, ...patch };
+    replacePage(next);
+    await documentRepository.updatePage(currentPage.id, patch);
+  };
+
+  const handleSelectFilter = async (newFilter: FilterType) => {
+    if (!currentPage || currentPage.filter === newFilter) return;
+    try {
+      await updateCurrent({ filter: newFilter });
     } catch (err) {
       console.error('[DocumentDetailScreen] Error applying filter:', err);
-      Alert.alert(t.common.error, 'Filter konnte nicht angewendet werden.');
-    } finally {
-      setIsProcessingFilter(false);
+      Alert.alert(t.common.error, t.filters.filterFailed);
     }
   };
 
-  // Rotation handler
+  // Non-destructive rotation (stored, applied at render time)
   const handleRotate = async () => {
-    if (!currentPage || isProcessingFilter) return;
-
+    if (!currentPage) return;
     try {
-      setIsProcessingFilter(true);
-      const newUri = await filterService.rotateImage(currentPage.previewUri);
-      const newOrigUri = await filterService.rotateImage(currentPage.originalUri);
-      const newRotation = (currentPage.rotation + 90) % 360;
-
-      await documentRepository.updatePage(currentPage.id, {
-        previewUri: newUri,
-        rotation: newRotation,
-      });
-
-      setPages((prev) =>
-        prev.map((p, idx) =>
-          idx === currentPageIndex
-            ? { ...p, previewUri: newUri, originalUri: newOrigUri, rotation: newRotation }
-            : p
-        )
-      );
+      await updateCurrent({ rotation: nextRotation(currentPage.rotation) });
     } catch (err) {
       console.error('[DocumentDetailScreen] Rotation error:', err);
-      Alert.alert(t.common.error, 'Drehen fehlgeschlagen.');
-    } finally {
-      setIsProcessingFilter(false);
+      Alert.alert(t.common.error, t.filters.rotateFailed);
     }
   };
 
-  // Crop navigation
+  const handleAdjust = async (adj: Adjustments) => {
+    try {
+      await updateCurrent({ adjustments: adj });
+    } catch (err) {
+      console.error('[DocumentDetailScreen] Adjust error:', err);
+      Alert.alert(t.common.error, t.filters.filterFailed);
+    }
+  };
+
+  const handleApplyToAll = async () => {
+    if (!currentPage || !document) return;
+    await documentRepository.updateAllPages(document.id, {
+      filter: currentPage.filter,
+      adjustments: currentPage.adjustments,
+    });
+    await loadDocumentData();
+    Alert.alert(t.filters.applyToAll, t.filters.appliedToAll);
+  };
+
   const handleCrop = () => {
     if (!currentPage) return;
-    router.push({
-      pathname: '/crop',
-      params: {
-        pageId: currentPage.id,
-        imageUri: currentPage.previewUri,
-        documentId: id,
-      },
-    });
+    router.push({ pathname: '/crop', params: { pageId: currentPage.id, documentId: id } });
   };
 
-  // Delete current page
-  const handleDeleteCurrentPage = () => {
+  const deletePageAt = (index: number) => {
+    const page = pages[index];
+    if (!page || !document) return;
     if (pages.length <= 1) {
-      Alert.alert(
-        t.library.deleteDocument,
-        'Dieses Dokument enthält nur eine Seite. Wenn Sie diese Seite löschen, wird das gesamte Dokument gelöscht.',
-        [
-          { text: t.common.cancel, style: 'cancel' },
-          {
-            text: t.common.delete,
-            style: 'destructive',
-            onPress: async () => {
-              if (document) {
-                await documentRepository.delete(document.id);
-                router.replace('/(tabs)');
-              }
-            },
+      Alert.alert(t.library.deleteDocument, t.filters.deleteLastPage, [
+        { text: t.common.cancel, style: 'cancel' },
+        {
+          text: t.common.delete,
+          style: 'destructive',
+          onPress: async () => {
+            await documentRepository.delete(document.id);
+            router.replace('/(tabs)');
           },
-        ]
-      );
+        },
+      ]);
       return;
     }
-
     Alert.alert(t.filters.deletePage, t.filters.deletePageConfirm, [
       { text: t.common.cancel, style: 'cancel' },
       {
         text: t.common.delete,
         style: 'destructive',
         onPress: async () => {
-          if (!currentPage || !document) return;
-          await storageService.deleteFile(currentPage.originalUri);
-          if (currentPage.previewUri !== currentPage.originalUri) {
-            await storageService.deleteFile(currentPage.previewUri);
-          }
+          await documentRepository.deletePage(page.id);
+          // keep showing the same page if a page before it was deleted (index is clamped on reload)
+          setCurrentPageIndex((i) => (index < i ? i - 1 : i));
           await loadDocumentData();
         },
       },
     ]);
   };
 
-  // Add Page handler
   const handleAddPage = () => {
-    Alert.alert('Seite hinzufügen', 'Wählen Sie die Quelle für die neue Seite:', [
+    Alert.alert(t.filters.addPage, t.filters.addPageSource, [
       { text: t.common.cancel, style: 'cancel' },
       {
-        text: 'Aus Fotomediathek',
+        text: t.filters.fromLibrary,
         onPress: async () => {
           const res = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsMultipleSelection: true,
-            quality: 0.9,
+            quality: 1,
+            exif: false,
           });
-          if (!res.canceled && res.assets && res.assets.length > 0) {
-            for (const asset of res.assets) {
-              const savedUri = await storageService.saveImage(asset.uri, 'page_added');
-              // Append to pages
-              await documentRepository.create({
-                title: document?.title || 'Scan',
-                pages: [{ originalUri: savedUri }],
-              });
-            }
-            loadDocumentData();
+          if (res.canceled || !res.assets?.length || !document) return;
+          try {
+            setIsBusy(true);
+            const newPages = await importPages(
+              res.assets.map((a) => a.uri),
+              (current, total) => setBusyText(formatString(t.scan.processing, { current, total }))
+            );
+            await documentRepository.addPages(document.id, newPages);
+            await loadDocumentData();
+            setCurrentPageIndex(pages.length);
+          } catch (err) {
+            console.error('[DocumentDetailScreen] add page error', err);
+            Alert.alert(t.common.error, t.scan.importFailed);
+          } finally {
+            setIsBusy(false);
+            setBusyText(null);
           }
         },
       },
       {
-        text: 'Mit Kamera aufnehmen',
-        onPress: () => {
-          router.push('/scan');
-        },
+        text: t.filters.fromCamera,
+        onPress: () => router.push({ pathname: '/scan', params: { documentId: id } }),
       },
     ]);
   };
 
-  // Export & Share handler
-  const handleShare = async (format: ExportFormat, quality: ExportQuality, watermark?: string) => {
-    if (!document || pages.length === 0) return;
+  const handleMovePage = async (from: number, to: number) => {
+    if (!document || to < 0 || to >= pages.length) return;
+    const next = [...pages];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setPages(next.map((p, i) => ({ ...p, pageNumber: i + 1 })));
+    if (currentPage) setCurrentPageIndex(next.findIndex((p) => p.id === currentPage.id));
+    await documentRepository.reorderPages(document.id, next.map((p) => p.id));
+  };
 
+  const handleShare = async (format: ExportFormat, quality: ExportQuality, dpi: ExportDpi, watermark?: string) => {
+    if (!document || pages.length === 0) return;
     try {
       setIsExporting(true);
-      if (format === 'pdf') {
-        const pageUris = pages.map((p) => p.previewUri);
-        const pdfUri = await exportService.generatePdf(document.title, pageUris, quality, watermark);
-        setIsExportVisible(false);
-        await exportService.shareDocument(pdfUri, 'pdf');
-      } else {
-        // Share current page JPG
-        setIsExportVisible(false);
-        await exportService.shareDocument(currentPage?.previewUri || pages[0].previewUri, 'jpg');
-      }
+      setExportProgress({ current: 0, total: format === 'pdf' ? pages.length : 1 });
+      const onProgress = (current: number, total: number) => setExportProgress({ current, total });
+      const uri =
+        format === 'pdf'
+          ? await exportService.generatePdf(document.title, pages, { dpi, quality, watermark, onProgress })
+          : await exportService.generateJpg(document.title, currentPage ?? pages[0], currentPageIndex, { dpi, quality, onProgress });
+      setIsExportVisible(false);
+      await exportService.shareDocument(uri, format, t.export.shareTitle);
     } catch (err) {
       console.error('[DocumentDetailScreen] Share error:', err);
-      Alert.alert(t.common.error, 'Exportieren fehlgeschlagen.');
+      Alert.alert(t.common.error, t.export.failed);
     } finally {
       setIsExporting(false);
+      setExportProgress(null);
     }
+  };
+
+  const onAreaLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setArea({ w: width, h: height });
   };
 
   if (loading || !document || !currentPage) {
@@ -281,84 +350,77 @@ export default function DocumentDetailScreen() {
     );
   }
 
+  // Page card with the exact page aspect ratio (same as in the exported PDF)
+  const cardSize = area
+    ? (() => {
+        const w = Math.min(area.w, area.h * aspect);
+        return { width: w, height: w / aspect };
+      })()
+    : { width: SCREEN_WIDTH * 0.8, height: (SCREEN_WIDTH * 0.8) / aspect };
+  const showUri = isPreviewCurrent || currentPage.previewUri !== currentPage.originalUri ? currentPage.previewUri : null;
+  const busy = isBusy || isExporting;
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      {/* Headless Image Processor */}
-      <HeadlessFilterProcessor ref={processorRef} />
-
       {/* Top Header matching Dokumente.png & Exportieren.png */}
       <View style={styles.topBar}>
-        {/* Left: < Dokumente */}
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
+        <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={colors.primary} />
-          <Text style={[typography.headline, { color: colors.primary, marginLeft: -4 }]}>
-            {t.library.title}
-          </Text>
+          <Text style={[typography.headline, { color: colors.primary, marginLeft: -4 }]}>{t.library.title}</Text>
         </TouchableOpacity>
 
-        {/* Center: Title */}
-        <Text
-          numberOfLines={1}
-          style={[typography.headline, styles.navTitle, { color: colors.textPrimary }]}
-        >
+        <Text numberOfLines={1} style={[typography.headline, styles.navTitle, { color: colors.textPrimary }]}>
           {document.title}
         </Text>
 
-        {/* Right Action Icons: Share & ... */}
         <View style={styles.headerRightActions}>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => setIsExportVisible(true)}
-            style={styles.headerCircleBtn}
-          >
+          <TouchableOpacity activeOpacity={0.7} onPress={() => setIsExportVisible(true)} style={styles.headerCircleBtn}>
             <Ionicons name="share-outline" size={20} color={colors.primary} />
           </TouchableOpacity>
-
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => setIsActionModalVisible(true)}
-            style={styles.headerCircleBtn}
-          >
+          <TouchableOpacity activeOpacity={0.7} onPress={() => setIsActionModalVisible(true)} style={styles.headerCircleBtn}>
             <Ionicons name="ellipsis-horizontal" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Main Document Page Viewer matching Dokumente.png */}
+      {/* Page viewer */}
       <View style={styles.pageViewerContainer}>
-        {/* Centered Document Card */}
-        <View
-          style={[
-            styles.documentCard,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.cardBorder,
-              borderRadius: borderRadius.lg,
-              shadowColor: colors.shadowColor,
-            },
-          ]}
-        >
-          {isProcessingFilter ? (
-            <View style={styles.processingOverlay}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 8 }]}>
-                Filter wird angewendet...
-              </Text>
-            </View>
-          ) : null}
-
-          <Image
-            source={{ uri: currentPage.previewUri }}
-            style={styles.documentImage}
-            resizeMode="contain"
-          />
+        <View style={styles.pageArea} onLayout={onAreaLayout}>
+          <View
+            style={[
+              styles.documentCard,
+              cardSize,
+              {
+                backgroundColor: '#FFFFFF',
+                borderColor: colors.cardBorder,
+                borderRadius: borderRadius.sm,
+                shadowColor: colors.shadowColor,
+              },
+            ]}
+          >
+            {showUri ? (
+              <Image
+                key={showUri}
+                source={{ uri: showUri }}
+                style={styles.documentImage}
+                resizeMode="stretch"
+                onLoad={(e) => {
+                  const { width, height } = e.nativeEvent.source;
+                  if (width > 0 && height > 0) setAspect(width / height);
+                }}
+              />
+            ) : null}
+            {isRendering || busy || !showUri ? (
+              <View style={styles.processingOverlay}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 8 }]}>
+                  {busyText ?? t.filters.rendering}
+                </Text>
+              </View>
+            ) : null}
+          </View>
         </View>
 
-        {/* Multi-Page Navigation Indicator (if pages > 1) */}
         {pages.length > 1 && (
           <View style={styles.paginationRow}>
             <TouchableOpacity
@@ -368,13 +430,11 @@ export default function DocumentDetailScreen() {
             >
               <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
             </TouchableOpacity>
-
             <TouchableOpacity onPress={() => setIsPageEditorVisible(true)}>
               <Text style={[typography.footnote, { color: colors.textSecondary, fontWeight: '600' }]}>
                 {currentPageIndex + 1} / {pages.length}
               </Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               disabled={currentPageIndex === pages.length - 1}
               onPress={() => setCurrentPageIndex((prev) => Math.min(pages.length - 1, prev + 1))}
@@ -386,24 +446,33 @@ export default function DocumentDetailScreen() {
         )}
       </View>
 
-      {/* Filter Selector Strip matching Dokumente.png */}
+      {/* Filter strip with rendered thumbnails */}
       <FilterStrip
         activeFilter={currentPage.filter}
-        thumbnailUri={currentPage.originalUri}
+        thumbnails={thumbnails}
+        fallbackUri={currentPage.proxyUri ?? currentPage.originalUri}
         onSelectFilter={handleSelectFilter}
-        disabled={isProcessingFilter}
+        disabled={busy}
       />
 
-      {/* Bottom Action Bar matching Dokumente.png */}
       <DocumentBottomBar
         onRotate={handleRotate}
         onCrop={handleCrop}
-        onDeletePage={handleDeleteCurrentPage}
+        onAdjust={() => setIsAdjustVisible(true)}
+        onDeletePage={() => deletePageAt(currentPageIndex)}
         onAddPage={handleAddPage}
-        disabled={isProcessingFilter}
+        disabled={busy}
       />
 
-      {/* Export Modal matching Exportieren.png */}
+      <AdjustmentsPanel
+        visible={isAdjustVisible}
+        value={currentPage.adjustments}
+        onChange={handleAdjust}
+        onApplyToAll={handleApplyToAll}
+        onClose={() => setIsAdjustVisible(false)}
+        busy={busy}
+      />
+
       <ExportModal
         visible={isExportVisible}
         documentTitle={document.title}
@@ -411,28 +480,23 @@ export default function DocumentDetailScreen() {
         onClose={() => setIsExportVisible(false)}
         onShare={handleShare}
         isGenerating={isExporting}
+        progress={exportProgress}
       />
 
-      {/* Page Editor & Reorder Modal (Step 5) */}
       <PageEditorModal
         visible={isPageEditorVisible}
         pages={pages}
         onClose={() => setIsPageEditorVisible(false)}
-        onMovePage={(from, to) => {
-          const newPages = [...pages];
-          const [moved] = newPages.splice(from, 1);
-          newPages.splice(to, 0, moved);
-          setPages(newPages);
-        }}
-        onDeletePage={handleDeleteCurrentPage}
+        onMovePage={handleMovePage}
+        onDeletePage={deletePageAt}
         onRetakePage={(idx) => {
           setIsPageEditorVisible(false);
-          router.push('/scan');
+          const page = pages[idx];
+          if (page) router.push({ pathname: '/scan', params: { documentId: id, replacePageId: page.id } });
         }}
         onAddPage={handleAddPage}
       />
 
-      {/* Document Action Modal */}
       <DocumentActionModal
         visible={isActionModalVisible}
         document={document}
@@ -450,10 +514,8 @@ export default function DocumentDetailScreen() {
         }}
         onMove={() => setIsMoveModalVisible(true)}
         onDuplicate={async () => {
-          const dup = await documentRepository.duplicate(document.id);
-          if (dup) {
-            router.replace(`/document/${dup.id}` as any);
-          }
+          const dup = await documentRepository.duplicate(document.id, t.common.copySuffix);
+          if (dup) router.replace(`/document/${dup.id}` as never);
         }}
         onDelete={async () => {
           await documentRepository.delete(document.id);
@@ -461,7 +523,6 @@ export default function DocumentDetailScreen() {
         }}
       />
 
-      {/* Move Folder Modal */}
       <MoveFolderModal
         visible={isMoveModalVisible}
         document={document}
@@ -473,7 +534,6 @@ export default function DocumentDetailScreen() {
         }}
       />
 
-      {/* Prompt Modal for Renaming */}
       <PromptModal
         visible={promptState.visible}
         title={promptState.title}
@@ -530,9 +590,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 8,
   },
+  pageArea: {
+    flex: 1,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   documentCard: {
-    width: SCREEN_WIDTH * 0.86,
-    height: SCREEN_HEIGHT * 0.52,
     borderWidth: 1,
     overflow: 'hidden',
     shadowOffset: { width: 0, height: 4 },

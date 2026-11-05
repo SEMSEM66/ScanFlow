@@ -23,7 +23,8 @@ This document contains persistent rules, operational constraints, and workflow g
 - **Expo Go Constraint (Crucial):**
   - Phase 1 must use **ONLY** libraries that run inside the standard **Expo Go** app.
   - **NO** custom native modules, **NO** native code requiring development builds (`expo run:ios` or `eas build`) for Phase 1.
-  - If a feature is not supported in Expo Go (e.g. `@shopify/react-native-skia` perspective warp), do not guess or silently switch; explicitly inform the user and implement the verified Expo Go fallback (such as `expo-image-manipulator` bounding-box crop).
+  - If a feature is not supported in Expo Go, do not guess or silently switch; explicitly inform the user and implement a verified Expo Go fallback.
+  - `@shopify/react-native-skia` is part of Expo Go and is used for the perspective warp and scan shaders (v1.2.0). Install native packages only via `npx expo install <pkg>` so versions match the SDK.
 - **Shell & Tooling:**
   - Use **PowerShell-compatible** commands only.
   - Never use bash-only syntax (e.g., `&&`, `export FOO=bar`, `/dev/null`) in scripts or terminal commands.
@@ -86,7 +87,8 @@ Development proceeds in small, verifiable steps with real persisted storage from
 ## 6. Verification & Quality Gates
 - **After every step:**
   1. Run TypeScript check: `npx tsc --noEmit`. Fix any typing errors immediately.
-  2. Run linter: fix any errors.
+  2. Run linter (`npm run lint`): fix any errors you introduce. (Known pre-existing error: `src/components/AppLockOverlay.tsx`, tracked in ROADMAP Phase D.)
+  2a. Run tests: `npm run test:imaging` (fast) and `npm test` (full, incl. headless Skia renderer, ~5–7 min) when touching `src/imaging`, `src/db` or export.
   3. Update `docs/ROADMAP.md` (check off completed items).
   4. Update `CHANGELOG.md`.
   5. Commit and push to `main`.
@@ -100,10 +102,24 @@ Development proceeds in small, verifiable steps with real persisted storage from
 ---
 
 ## 7. Out of Scope for Phase 1 (Keep Architecture Ready)
-- OCR (text recognition)
+- OCR (text recognition) (planned: ROADMAP Phase C)
 - Digital signatures (e-signature)
 - ID-card scanning mode
 - QR code scanner
-- Automatic computer-vision edge detection
+- Live edge detection in the camera preview / real auto-capture (planned: ROADMAP Phase B; post-capture detection exists since v1.2.0)
 - Cloud sync & user accounts
 - Subscriptions / In-App Purchases
+
+---
+
+## 8. Imaging Pipeline Rules (since v1.2.0)
+See `docs/ARCHITECTURE.md` for details.
+- `src/imaging/` is **pure TypeScript**: no React, no Expo imports, no file IO. Skia is injected (`PageRenderer(Skia)`) so the same code runs in the app and in Node tests. App integration lives in `src/services/ImagePipelineService.ts` / `PageRenderService.ts`.
+- **Non-destructive editing:** never overwrite `original_uri`. Edits are page state (`corners`, `rotation`, `filter`, `adjustments`, `page_format`) and are rendered on demand. Previews are caches.
+- **Keep in sync:** `tools/prototype/enhance_prototype.py` ↔ `src/imaging/background.ts` / `filters.ts` ↔ `ENHANCE_SKSL` in `shaders.ts` ↔ `enhancePixelReference()` (CPU reference). The renderer tests compare GPU vs CPU (±2).
+- **Bump `RENDER_VERSION`** (`src/imaging/pageState.ts`) whenever rendered output changes, so cached previews are regenerated.
+- **Schema changes** only via a new step in `src/db/migrations.ts` (`SCHEMA_VERSION` + 1, transactional) with a test in `__tests__/migrations.test.ts`. Never edit an existing migration step.
+- **Memory:** large images go through the serial queue in `ImagePipelineService`; never decode several full-resolution photos in parallel.
+- **Acceptance numbers** (paper ≥ 245, gradient ≤ 8, border p1 ≥ 235, text ≤ 70, detection ≤ 2 %) must stay green; do not loosen thresholds without documenting why in `docs/ARCHITECTURE.md`.
+- Tests import Jest globals from `@jest/globals` (TS 6 `types: []`); Node-only helpers use `/// <reference types="node" />`.
+

@@ -1,255 +1,217 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
   Image,
   PanResponder,
+  PanResponderInstance,
   ActivityIndicator,
   Alert,
+  LayoutChangeEvent,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImageManipulator from 'expo-image-manipulator';
+import { Canvas, Path, Skia, FillType } from '@shopify/react-native-skia';
 import { useTheme } from '../src/theme';
 import { useTranslation } from '../src/i18n';
-import { documentRepository, storageService } from '../src/services';
+import { documentRepository, imagePipeline } from '../src/services';
+import { FULL_QUAD, isConvexQuad, polygonArea } from '../src/imaging/geometry';
+import type { PageFormat, Point, Quad } from '../src/types';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const HANDLE_SIZE = 44;
+const LOUPE_SIZE = 112;
+const LOUPE_ZOOM = 2.5;
+const ACCENT = '#00D2FF';
+const INVALID = '#FF453A';
 
-const HANDLE_SIZE = 34;
+type Corner = 0 | 1 | 2 | 3;
 
-interface Point {
-  x: number;
-  y: number;
-}
-
+/**
+ * Perspective crop: four freely movable corners on the (proxy of the) original.
+ * Saves only normalized corners + page format; the page is re-rendered
+ * non-destructively from the original (perspective warp, no bounding box).
+ */
 export default function CropScreen() {
   const router = useRouter();
-  const { pageId, imageUri, documentId } = useLocalSearchParams<{
-    pageId: string;
-    imageUri: string;
-    documentId: string;
-  }>();
-
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { pageId } = useLocalSearchParams<{ pageId: string; documentId?: string }>();
+  const { colors, typography } = useTheme();
   const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
+  const [viewport, setViewport] = useState<{ width: number; height: number } | null>(null);
+  /** Normalized corners (0…1) TL, TR, BR, BL */
+  const [corners, setCorners] = useState<Quad>(FULL_QUAD);
+  const [initialCorners, setInitialCorners] = useState<Quad>(FULL_QUAD);
+  const [pageFormat, setPageFormat] = useState<PageFormat>('auto');
+  const [active, setActive] = useState<Corner | null>(null);
 
-  // Original image dimensions
-  const [originalDimensions, setOriginalDimensions] = useState<{ width: number; height: number }>({
-    width: 0,
-    height: 0,
-  });
-
-  // Display dimensions of the image on screen
-  const [displayLayout, setDisplayLayout] = useState<{
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }>({
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
-  });
-
-  // 4 Corner Handles relative to displayLayout (TL, TR, BR, BL)
-  const [tl, setTl] = useState<Point>({ x: 0, y: 0 });
-  const [tr, setTr] = useState<Point>({ x: 0, y: 0 });
-  const [br, setBr] = useState<Point>({ x: 0, y: 0 });
-  const [bl, setBl] = useState<Point>({ x: 0, y: 0 });
-
-  // Currently dragged corner for magnifying loupe
-  const [activeCorner, setActiveCorner] = useState<'TL' | 'TR' | 'BR' | 'BL' | null>(null);
-
-  // Load image dimensions
+  // Load page, make sure a proxy exists
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!pageId) throw new Error('missing pageId');
+        let page = await documentRepository.getPage(pageId);
+        if (!page) throw new Error('page not found');
+        if (!page.proxyUri) {
+          const src = await imagePipeline.ensureProxy(page);
+          await documentRepository.replacePageSource(page.id, { originalUri: src.originalUri, proxyUri: src.proxyUri });
+          page = (await documentRepository.getPage(pageId))!;
+        }
+        const uri = page.proxyUri ?? page.originalUri;
+        Image.getSize(
+          uri,
+          (width, height) => {
+            if (cancelled) return;
+            setImageSize({ width, height });
+            setImageUri(uri);
+            const c = page!.corners ?? FULL_QUAD;
+            setCorners(c);
+            setInitialCorners(c);
+            setPageFormat(page!.pageFormat);
+            setLoading(false);
+          },
+          (err) => {
+            throw err;
+          }
+        );
+      } catch (err) {
+        console.error('[CropScreen] load error', err);
+        if (!cancelled) {
+          Alert.alert(t.common.error, t.filters.renderFailed);
+          router.back();
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageId]);
+
+  // Fitted display rectangle of the image inside the viewport
+  const display = useMemo(() => {
+    if (!imageSize || !viewport) return null;
+    const pad = HANDLE_SIZE / 2 + 4;
+    const maxW = viewport.width - pad * 2;
+    const maxH = viewport.height - pad * 2;
+    const s = Math.min(maxW / imageSize.width, maxH / imageSize.height);
+    const width = imageSize.width * s;
+    const height = imageSize.height * s;
+    return { width, height, left: (viewport.width - width) / 2, top: (viewport.height - height) / 2 };
+  }, [imageSize, viewport]);
+
+  // Pan responders work with incremental deltas + functional state updates,
+  // so they never read stale corner state (the bug of the old crop screen).
+  const responders = useMemo(() => {
+    const make = (corner: Corner): PanResponderInstance => {
+      let last = { dx: 0, dy: 0 };
+      return PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: () => {
+          last = { dx: 0, dy: 0 };
+          setActive(corner);
+        },
+        onPanResponderMove: (_, g) => {
+          if (!display) return;
+          const ddx = (g.dx - last.dx) / display.width;
+          const ddy = (g.dy - last.dy) / display.height;
+          last = { dx: g.dx, dy: g.dy };
+          setCorners((prev) => {
+            const next = [...prev] as Quad;
+            next[corner] = {
+              x: Math.min(1, Math.max(0, prev[corner].x + ddx)),
+              y: Math.min(1, Math.max(0, prev[corner].y + ddy)),
+            };
+            return next;
+          });
+        },
+        onPanResponderRelease: () => setActive(null),
+        onPanResponderTerminate: () => setActive(null),
+      });
+    };
+    return [make(0), make(1), make(2), make(3)];
+  }, [display]);
+
+  const toPx = (p: Point) => ({ x: (display?.width ?? 0) * p.x, y: (display?.height ?? 0) * p.y });
+  const valid = useMemo(() => {
+    if (!imageSize) return false;
+    const px = corners.map((p) => ({ x: p.x * imageSize.width, y: p.y * imageSize.height })) as Quad;
+    return isConvexQuad(px) && Math.abs(polygonArea(px)) > 0.02 * imageSize.width * imageSize.height;
+  }, [corners, imageSize]);
+
+  const overlayPath = useMemo(() => {
+    if (!display) return null;
+    const q = corners.map((c) => ({ x: c.x * display.width, y: c.y * display.height }));
+    return Skia.PathBuilder.Make()
+      .addRect(Skia.XYWHRect(0, 0, display.width, display.height))
+      .addPoly(q, true)
+      .setFillType(FillType.EvenOdd)
+      .detach();
+  }, [corners, display]);
+
+  const outlinePath = useMemo(() => {
+    if (!display) return null;
+    const q = corners.map((c) => ({ x: c.x * display.width, y: c.y * display.height }));
+    return Skia.PathBuilder.Make().addPoly(q, true).detach();
+  }, [corners, display]);
+
+  const handleDetect = async () => {
     if (!imageUri) return;
-
-    Image.getSize(
-      imageUri,
-      (width, height) => {
-        setOriginalDimensions({ width, height });
-
-        // Calculate fitted display size (A4-friendly container)
-        const containerWidth = SCREEN_WIDTH - 40;
-        const containerHeight = SCREEN_HEIGHT * 0.65;
-
-        const imgAspect = width / height;
-        const containerAspect = containerWidth / containerHeight;
-
-        let dispW: number;
-        let dispH: number;
-
-        if (imgAspect > containerAspect) {
-          dispW = containerWidth;
-          dispH = containerWidth / imgAspect;
-        } else {
-          dispH = containerHeight;
-          dispW = containerHeight * imgAspect;
-        }
-
-        const dispX = (SCREEN_WIDTH - dispW) / 2;
-        const dispY = (containerHeight - dispH) / 2 + 10;
-
-        setDisplayLayout({ x: dispX, y: dispY, width: dispW, height: dispH });
-
-        // Initialize 4 corners with slight 6% inset margin
-        const insetX = dispW * 0.06;
-        const insetY = dispH * 0.06;
-
-        setTl({ x: insetX, y: insetY });
-        setTr({ x: dispW - insetX, y: insetY });
-        setBr({ x: dispW - insetX, y: dispH - insetY });
-        setBl({ x: insetX, y: dispH - insetY });
-
-        setLoading(false);
-      },
-      (err) => {
-        console.error('[CropScreen] Error getting image size:', err);
-        Alert.alert(t.common.error, 'Bild konnte nicht geladen werden.');
-        setLoading(false);
-      }
-    );
-  }, [imageUri]);
-
-  // PanResponder generators for each handle
-  const createPanResponder = (corner: 'TL' | 'TR' | 'BR' | 'BL') => {
-    let startPoint: Point = { x: 0, y: 0 };
-
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        setActiveCorner(corner);
-        if (corner === 'TL') startPoint = { ...tl };
-        else if (corner === 'TR') startPoint = { ...tr };
-        else if (corner === 'BR') startPoint = { ...br };
-        else if (corner === 'BL') startPoint = { ...bl };
-      },
-      onPanResponderMove: (_, gestureState) => {
-        const { dx, dy } = gestureState;
-        const newX = Math.max(0, Math.min(displayLayout.width, startPoint.x + dx));
-        const newY = Math.max(0, Math.min(displayLayout.height, startPoint.y + dy));
-
-        if (corner === 'TL') {
-          setTl({ x: Math.min(newX, tr.x - 30), y: Math.min(newY, bl.y - 30) });
-        } else if (corner === 'TR') {
-          setTr({ x: Math.max(newX, tl.x + 30), y: Math.min(newY, br.y - 30) });
-        } else if (corner === 'BR') {
-          setBr({ x: Math.max(newX, bl.x + 30), y: Math.max(newY, tr.y + 30) });
-        } else if (corner === 'BL') {
-          setBl({ x: Math.min(newX, br.x - 30), y: Math.max(newY, tl.y + 30) });
-        }
-      },
-      onPanResponderRelease: () => {
-        setActiveCorner(null);
-      },
-      onPanResponderTerminate: () => {
-        setActiveCorner(null);
-      },
-    });
-  };
-
-  const panTL = useRef(createPanResponder('TL')).current;
-  const panTR = useRef(createPanResponder('TR')).current;
-  const panBR = useRef(createPanResponder('BR')).current;
-  const panBL = useRef(createPanResponder('BL')).current;
-
-  // Reset corners to default margin
-  const handleReset = () => {
-    if (displayLayout.width === 0) return;
-    const insetX = displayLayout.width * 0.05;
-    const insetY = displayLayout.height * 0.05;
-    setTl({ x: insetX, y: insetY });
-    setTr({ x: displayLayout.width - insetX, y: insetY });
-    setBr({ x: displayLayout.width - insetX, y: displayLayout.height - insetY });
-    setBl({ x: insetX, y: displayLayout.height - insetY });
-  };
-
-  // Apply crop using expo-image-manipulator
-  const handleApplyCrop = async () => {
-    if (!imageUri || processing || displayLayout.width === 0) return;
-
     try {
-      setProcessing(true);
-
-      // Compute bounding box from corner handles
-      const minX = Math.min(tl.x, bl.x);
-      const maxX = Math.max(tr.x, br.x);
-      const minY = Math.min(tl.y, tr.y);
-      const maxY = Math.max(bl.y, br.y);
-
-      // Scale factors from screen display coordinates to actual image pixel coordinates
-      const scaleX = originalDimensions.width / displayLayout.width;
-      const scaleY = originalDimensions.height / displayLayout.height;
-
-      const originX = Math.max(0, Math.floor(minX * scaleX));
-      const originY = Math.max(0, Math.floor(minY * scaleY));
-      const width = Math.min(originalDimensions.width - originX, Math.floor((maxX - minX) * scaleX));
-      const height = Math.min(originalDimensions.height - originY, Math.floor((maxY - minY) * scaleY));
-
-      if (width <= 10 || height <= 10) {
-        Alert.alert(t.common.error, 'Der ausgewählte Bereich ist zu klein.');
-        setProcessing(false);
-        return;
-      }
-
-      // Execute bounding box crop via Expo Go verified ImageManipulator
-      const cropResult = await ImageManipulator.manipulateAsync(
-        imageUri,
-        [{ crop: { originX, originY, width, height } }],
-        { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG }
-      );
-
-      // Save new cropped asset locally
-      const savedCroppedUri = await storageService.saveImage(cropResult.uri, 'cropped');
-
-      // Update database page record if pageId was provided
-      if (pageId) {
-        await documentRepository.updatePage(pageId, {
-          previewUri: savedCroppedUri,
-        });
-      }
-
-      router.back();
+      setDetecting(true);
+      const res = await imagePipeline.detect(imageUri);
+      if (res.detected) setCorners(res.corners);
+      else Alert.alert(t.crop.title, t.crop.notDetected);
     } catch (err) {
-      console.error('[CropScreen] Error executing crop:', err);
-      Alert.alert(t.common.error, 'Zuschneiden fehlgeschlagen.');
+      console.warn('[CropScreen] detect failed', err);
+      Alert.alert(t.crop.title, t.crop.notDetected);
     } finally {
-      setProcessing(false);
+      setDetecting(false);
     }
   };
 
-  // Active point for the magnifying loupe
-  const getActivePoint = (): Point | null => {
-    if (activeCorner === 'TL') return tl;
-    if (activeCorner === 'TR') return tr;
-    if (activeCorner === 'BR') return br;
-    if (activeCorner === 'BL') return bl;
-    return null;
+  const handleApply = async () => {
+    if (!pageId || saving) return;
+    if (!valid) {
+      Alert.alert(t.crop.title, t.crop.invalidQuad);
+      return;
+    }
+    try {
+      setSaving(true);
+      const isFull = corners.every((c, i) => Math.abs(c.x - FULL_QUAD[i].x) < 1e-3 && Math.abs(c.y - FULL_QUAD[i].y) < 1e-3);
+      await documentRepository.updatePage(pageId, { corners: isFull ? null : corners, pageFormat });
+      router.back();
+    } catch (err) {
+      console.error('[CropScreen] save error', err);
+      Alert.alert(t.common.error, t.crop.saveFailed);
+      setSaving(false);
+    }
   };
 
-  const activePoint = getActivePoint();
+  const activePoint = active !== null ? toPx(corners[active]) : null;
+  const lineColor = valid ? ACCENT : INVALID;
+  // Loupe on the side away from the finger
+  const loupeLeft = activePoint && display && activePoint.x < display.width / 2;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: '#101114' }]} edges={['top', 'bottom']}>
-      {/* Top Navigation Bar */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.barButton}>
           <Text style={[typography.body, { color: '#FFFFFF' }]}>{t.common.cancel}</Text>
         </TouchableOpacity>
-
         <Text style={[typography.headline, { color: '#FFFFFF' }]}>{t.crop.title}</Text>
-
-        <TouchableOpacity onPress={handleApplyCrop} disabled={processing} style={styles.barButton}>
-          {processing ? (
+        <TouchableOpacity onPress={handleApply} disabled={saving || loading} style={styles.barButton}>
+          {saving ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : (
             <Text style={[typography.bodyBold, { color: colors.primary }]}>{t.crop.apply}</Text>
@@ -257,147 +219,96 @@ export default function CropScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Verified Expo Go Notice & Instruction */}
       <View style={styles.noticeContainer}>
         <View style={styles.noticePill}>
-          <Ionicons name="crop" size={14} color="#00D2FF" style={{ marginRight: 6 }} />
+          <Ionicons name="crop" size={14} color={ACCENT} style={{ marginRight: 6 }} />
           <Text style={styles.noticeText}>{t.crop.instruction}</Text>
         </View>
       </View>
 
-      {/* Main Viewport */}
-      <View style={styles.viewport}>
-        {loading ? (
+      <View style={styles.viewport} onLayout={(e: LayoutChangeEvent) => setViewport(e.nativeEvent.layout)}>
+        {loading || !display || !imageUri ? (
           <ActivityIndicator size="large" color={colors.primary} />
         ) : (
-          <View
-            style={[
-              styles.imageContainer,
-              {
-                width: displayLayout.width,
-                height: displayLayout.height,
-              },
-            ]}
-          >
-            {/* Base Image */}
-            <Image
-              source={{ uri: imageUri }}
-              style={{
-                width: displayLayout.width,
-                height: displayLayout.height,
-                borderRadius: 4,
-              }}
-              resizeMode="cover"
-            />
-
-            {/* Bounding Box Border Frame */}
-            <View
-              pointerEvents="none"
-              style={[
-                styles.cropBoundingBox,
-                {
-                  left: Math.min(tl.x, bl.x),
-                  top: Math.min(tl.y, tr.y),
-                  width: Math.max(tr.x, br.x) - Math.min(tl.x, bl.x),
-                  height: Math.max(bl.y, br.y) - Math.min(tl.y, tr.y),
-                },
-              ]}
-            />
-
-            {/* 4 Draggable Corner Handles */}
-            {/* Top-Left */}
-            <View
-              {...panTL.panHandlers}
-              style={[
-                styles.handle,
-                {
-                  transform: [
-                    { translateX: tl.x - HANDLE_SIZE / 2 },
-                    { translateY: tl.y - HANDLE_SIZE / 2 },
-                  ],
-                },
-              ]}
-            >
-              <View style={styles.handleInner} />
-            </View>
-
-            {/* Top-Right */}
-            <View
-              {...panTR.panHandlers}
-              style={[
-                styles.handle,
-                {
-                  transform: [
-                    { translateX: tr.x - HANDLE_SIZE / 2 },
-                    { translateY: tr.y - HANDLE_SIZE / 2 },
-                  ],
-                },
-              ]}
-            >
-              <View style={styles.handleInner} />
-            </View>
-
-            {/* Bottom-Right */}
-            <View
-              {...panBR.panHandlers}
-              style={[
-                styles.handle,
-                {
-                  transform: [
-                    { translateX: br.x - HANDLE_SIZE / 2 },
-                    { translateY: br.y - HANDLE_SIZE / 2 },
-                  ],
-                },
-              ]}
-            >
-              <View style={styles.handleInner} />
-            </View>
-
-            {/* Bottom-Left */}
-            <View
-              {...panBL.panHandlers}
-              style={[
-                styles.handle,
-                {
-                  transform: [
-                    { translateX: bl.x - HANDLE_SIZE / 2 },
-                    { translateY: bl.y - HANDLE_SIZE / 2 },
-                  ],
-                },
-              ]}
-            >
-              <View style={styles.handleInner} />
-            </View>
+          <View style={[styles.imageContainer, { left: display.left, top: display.top, width: display.width, height: display.height }]}>
+            <Image source={{ uri: imageUri }} style={{ width: display.width, height: display.height }} resizeMode="stretch" />
+            {overlayPath && outlinePath ? (
+              <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+                <Path path={overlayPath} color="rgba(0,0,0,0.55)" />
+                <Path path={outlinePath} color={lineColor} style="stroke" strokeWidth={2} />
+              </Canvas>
+            ) : null}
+            {corners.map((c, i) => {
+              const p = toPx(c);
+              return (
+                <View
+                  key={i}
+                  {...responders[i].panHandlers}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  style={[styles.handle, { transform: [{ translateX: p.x - HANDLE_SIZE / 2 }, { translateY: p.y - HANDLE_SIZE / 2 }] }]}
+                  accessibilityLabel={`corner-${i}`}
+                >
+                  <View style={[styles.handleRing, { borderColor: lineColor, backgroundColor: active === i ? 'rgba(0,210,255,0.25)' : 'transparent' }]} />
+                </View>
+              );
+            })}
           </View>
         )}
 
-        {/* Magnifying Loupe during handle drag */}
-        {activePoint && !loading && (
-          <View style={styles.loupeBubble}>
+        {/* Magnifying loupe while dragging */}
+        {activePoint && display && imageUri ? (
+          <View pointerEvents="none" style={[styles.loupe, loupeLeft ? { right: 16 } : { left: 16 }]}>
             <Image
               source={{ uri: imageUri }}
+              resizeMode="stretch"
               style={{
-                width: displayLayout.width * 2.2,
-                height: displayLayout.height * 2.2,
-                transform: [
-                  { translateX: -(activePoint.x * 2.2 - 45) },
-                  { translateY: -(activePoint.y * 2.2 - 45) },
-                ],
+                position: 'absolute',
+                width: display.width * LOUPE_ZOOM,
+                height: display.height * LOUPE_ZOOM,
+                left: LOUPE_SIZE / 2 - activePoint.x * LOUPE_ZOOM,
+                top: LOUPE_SIZE / 2 - activePoint.y * LOUPE_ZOOM,
               }}
-              resizeMode="cover"
             />
-            {/* Crosshair in Loupe */}
-            <View style={styles.loupeCrosshairH} />
-            <View style={styles.loupeCrosshairV} />
+            <View style={[styles.crossH, { backgroundColor: lineColor }]} />
+            <View style={[styles.crossV, { backgroundColor: lineColor }]} />
           </View>
-        )}
+        ) : null}
       </View>
 
-      {/* Bottom Toolbar: Reset Corners Button */}
+      {/* Page format */}
+      <View style={styles.formatRow}>
+        <Text style={styles.formatLabel}>{t.crop.pageFormat}</Text>
+        <View style={styles.segment}>
+          {(['auto', 'a4', 'letter'] as PageFormat[]).map((f) => (
+            <TouchableOpacity
+              key={f}
+              onPress={() => setPageFormat(f)}
+              style={[styles.segmentItem, pageFormat === f && { backgroundColor: colors.primary }]}
+            >
+              <Text style={[styles.segmentText, { color: pageFormat === f ? '#FFFFFF' : 'rgba(255,255,255,0.75)' }]}>
+                {f === 'auto' ? t.crop.formatAuto : f === 'a4' ? t.crop.formatA4 : t.crop.formatLetter}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
       <View style={styles.bottomBar}>
-        <TouchableOpacity activeOpacity={0.8} onPress={handleReset} style={styles.resetButton}>
-          <Ionicons name="refresh-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-          <Text style={[typography.bodyMedium, { color: '#FFFFFF' }]}>{t.crop.reset}</Text>
+        <TouchableOpacity style={styles.pillButton} onPress={handleDetect} disabled={detecting || loading}>
+          {detecting ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Ionicons name="scan-outline" size={16} color="#FFFFFF" />
+          )}
+          <Text style={styles.pillText}>{t.crop.autoDetect}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.pillButton} onPress={() => setCorners(FULL_QUAD)} disabled={loading}>
+          <Ionicons name="expand-outline" size={16} color="#FFFFFF" />
+          <Text style={styles.pillText}>{t.crop.fullImage}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.pillButton} onPress={() => setCorners(initialCorners)} disabled={loading}>
+          <Ionicons name="refresh-outline" size={16} color="#FFFFFF" />
+          <Text style={styles.pillText}>{t.crop.reset}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -405,9 +316,7 @@ export default function CropScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -415,14 +324,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
   },
-  barButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  noticeContainer: {
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
+  barButton: { paddingVertical: 6, paddingHorizontal: 8 },
+  noticeContainer: { alignItems: 'center', paddingVertical: 6 },
   noticePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -431,97 +334,53 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
   },
-  noticeText: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  viewport: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  imageContainer: {
-    position: 'relative',
-    overflow: 'visible',
-  },
-  cropBoundingBox: {
-    position: 'absolute',
-    borderWidth: 2,
-    borderColor: '#00D2FF',
-    backgroundColor: 'rgba(0, 210, 255, 0.08)',
-    shadowColor: '#00D2FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 6,
-  },
+  noticeText: { color: 'rgba(255, 255, 255, 0.85)', fontSize: 12, fontWeight: '500' },
+  viewport: { flex: 1, position: 'relative', justifyContent: 'center', alignItems: 'center' },
+  imageContainer: { position: 'absolute', overflow: 'visible' },
   handle: {
     position: 'absolute',
     top: 0,
     left: 0,
     width: HANDLE_SIZE,
     height: HANDLE_SIZE,
-    borderRadius: HANDLE_SIZE / 2,
-    backgroundColor: '#00D2FF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 8,
   },
-  handleInner: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#FFFFFF',
-  },
-  loupeBubble: {
+  handleRing: { width: 26, height: 26, borderRadius: 13, borderWidth: 3 },
+  loupe: {
     position: 'absolute',
-    top: 20,
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    top: 8,
+    width: LOUPE_SIZE,
+    height: LOUPE_SIZE,
+    borderRadius: LOUPE_SIZE / 2,
     borderWidth: 3,
-    borderColor: '#00D2FF',
+    borderColor: ACCENT,
     overflow: 'hidden',
     backgroundColor: '#000',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
     zIndex: 99,
   },
-  loupeCrosshairH: {
-    position: 'absolute',
-    top: 44,
-    left: 30,
-    right: 30,
-    height: 2,
-    backgroundColor: '#00D2FF',
-  },
-  loupeCrosshairV: {
-    position: 'absolute',
-    left: 44,
-    top: 30,
-    bottom: 30,
-    width: 2,
-    backgroundColor: '#00D2FF',
-  },
-  bottomBar: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 14,
-  },
-  resetButton: {
+  crossH: { position: 'absolute', top: LOUPE_SIZE / 2 - 1, left: LOUPE_SIZE / 2 - 14, width: 28, height: 2 },
+  crossV: { position: 'absolute', left: LOUPE_SIZE / 2 - 1, top: LOUPE_SIZE / 2 - 14, width: 2, height: 28 },
+  formatRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  formatLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '500' },
+  segment: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: 2 },
+  segmentItem: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
+  segmentText: { fontSize: 13, fontWeight: '600' },
+  bottomBar: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, paddingVertical: 14 },
+  pillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
   },
+  pillText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
 });

@@ -15,12 +15,13 @@ import { useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { authService, LockTimeoutOption } from '../../src/services/AuthService';
 import { storageService, documentRepository } from '../../src/services';
-import { ExportQuality } from '../../src/types';
+import { ExportDpi, ExportQuality } from '../../src/types';
+import { EXPORT_DPI_PRESETS } from '../../src/imaging/pageFormat';
 import { PinSetupModal } from '../../src/components/PinSetupModal';
 
 export default function SettingsScreen() {
   const { colors, typography, spacing, borderRadius, mode, setMode } = useTheme();
-  const { t, language, setLanguage } = useTranslation();
+  const { t, language, setLanguage, formatString } = useTranslation();
 
   // Security state
   const [appLockEnabled, setAppLockEnabled] = useState(false);
@@ -30,7 +31,8 @@ export default function SettingsScreen() {
   const [isPinModalVisible, setIsPinModalVisible] = useState(false);
 
   // App & Storage state
-  const [defaultQuality, setDefaultQuality] = useState<ExportQuality>('high');
+  const [defaultQuality, setDefaultQuality] = useState<ExportQuality>('medium');
+  const [defaultDpi, setDefaultDpiState] = useState<ExportDpi>(200);
   const [storageBytes, setStorageBytes] = useState(0);
   const [docCount, setDocCount] = useState(0);
 
@@ -46,6 +48,7 @@ export default function SettingsScreen() {
       setScreenCaptureProtection(screenCap);
       const qual = await authService.getDefaultQuality();
       setDefaultQuality(qual);
+      setDefaultDpiState(await authService.getDefaultDpi());
       const size = await storageService.getStorageSize();
       setStorageBytes(size);
       const docs = await documentRepository.getAll();
@@ -90,15 +93,22 @@ export default function SettingsScreen() {
     await authService.setDefaultQuality(q);
   };
 
+  const handleSetDpi = async (d: ExportDpi) => {
+    setDefaultDpiState(d);
+    await authService.setDefaultDpi(d);
+  };
+
   const handleClearCache = async () => {
-    Alert.alert('Cache leeren', 'Möchten Sie den temporären Speicher bereinigen?', [
+    Alert.alert(t.settings.clearCacheTitle, t.settings.clearCacheMessage, [
       { text: t.common.cancel, style: 'cancel' },
       {
-        text: 'Bereinigen',
+        text: t.settings.clearCacheConfirm,
         onPress: async () => {
+          // Temporary export files only – scans and previews are kept
+          await storageService.clearCaches();
           const size = await storageService.getStorageSize();
           setStorageBytes(size);
-          Alert.alert('Erfolg', 'Temporärer Speicher wurde bereinigt.');
+          Alert.alert(t.settings.success, t.settings.clearCacheDone);
         },
       },
     ]);
@@ -356,6 +366,35 @@ export default function SettingsScreen() {
                     ]}
                   >
                     {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Section 4b: Default export resolution */}
+        <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary, marginTop: spacing.lg }]}>
+          {t.settings.defaultResolution}
+        </Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <View style={styles.segmentedRow}>
+            {EXPORT_DPI_PRESETS.map((d) => {
+              const isSelected = defaultDpi === d;
+              return (
+                <TouchableOpacity
+                  key={d}
+                  activeOpacity={0.8}
+                  onPress={() => handleSetDpi(d)}
+                  style={[styles.segmentButton, isSelected && { backgroundColor: colors.primary }]}
+                >
+                  <Text
+                    style={[
+                      typography.bodyMedium,
+                      { color: isSelected ? '#FFFFFF' : colors.textPrimary, fontWeight: isSelected ? '700' : '500' },
+                    ]}
+                  >
+                    {formatString(t.export.dpi, { dpi: d })}
                   </Text>
                 </TouchableOpacity>
               );
