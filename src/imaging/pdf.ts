@@ -1,8 +1,11 @@
-import { PDFDocument, PDFPage, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { PDFDocument, PDFFont, PDFPage, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { drawTextLayer } from '../ocr/pdfTextLayer';
+import type { OcrLine } from '../ocr/types';
 
 /**
  * PDF builder on pdf-lib (pure JS, works in Expo Go / Hermes and Node).
- * One full-bleed JPEG per page at the exact page size in points.
+ * One full-bleed JPEG per page at the exact page size in points, optionally
+ * with an invisible OCR text layer (searchable PDF).
  */
 
 export interface PdfPageInput {
@@ -10,9 +13,11 @@ export interface PdfPageInput {
   jpeg: string | Uint8Array;
   widthPt: number;
   heightPt: number;
+  /** Recognized text of the page (normalized boxes) → invisible, searchable text layer. */
+  text?: OcrLine[] | null;
 }
 
-/** Phase C hook: draw an invisible OCR text layer onto a finished page. */
+/** Extra drawing hook on a finished page (after image and text layer, before the watermark). */
 export interface PdfTextLayerContext {
   doc: PDFDocument;
   page: PDFPage;
@@ -50,12 +55,22 @@ export async function buildPdf(
   doc.setCreationDate(now);
   doc.setModificationDate(now);
   const font = opts.watermark ? await doc.embedFont(StandardFonts.HelveticaBold) : null;
+  let textFont: PDFFont | null = null;
 
   for (let i = 0; i < pageCount; i++) {
     const input = await getPage(i);
     const page = doc.addPage([input.widthPt, input.heightPt]);
     const img = await doc.embedJpg(input.jpeg);
     page.drawImage(img, { x: 0, y: 0, width: input.widthPt, height: input.heightPt });
+    if (input.text && input.text.length > 0) {
+      textFont ??= await doc.embedFont(StandardFonts.Helvetica);
+      try {
+        drawTextLayer(page, textFont, input.text, input.widthPt, input.heightPt);
+      } catch (err) {
+        // the page stays an image-only page
+        console.warn('[pdf] text layer skipped on page', i + 1, err);
+      }
+    }
     if (opts.textLayer) {
       await opts.textLayer({ doc, page, pageIndex: i, widthPt: input.widthPt, heightPt: input.heightPt });
     }
