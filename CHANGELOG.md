@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0] - 2026-11-05
+
+Text recognition (OCR) and searchable PDFs – Phase C. Runs completely on the iPhone with Apple's text recognition (Vision), nothing is uploaded. **Only in the installed app (IPA)** – in Expo Go everything else keeps working, just without text recognition. See `docs/ARCHITECTURE.md` → "Text recognition (OCR)".
+
+### Added
+- **Automatic text recognition:** new and changed pages (scan, import, crop, rotation, retake) are recognized in the background while ScanFlow is open – one page at a time, the open document first, then the newest documents. German and English with language correction; small print down to about 0.8 % of the page height is included.
+- **Search in the text of the pages:** the search in *Dokumente* (*Titel und Text durchsuchen*) also finds words in the recognized text. Upper/lower case, umlauts and ß do not matter (`muller` finds *Müller*, `strasse` finds *Straße*), words hyphenated at the end of a line are found as one word, and several words must all occur. Hits show a short excerpt with the found word in bold; the results update as soon as a page has been recognized.
+- **Text kopieren:** new entry in the document menu (*…*) of the library and of the document screen – the text page by page (selectable), *Kopieren* per page, *Alles kopieren*, *Text teilen*.
+- **Searchable PDFs:** exported PDFs contain an invisible text layer exactly over the words of the page image – search, select and copy in Files, Preview, Acrobat, Mail. Pages that have not been recognized yet are recognized during the export.
+- **Settings → Texterkennung:** *Text erkennen* (default on) with progress (*x von y Seiten erkannt*). Turning it off asks whether to keep or delete the text recognized so far. In Expo Go the section explains that text recognition is only available in the installed app.
+- Local Expo module `modules/scanflow-ocr` (Swift, `VNRecognizeTextRequest`, linked automatically into the IPA build) and `expo-clipboard`.
+- SQLite schema v3: table `page_text` (plain text, normalized search text and word positions per page; deleted together with its page).
+- Tests: `__tests__/ocr.test.ts` (21), `ocrScheduler.test.ts` (10), `pdfTextLayer.test.ts` (5 – incl. reading the PDF back with `pdftotext` and checking every word position), `textSearch.test.ts` (12, real SQLite); `migrations.test.ts` covers v2 → v3. New script `npm run test:ocr`.
+
+### Changed
+- Duplicated documents keep the recognized text (no second recognition).
+- The background recognition pauses during an export.
+- *Cache leeren* also removes temporary text-recognition images.
+- IPA workflow: GitHub releases are only published from `main` and `v*` tags (manual runs on other branches only build the IPA artifact); the build stops early if the text-recognition module was not linked.
+
+### Fixed
+- Library: *In Ordner verschieben* in the document menu did nothing – the folder list never opened.
+- Library: typing quickly in the search could leave the results of an earlier search term on screen.
+- Library: the "no results" hint was German only.
+
+### Known limitations
+- Text recognition only in the installed app (IPA), **not in Expo Go** (it needs native code). In Expo Go the search covers titles only and exported PDFs have no text layer.
+- Recognition only runs while ScanFlow is open; an existing library is recognized gradually after the update (estimated 0.5–2 s per page – not yet measured on an iPhone).
+- The invisible PDF text uses the standard PDF font: letters outside Western European languages are replaced in the text layer (e.g. ł → l, others → ?); the page image is unchanged. Handwriting is recognized poorly.
+- The *title* search still distinguishes upper/lower case for umlauts (`MÜLLER` does not find the title *Müller*); the text search does not.
+- Not yet tested on a physical iPhone (STOP C in `docs/ROADMAP.md`).
+
+---
+
 ## [1.4.0] - 2026-11-05
 
 Security hardening: app lock, ScanFlow PIN, privacy and exported files. See `docs/ARCHITECTURE.md` → "App lock & security".

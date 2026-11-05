@@ -25,6 +25,7 @@ This document contains persistent rules, operational constraints, and workflow g
   - **NO** custom native modules, **NO** native code requiring development builds (`expo run:ios` or `eas build`) for Phase 1.
   - If a feature is not supported in Expo Go, do not guess or silently switch; explicitly inform the user and implement a verified Expo Go fallback.
   - `@shopify/react-native-skia` is part of Expo Go and is used for the perspective warp and scan shaders (v1.2.0). Install native packages only via `npx expo install <pkg>` so versions match the SDK.
+  - **One exception (since v1.5.0):** the local Expo module `modules/scanflow-ocr` (Swift, Apple Vision text recognition). It exists only in the IPA build (GitHub Actions, sideloaded); the app must keep working in **Expo Go** without it – access it only through `ocrService` and check `ocrService.available`. Do not add further native code or modules without asking the user. Swift can only be compiled in CI (no Mac): keep native changes small and verify them in the CI log.
 - **Shell & Tooling:**
   - Use **PowerShell-compatible** commands only.
   - Never use bash-only syntax (e.g., `&&`, `export FOO=bar`, `/dev/null`) in scripts or terminal commands.
@@ -37,7 +38,7 @@ This document contains persistent rules, operational constraints, and workflow g
 
 ## 3. Git & Version Control Rules
 - **Remote Repository:** Always verify `git remote -v`.
-- **Branch:** Work directly on `main`.
+- **Branch:** Small changes directly on `main`. Larger phases on a feature branch (`feat/<phase>`), pushed while working (pushes to other branches build nothing), then fast-forward merged into `main` and pushed once → exactly one IPA build per release (the macOS CI minutes are limited).
 - **Commit Style:** Small, focused commits using **Conventional Commits**:
   - `feat:` for new features
   - `fix:` for bug fixes
@@ -46,7 +47,7 @@ This document contains persistent rules, operational constraints, and workflow g
   - `chore:` for tooling or config updates
 - **Push Cadence:** Push after every commit. If push fails due to git credentials/authentication, stop immediately and explain what the user needs to configure.
 - **Safety:** Never commit secrets, `.env` files, or binary artifacts that don't belong in git. Never rewrite git history.
-- **Releases:** bump `version` in `package.json`, `app.json` and the two root entries of `package-lock.json` together and add a `## [x.y.z]` section to `CHANGELOG.md`. Every push to `main` builds the IPA (`.github/workflows/build-ipa.yml`) and publishes it as GitHub release `v<package.json version>` with that changelog section as release notes; pushing again without a bump updates that release.
+- **Releases:** bump `version` in `package.json`, `app.json` and the two root entries of `package-lock.json` together and add a `## [x.y.z]` section to `CHANGELOG.md`. Every push to `main` builds the IPA (`.github/workflows/build-ipa.yml`) and publishes it as GitHub release `v<package.json version>` with that changelog section as release notes; pushing again without a bump updates that release. Manual runs on other branches only build the IPA artifact (no release).
 
 ---
 
@@ -89,7 +90,7 @@ Development proceeds in small, verifiable steps with real persisted storage from
 - **After every step:**
   1. Run TypeScript check: `npx tsc --noEmit`. Fix any typing errors immediately.
   2. Run linter (`npm run lint`): fix any errors you introduce (0 errors since v1.4.0; the remaining unused-variable warnings are tracked in ROADMAP Phase D).
-  2a. Run tests: `npm run test:imaging` (fast) and `npm test` (full, incl. headless Skia renderer, ~5–7 min) when touching `src/imaging`, `src/db` or export; `npm run test:security` when touching `src/security`, `AuthService`, `AppLockOverlay`, `LockScreen`, `PinSetupModal`, `PrivacyService` or sharing.
+  2a. Run tests: `npm run test:imaging` (fast) and `npm test` (full, incl. headless Skia renderer, ~5–7 min) when touching `src/imaging`, `src/db` or export; `npm run test:security` when touching `src/security`, `AuthService`, `AppLockOverlay`, `LockScreen`, `PinSetupModal`, `PrivacyService` or sharing; `npm run test:ocr` when touching `src/ocr`, `src/db/textSearch.ts`, `PageTextRepository`, `OcrService`, the PDF text layer or the search.
   3. Update `docs/ROADMAP.md` (check off completed items).
   4. Update `CHANGELOG.md`.
   5. Commit and push to `main`.
@@ -103,7 +104,7 @@ Development proceeds in small, verifiable steps with real persisted storage from
 ---
 
 ## 7. Out of Scope for Phase 1 (Keep Architecture Ready)
-- OCR (text recognition) (planned: ROADMAP Phase C)
+- ~~OCR (text recognition)~~ – implemented in v1.5.0 (ROADMAP Phase C, IPA build only)
 - Digital signatures (e-signature)
 - ID-card scanning mode
 - QR code scanner
@@ -147,3 +148,16 @@ See `docs/ARCHITECTURE.md` → "App lock & security".
 - **Exported files are temporary:** write them only below `storageService.exportDir` (one folder per export) and delete them after sharing (`exportService.shareDocument()` / `discardExport()`). Do not declare a share type whose preferred extension differs from the file's extension (expo-sharing would stage a hard-linked copy).
 - **Honest wording:** do not claim encryption, "secure wiping" or "zero trace" the app does not provide. The app lock protects the UI; files are protected by iOS Data Protection (device passcode).
 - **Tests for security code:** pure logic goes into `src/security/` (no Expo imports) with unit tests; service behaviour is tested with mocked `expo-secure-store` / `expo-local-authentication` (`__tests__/authService.test.ts`).
+
+---
+
+## 11. Text Recognition Rules (since v1.5.0)
+See `docs/ARCHITECTURE.md` → "Text recognition, search & searchable PDF".
+- **Only through `ocrService`** (`src/services/OcrService.ts`). Screens never import `modules/scanflow-ocr` directly. Hide or disable OCR UI when `ocrService.available` is false (Expo Go) – nothing else may depend on OCR.
+- **Pure logic in `src/ocr/`** (no React / Expo imports) with unit tests: model, `ocrKey()`, normalization, snippets, storage format, Vision conversion, PDF text layer, queue. SQL of the search and of `page_text` lives in `src/db/textSearch.ts` and is tested against real SQLite (`__tests__/textSearch.test.ts`).
+- **Coordinates:** `OcrBox` is normalized (0…1) on the rendered page, origin top-left. Vision returns origin bottom-left – convert only in `src/ocr/vision.ts`.
+- **Staleness:** text belongs to `ocrKey()` (original + corners + rotation + `OCR_VERSION`). Stale text must never be shown, searched as current or written into a PDF. Bump `OCR_VERSION` (and update the pinned key test) when the recognition setup or the OCR image changes; filter, adjustments and page format do not invalidate text.
+- **Search consistency:** `search_text` is always `searchTextOf(text)` and query words always go through `normalizeForSearch()` – change both together and keep the tests green.
+- **Never block the user:** recognition runs in the background, one page at a time, only in the foreground, via the serial image queue (`imagePipeline.renderForOcr()`, temp files in `storageService.ocrTempDir`, deleted afterwards) and paused during exports (`ocrService.hold()`). Failures leave the page without text (limited retries); they never break scanning, editing or exporting.
+- **Privacy:** recognized text is user data like the pages – stored only in the local SQLite database, never logged, never sent anywhere. Turning OCR off must offer to delete the text.
+- **PDF layer:** invisible text only (render mode 3) exactly over the words; the visible page image is never changed.

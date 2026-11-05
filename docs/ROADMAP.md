@@ -6,7 +6,7 @@ This roadmap outlines the complete implementation plan for **ScanFlow**, an offl
 
 ## 🎯 Architectural Principles & Expo Go Constraints
 
-1. **Expo Go Only:** All dependencies and APIs must run in standard Expo Go without custom native build steps (`npx expo run:ios`).
+1. **Expo Go Only:** All dependencies and APIs must run in standard Expo Go without custom native build steps (`npx expo run:ios`). *Exception since v1.5.0: the local module `modules/scanflow-ocr` (Apple Vision text recognition) is only built into the IPA; the app keeps working in Expo Go without it.*
 2. **Offline-First & Persistent Data From Day One:** All files stored in app container via `expo-file-system`; all metadata and folder structures managed in SQLite via `expo-sqlite`. No mock data.
 3. **Repository Pattern:** UI layers never directly invoke raw file or database operations; all interactions pass through typed services (`StorageService`, `DocumentRepository`, `FolderRepository`, `ImagePipelineService`, `PageRenderService`, `ExportService`). *(v1.2.0: `FilterService` was replaced by the Skia pipeline in `src/imaging` + `ImagePipelineService`.)*
 4. **Design Accuracy:** Pixel-accurate replication of design screenshots in `/design` (`bearbeiten.png`, `Scannen.png`, `Dokumente.png`, `Exportieren.png`).
@@ -210,7 +210,7 @@ Development pauses at each of these 5 checkpoints for physical verification on y
 
 ## 🚀 Phase 2 Architecture Readiness (Future Expansion)
 *Kept out of Phase 1 scope but architectural interfaces preserved:*
-- **OCR Service Interface:** `IOCRService` placeholder in `src/services/ocr`.
+- **OCR Service Interface:** `IOCRService` placeholder in `src/services/ocr`. *(Implemented in v1.5.0: `src/services/OcrService.ts` + `src/ocr/`.)*
 - **Cloud Sync Adapter:** `ISyncAdapter` placeholder for WebDAV / iCloud / Nextcloud.
 - **E-Signature:** Signature canvas overlay placeholder.
 - **ID-Card Dual Mode:** Multi-slot page template architecture.
@@ -301,13 +301,32 @@ Spike result: Expo Go has no camera frame processors, so a custom live overlay w
   10. Export PDF and JPG → share to *Dateien sichern*, Mail and AirDrop → the files arrive complete with their normal names (`.pdf` / `.jpg`).
   11. If you used a 4-digit PIN with 1.3.0: it still unlocks after the update.
 
-## ⏳ Phase C: OCR & searchable PDF (planned)
-*Goal: text search in the library and an invisible text layer in exported PDFs.*
-- [ ] Spike: on-device OCR that runs in Expo Go (no custom native module). Candidates: none built into Expo Go today → evaluate WebView + tesseract.js (WASM, offline, bundled language data de/en) vs. a later development build with Apple Vision. **STOP** and decide with the user before adding a dev-build requirement.
-- [ ] `IOcrService` interface + implementation; run in background per page, store words + boxes (normalized to the rendered page) in a new `page_text` table (migration v3).
-- [ ] Use the `textLayer` hook in `src/imaging/pdf.ts` to draw invisible text (render mode 3) at the word boxes → searchable/copyable PDFs.
-- [ ] Library search over OCR text; "Text kopieren" action.
-- [ ] Tests: text-layer placement via pdf-lib roundtrip; OCR on synthetic pages.
+## ✅ Phase C: OCR & searchable PDF (v1.5.0)
+*Goal: text search in the library, "Text kopieren" and an invisible text layer in exported PDFs.*
+
+Spike result / decision: Expo Go contains no OCR engine; tesseract.js in a WebView would be slow and large (language data) and less accurate than Apple's text recognition. ScanFlow therefore uses **Apple Vision** (`VNRecognizeTextRequest`, offline) through a small local Expo module that is only built into the IPA. In Expo Go `ocrService.available` is false and every OCR UI is hidden or explains this.
+
+- [x] Local Expo module `modules/scanflow-ocr` (Swift): `recognizeAsync(uri, { languages, level, usesLanguageCorrection, minimumTextHeight })` → lines with confidence, line and word boxes; own serial queue; autolinked; CI checks that the pod is linked.
+- [x] Pure OCR core in `src/ocr/` (no Expo imports): model (normalized boxes, origin top-left), Vision conversion incl. plausibility check of word boxes, reading order, plain text, search normalization (case, diacritics, ß, ligatures, hyphenation), snippets, compact storage format, staleness key `ocrKey()` (original + corners + rotation + `OCR_VERSION`).
+- [x] `page_text` table (schema v3, migration step + test), `PageTextRepository` (save, copy on duplicate, pending pages, stats, snippets); rows deleted with their page.
+- [x] `OcrService`: background queue (`src/ocr/scheduler.ts`) – one page at a time, foreground only, open document first, 2 attempts per page state, stops after 5 failures in a row, paused during export; on/off setting; OCR image rendered without filter at 200 dpi (≤ 2400 px).
+- [x] Invisible text layer (render mode 3, Helvetica/WinAnsi) per word in `buildPdf()` → searchable/copyable PDFs; missing text is recognized during export.
+- [x] Library search over titles + OCR text (every word, normalized), excerpt with the hit on the document card, live update while searching; *Text kopieren* (per page / all / share) in the document menu; Settings → *Texterkennung*.
+- [x] Tests: `ocr.test.ts`, `ocrScheduler.test.ts`, `pdfTextLayer.test.ts` (pdf-lib roundtrip + word positions via `pdftotext -bbox`), `textSearch.test.ts` (node:sqlite), migrations v2 → v3 (`npm run test:ocr`).
+- [ ] OCR on synthetic / real pages in CI (needs macOS + Vision; not possible in the Jest/Node tests).
+- [ ] Measure recognition time and memory on an iPhone; tune `OCR_MIN_TEXT_HEIGHT`, `OCR_DPI` / `OCR_MAX_LONG_SIDE` if needed (bump `OCR_VERSION` when the recognition setup changes).
+- [ ] Optional: normalized title search (umlaut case), more recognition languages (setting), embedded Unicode font for non-WinAnsi text in the PDF layer.
+- [ ] **🛑 STOP C:** Test on physical iPhone (**IPA** v1.5.0; then a short check in Expo Go):
+  1. Update from 1.4.0: documents, folders and settings are still there. Settings → *Texterkennung* shows *Text wird erkannt … x von y Seiten*, after a while *y von y Seiten erkannt*. While it runs, scrolling, opening documents and editing stay smooth.
+  2. Scan a letter or an invoice → after a few seconds the search finds a word from the body text (not from the title), with the excerpt and the word in bold. Also try `muller` for *Müller*, `strasse` for *Straße*, two words, a word hyphenated at a line end.
+  3. Small print (footer, fine print): is it found? If not, report which size is missing (setting `OCR_MIN_TEXT_HEIGHT`).
+  4. Document menu (*…*) → *Text kopieren*: text per page in a sensible reading order; *Kopieren*, *Alles kopieren*, paste in Notes; *Text teilen*.
+  5. Rotate a page or change its corners → the text is recognized again (search still finds it; *Text kopieren* shows the new text).
+  6. Export a PDF → *In Dateien sichern* → open in Files: search for a word (it is highlighted at the right place), select and copy text; also open in Preview on a Mac/PC or Acrobat if available. JPG export unchanged.
+  7. Settings → *Text erkennen* off → *Text behalten*: search still finds text, new scans are not recognized; off → *Text löschen*: text search finds nothing anymore; on again → everything is recognized again.
+  8. Duplicate a document → the copy is found by its text immediately. Delete a document → its text is gone from the search.
+  9. Library → *…* → *In Ordner verschieben* opens the folder list and moves the document (fixed in 1.5.0).
+  10. Expo Go: the app starts and works; *Texterkennung* in Settings says it is only available in the installed app; *Text kopieren* is not offered; title search works.
 
 ## ⏳ Phase D: Docs, repo & release hygiene
 - [x] README, ROADMAP, CHANGELOG, AGENTS.md updated; `docs/ARCHITECTURE.md` added; doc-vs-code discrepancies corrected (v1.2.0).

@@ -1,4 +1,32 @@
-# v1.4.0 – Commit plan (Phase S: security hardening)
+# Commit groups per release
+
+## v1.5.0 – Phase C: text recognition & searchable PDF
+
+Committed directly from the agent's working copy on the branch
+`feat/phase-c-ocr` (pushes to other branches than `main` build nothing), then
+fast-forward merged into `main` and pushed once → one IPA build and the
+release `v1.5.0`. Intermediate commits are not guaranteed to type-check on
+their own; the final state is verified (`npx tsc --noEmit`, `npm run lint`
+0 errors, `npm test` 159 passed / 1 skipped).
+
+New package: `expo-clipboard` (`npx expo install expo-clipboard`) – run
+`npm install` after pulling.
+
+| # | Message | Files |
+| --- | --- | --- |
+| 1 | `fix(library): open the folder list from the document menu` | `app/(tabs)/index.tsx` |
+| 2 | `chore: bump version to 1.5.0, add expo-clipboard and the test:ocr script` | `package.json`, `package-lock.json`, `app.json` |
+| 3 | `feat(ocr): add the local Apple Vision text recognition module` | `modules/scanflow-ocr/*`, `.gitignore` (only the root `ios/` / `android/` are generated) |
+| 4 | `feat(ocr): add OCR model, search normalization, Vision conversion, PDF text layer and queue` | `src/ocr/*`, `src/imaging/pdf.ts`, `__tests__/ocr.test.ts`, `__tests__/ocrScheduler.test.ts`, `__tests__/pdfTextLayer.test.ts` |
+| 5 | `feat(db): store recognized page text (schema v3) and search titles and text` | `src/db/*`, `src/services/PageTextRepository.ts`, `src/services/DocumentRepository.ts`, `__tests__/textSearch.test.ts`, `__tests__/migrations.test.ts` |
+| 6 | `feat(ocr): recognize pages in the background and export searchable PDFs` | `src/services/OcrService.ts`, `ImagePipelineService.ts`, `StorageService.ts`, `ExportService.ts`, `src/services/index.ts` |
+| 7 | `feat(ui): search page text with excerpts, copy text and text recognition settings` | `src/components/*`, `src/i18n/*`, `app/*` |
+| 8 | `ci: release only from main and v* tags, check that the OCR module is linked` | `.github/workflows/build-ipa.yml` |
+| 9 | `docs: text recognition and searchable PDF (v1.5.0)` | `CHANGELOG.md`, `README.md`, `AGENTS.md`, `docs/*` |
+
+---
+
+## v1.4.0 – Commit plan (Phase S: security hardening)
 
 The v1.4.0 change set was prepared outside the repository (no git credentials
 in the build environment). The delivery zip contains the **whole project**
@@ -18,7 +46,7 @@ Push once at the end: every push to `main` starts the IPA workflow
 > If it prints nothing (v1.2.0 / v1.3.0 were never committed) → use the
 > single commit at the end of this file instead.
 
-## Commit groups
+### Commit groups
 
 | # | Message | Files |
 | --- | --- | --- |
@@ -32,7 +60,7 @@ Push once at the end: every push to `main` starts the IPA workflow
 
 No files were deleted in this change set.
 
-## Commands (Command Prompt or PowerShell)
+### Commands (Command Prompt or PowerShell)
 
 1. Extract `scanflow-v1.4.0.zip`, select everything **inside** the extracted
    folder and drag it into the repo's top level (where `package.json` is) →
@@ -100,7 +128,7 @@ Notes
 - Existing settings and an existing 4-digit PIN are kept; the PIN is
   converted to the new format the first time it is entered.
 
-## Files in this change set (vs. v1.3.0)
+### Files in this change set (vs. v1.3.0)
 
 Added (10):
 

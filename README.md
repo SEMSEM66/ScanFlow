@@ -40,13 +40,22 @@ Designed as a clean, ad-free alternative to apps like CamScanner, ScanFlow proce
 - **🙈 Privacy:** *App-Vorschau verbergen* (blur in the app switcher, default on), *Screenshot-Schutz* (screenshots and recordings stay black; notice only while it is on), exported PDFs/JPGs are deleted as soon as the share sheet closes.
 - **🌐** Lock screen, PIN dialog and security settings in German and English.
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow, the pipeline and the app lock, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phases.
+### Phase C – Text recognition & searchable PDF (v1.5.0, installed app only)
+- **🔤 Automatic text recognition** with Apple Vision, fully offline: new and changed pages are recognized in the background while ScanFlow is open (German and English, open document first).
+- **🔎 Search titles and text:** the library search also finds words on the pages – ignoring case, umlauts and ß, with a short excerpt of the hit under the document.
+- **📋 Text kopieren:** recognized text page by page – select, copy a page, *Alles kopieren*, share.
+- **📄 Searchable PDFs:** an invisible text layer lies exactly over the words of the page image, so the PDF can be searched and the text copied in Files, Preview or Acrobat.
+- **⚙️ Settings → Texterkennung:** on/off with progress; when turning it off, keep or delete the recognized text.
+- Needs the IPA build (local native module `modules/scanflow-ocr`); in Expo Go the app works as before without text recognition.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow, the pipeline, the app lock and the text recognition, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phases.
 
 ### Known limitations
 - ScanFlow's *own* camera has no live edge overlay / auto-capture (Expo Go offers no camera frame processing); live detection comes from the iOS scanner.
 - The language of the iOS scanner's buttons follows the app's localizations: German/English in the IPA build; in Expo Go it depends on Expo Go (may be English).
 - Photo import / own camera detection: if the sheet lies in a clear sleeve or the page is cut off by the image frame, the detected outline can be wrong (e.g. include the sleeve) – check the corners in *Zuschneiden*. In the iOS scanner the outline is visible live before capture and the corners can be adjusted before saving.
-- OCR / searchable PDF: **not yet** (Phase C; hook prepared in `src/imaging/pdf.ts`).
+- Text recognition / searchable PDF only in the installed app (IPA), not in Expo Go. It runs only while ScanFlow is open; an existing library is recognized gradually. Letters outside Western European languages are replaced in the invisible PDF text (the page image is unchanged); handwriting is recognized poorly.
+- The title search distinguishes upper/lower case for umlauts (`MÜLLER` does not find the title *Müller*); the text search does not.
 - JPG export exports the current page only.
 - **The app lock protects the app's screens, not the files.** ScanFlow does not encrypt its database and page images itself (not possible in Expo Go); iOS Data Protection encrypts them when a **device passcode** is set. Deleted files are removed immediately, but flash storage cannot be wiped securely by an app.
 - iPhone / iCloud backups include your documents like any other app data (the PIN and lock settings are not restored to another device).
@@ -61,12 +70,13 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow, the pipeli
 - **Language:** TypeScript (`"strict": true`)
 - **Storage:** `expo-sqlite` (relational metadata) + `expo-file-system` (document scans & PDFs)
 - **Imaging:** `@shopify/react-native-skia` (GPU warp + enhancement shaders, included in Expo Go) + pure TypeScript detection
-- **Export:** `pdf-lib` (primary) / `expo-print` (fallback) + `expo-sharing`
+- **Export:** `pdf-lib` (primary, incl. invisible OCR text layer) / `expo-print` (fallback) + `expo-sharing`
+- **Text recognition:** Apple Vision via the local Expo module `modules/scanflow-ocr` (IPA build only) + `expo-clipboard`
 - **Tests:** Jest (`jest-expo` preset), headless Skia (CanvasKit), `node:sqlite` for migrations
 - **Camera & Photos:** `expo-camera` + `expo-image-picker`
 - **Security:** `expo-local-authentication` + `expo-secure-store`
 - **Host OS:** Windows (PowerShell)
-- **Target Device:** Real iPhone running **Expo Go**
+- **Target Device:** Real iPhone running **Expo Go** (development) and the sideloaded **IPA** from GitHub Releases (needed for text recognition)
 
 ---
 
@@ -104,6 +114,7 @@ npm run lint
 npm test                 # all tests, incl. GPU renderer tests (~5–7 min)
 npm run test:imaging     # fast subset: geometry, detection, page state, PDF, migrations
 npm run test:security    # fast subset: hashes, PIN, attempt limit, lock policy, AuthService, export cleanup
+npm run test:ocr         # fast subset: OCR text helpers, queue, PDF text layer, search SQL, migrations
 ```
 
 Optional: write before/after sample images (synthetic photo → all filters) and a sample PDF for visual review:
@@ -134,11 +145,13 @@ ScanFlow/
 │   ├── components/           # Reusable UI components matching /design (+ ScannerProvider: scan entry)
 │   ├── db/                   # SQLite schema, migrations (user_version), client
 │   ├── imaging/              # Pure TS imaging: geometry, detection, filters, SkSL shaders, renderer, PDF
+│   ├── ocr/                  # Pure TS OCR: text/search helpers, Vision conversion, PDF text layer, queue
 │   ├── security/             # Pure TS: SHA-256/PBKDF2, PIN records, attempt limit, lock policy
 │   ├── services/             # Repositories, storage, image pipeline, render, export, auth, privacy
 │   ├── i18n/                 # Translations (German & English)
 │   ├── theme/                # Design tokens & theme context
 │   └── types/                # TypeScript domain types
+├── modules/scanflow-ocr/     # Local Expo module (Swift): Apple Vision text recognition (IPA build only)
 ├── __tests__/                # Jest tests (+ helpers for headless Skia & synthetic photos)
 ├── tools/prototype/          # Python/OpenCV prototype of the enhancement algorithm (not bundled)
 ├── design/                   # UI design screenshots

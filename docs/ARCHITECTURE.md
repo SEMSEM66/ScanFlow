@@ -1,11 +1,12 @@
-# ScanFlow – Architecture: Scan & Image Pipeline (Phase A + B), App Lock & Security (v1.4.0)
+# ScanFlow – Architecture: Scan & Image Pipeline (Phase A + B), App Lock & Security (v1.4.0), Text Recognition (v1.5.0)
 
 This document describes how ScanFlow captures pages (iOS document scanner or
 its own camera), turns a phone photo into a page that looks like a real
 scanned PDF page, how page state is stored, and how the pieces are tested. It
 is the reference for anybody changing `src/imaging/` or the scan flow.
 Section 8 describes the app lock, the ScanFlow PIN and the privacy features
-(`src/security/`, v1.4.0).
+(`src/security/`, v1.4.0), section 9 the text recognition, the text search and
+the searchable PDF (`src/ocr/`, `modules/scanflow-ocr`, v1.5.0).
 
 ---
 
@@ -15,7 +16,9 @@ Section 8 describes the app lock, the ScanFlow PIN and the privacy features
   no shadows/gradients, correct page size (A4 / Letter) – like a flatbed scan.
 - **Expo Go only:** everything runs inside the standard Expo Go app.
   GPU work uses `@shopify/react-native-skia` (bundled in Expo Go);
-  everything else is pure TypeScript. No custom native code.
+  everything else is pure TypeScript. No custom native code – with one
+  exception since v1.5.0: text recognition (`modules/scanflow-ocr`, Apple
+  Vision) exists only in the IPA build; without it the app behaves as before.
 - **Non-destructive:** the original photo is never overwritten. Every edit
   (corners, rotation, filter, adjustments, page format) is stored as state in
   SQLite; images are *rendered* from the original on demand.
@@ -37,7 +40,7 @@ src/imaging/            Pure, framework-free TypeScript (testable in Node)
   filters.ts            7 filter presets → shader uniforms; CPU reference implementation
   shaders.ts            SkSL: WARP_SKSL (perspective), ENHANCE_SKSL (normalize/clean/sharpen/mode)
   renderer.ts           PageRenderer – Skia API injected (app: RN Skia, tests: CanvasKit)
-  pdf.ts                buildPdf() with pdf-lib, metadata, watermark, text-layer hook (OCR later)
+  pdf.ts                buildPdf() with pdf-lib, metadata, watermark, invisible OCR text layer
   pageState.ts          RENDER_VERSION, (de)serialisation of page state, renderKey()
 
 src/services/
@@ -56,7 +59,21 @@ src/components/ScannerProvider.tsx  App-wide scan entry (useScanner): scanner ch
 
 src/security/           Pure TypeScript: SHA-256/PBKDF2, PIN records, attempt limit, lock policy (see §8)
 
-src/db/migrations.ts    PRAGMA user_version based migrations (v1 → v2)
+src/ocr/                Pure TypeScript OCR core (see §9)
+  types.ts              OcrBox / OcrWord / OcrLine (normalized, origin top-left), PageTextRecord
+  text.ts               ocrKey(), reading order, plain text, search normalization, snippets, storage format
+  vision.ts             Native Vision result → OcrLine[] (y flip, cleanup, word-box plausibility)
+  pdfTextLayer.ts       Invisible text (render mode 3) per word for buildPdf()
+  scheduler.ts          Background queue (order, retries, pause/hold), dependencies injected
+
+modules/scanflow-ocr/   Local Expo module (Swift, Apple Vision) – IPA build only (see §9)
+
+src/services/
+  OcrService.ts            Background recognition, on/off setting, text for export / copy (see §9)
+  PageTextRepository.ts    page_text table: save, copy, pending pages, stats, snippets
+
+src/db/migrations.ts    PRAGMA user_version based migrations (v1 → v2 → v3)
+src/db/textSearch.ts    Search / page_text SQL (pure, tested against real SQLite)
 tools/prototype/        Python/OpenCV prototype of the enhancement algorithm (not bundled)
 __tests__/              Jest tests (Node + headless Skia/CanvasKit + node:sqlite)
 ```
@@ -166,7 +183,7 @@ Photo import (Documents tab: header button / empty state; add page → "Aus Foto
 
 ---
 
-## 5. Data model (SQLite schema v2)
+## 5. Data model (SQLite schema v3)
 
 `pages` gains the following columns (migration `src/db/migrations.ts`):
 
@@ -190,6 +207,11 @@ becomes the new `original_uri`, filter is reset to `original`, rotation to 0,
 and the previous photo is kept in `legacy_original_uri`. Proxies for legacy
 pages are created lazily on first open.
 
+**v2 → v3** (v1.5.0, additive): table `page_text` – one row per page with
+recognized text (see §9). `page_id` is the primary key and a foreign key to
+`pages(id)` with `ON DELETE CASCADE` (`PRAGMA foreign_keys = ON` is set in
+`database.ts`), so the text disappears with its page or document.
+
 ---
 
 ## 6. PDF structure
@@ -201,8 +223,10 @@ pages are created lazily on first open.
 - Metadata: Title (document name, Unicode), Creator/Producer `ScanFlow`,
   CreationDate/ModDate. No author, no device data.
 - Optional diagonal watermark (Helvetica, WinAnsi-safe text).
-- `textLayer` hook in `buildPdf()` (no-op today) – Phase C (OCR) adds an
-  invisible text layer here.
+- Invisible OCR text layer (v1.5.0, see §9): pages with up-to-date
+  recognized text get one text object with every word in render mode 3 → the
+  PDF is searchable and the text can be selected and copied. The optional
+  `textLayer` hook in `buildPdf()` still runs after it.
 - File: `<cache>/scanflow-export/<timestamp>/<sanitized title>.pdf`;
   "Cache leeren" in Settings deletes this export folder.
 
@@ -390,9 +414,120 @@ Run: `npm run test:security`.
 
 ---
 
-## 9. Not yet implemented (see ROADMAP)
+## 9. Text recognition, search & searchable PDF (v1.5.0)
+
+### Engine: local module `modules/scanflow-ocr`
+
+- Swift module `ScanFlowOcrModule` (Expo Modules API), autolinked from
+  `modules/` into the IPA build (`expo-module.config.json`, pod `ScanFlowOcr`;
+  CI step 7 fails if the pod is missing).
+- `recognizeAsync(uri, options)` – `VNRecognizeTextRequest` on its own serial
+  queue: level `accurate`, language correction on, languages `de-DE`, `en-US`
+  (only the supported ones are passed), `minimumTextHeight` 0.008 (Vision's
+  default 1/32 of the image height would skip small print). EXIF orientation is
+  passed to Vision.
+- Result: `{ width, height, languages, lines: [{ text, confidence, box,
+  words: [{ text, box }] }] }`; boxes normalized, origin **bottom-left**
+  (Vision). Words are the whitespace tokens of the top candidate; a word box is
+  the union of the boxes of its first and last character.
+- JS binding `modules/scanflow-ocr/index.ts`: `requireOptionalNativeModule`
+  → `null` in Expo Go. `ocrService.available` is the only switch the UI uses.
+
+### Coordinates and the staleness key
+
+- `OcrBox` is normalized to the **rendered page** (crop, perspective and
+  rotation applied), origin **top-left** – the geometry of the exported PDF
+  page. `vision.ts` flips the y axis and clamps to the page. Native word boxes
+  are used only when they look sane (one per token, left to right, on the
+  line, none spanning a multi-word line); otherwise words are spread over the
+  line box by character count.
+- The page format does not change normalized positions (the homography maps
+  the quad onto the whole page), filter and adjustments do not change the text.
+  Therefore `ocrKey()` = FNV-1a of `[OCR_VERSION, original_uri, corners,
+  rotation]`. Text whose `ocr_key` differs from the page's current key is
+  stale: it is not used and the page is recognized again. Bump `OCR_VERSION`
+  when the recognition setup changes (languages, level, minimum text height,
+  OCR image) – every page is then recognized again.
+
+### Table `page_text`
+
+| Column | Meaning |
+| --- | --- |
+| `page_id` | Primary key, FK → `pages(id)` `ON DELETE CASCADE` |
+| `ocr_key` | `ocrKey()` of the page state the text was recognized on |
+| `engine`, `languages` | `apple-vision`, `de-DE,en-US` |
+| `text` | Plain text: rows top to bottom, lines of one row joined by a tab |
+| `search_text` | `searchTextOf(text)`: hyphenation joined, lower case, diacritics / ß / ligatures folded, whitespace collapsed |
+| `lines` | Compact JSON `[[text, conf, x, y, w, h, [[word, x, y, w, h], …]], …]` (4 decimals) |
+| `created_at` | Time of recognition |
+
+Duplicating a document copies the rows of pages whose text is still current
+(`COPY_PAGE_TEXT_SQL`, only if the source key matches).
+
+### Background recognition (`OcrService` + `src/ocr/scheduler.ts`)
+
+- Started in `app/_layout.tsx` (2.5 s after start, again whenever the app
+  returns to the foreground); kicked after every saved scan / import, on focus
+  of the library and the document screen and after a rotation (debounced
+  1.2 s).
+- Pending pages = pages without text or with a stale key
+  (`PageTextRepository.pending()`). Order: the open document first, then the
+  newest documents, pages in page order. One page at a time, 350 ms pause in
+  between, only while the app is active and *Text erkennen* is on; paused while
+  an export runs (`ocrService.hold()`).
+- Per page: `imagePipeline.renderForOcr()` renders the page (filter
+  *Original*, no adjustments, 200 dpi, long side ≤ 2400 px, JPEG 90) through
+  the serial render queue into `cache/scanflow-ocr/`, the native module
+  recognizes it, the temp file is deleted. The result is saved only if the page
+  still exists with the same key (it may have been edited meanwhile).
+- Failures: 2 attempts per page state (the second in a later run); after 5
+  failures in a row the run stops until the next kick. Failed pages are shown
+  as *Text konnte nicht erkannt werden* with *Erneut versuchen*.
+- Setting *Text erkennen* (Keychain key `scanflow_ocr_enabled`, default on).
+  Turning it off stops new recognition; the user chooses to keep or delete the
+  stored text (`ocrService.clearAll()`).
+
+### Search (`src/db/textSearch.ts`)
+
+- Every query word (max. 6) must match: `title LIKE %word%` (SQLite LIKE:
+  case-insensitive for ASCII only) **or** a page of the document whose
+  `search_text LIKE %normalizeForSearch(word)%`. Wildcards are escaped
+  (`ESCAPE '\'`).
+- Excerpt: `SNIPPET_SQL` returns the text of the first matching page (lowest
+  page number) per document; `findSnippet()` cuts ~36 characters around the
+  first hit and returns the hit in its original spelling for bold display.
+
+### Searchable PDF (`src/ocr/pdfTextLayer.ts`)
+
+- `ExportService` asks `ocrService.linesForExport(page)` for every page:
+  stored current text, otherwise (OCR on and available) the page is recognized
+  now; errors → the page stays image-only.
+- One `BT … ET` block per page, `3 Tr` (invisible). Per word: Helvetica
+  (standard font, WinAnsi) at size = box height / (ascent + descent), `Tz`
+  horizontal scaling so the advance width equals the box width (5–1000 %),
+  baseline = box bottom + descent. Words of a line are separated by a trailing
+  space (it falls into the gap to the next word), so copied text has spaces.
+- Characters outside WinAnsi are replaced by a close letter (ł → l, ș → s …)
+  or `?` – only in the invisible layer.
+- Verified in `__tests__/pdfTextLayer.test.ts`: content stream structure and,
+  with poppler's `pdftotext -bbox`, the position of every word (≤ 1–2.5 pt).
+
+### Tests
+
+`__tests__/ocr.test.ts` (key, reading order, normalization, snippets,
+storage format, Vision conversion), `ocrScheduler.test.ts` (order, retries,
+loop guard, hold, debounce), `pdfTextLayer.test.ts`, `textSearch.test.ts`
+(search, snippets, copy, cascade on real SQLite), `migrations.test.ts`
+(v2 → v3). Run: `npm run test:ocr`. The Swift module itself can only be
+compiled in CI (macOS) and tested on the iPhone (ROADMAP STOP C).
+
+---
+
+## 10. Not yet implemented (see ROADMAP)
 
 - Live edge overlay / auto-capture in ScanFlow's *own* camera (`app/scan.tsx`).
   Live detection and auto-capture are provided by the iOS document scanner
   (default); Expo Go offers no camera frame processors for a custom overlay.
-- OCR / searchable PDF (Phase C, hook prepared in `buildPdf`).
+- Text recognition in Expo Go (needs the native module), OCR of handwriting,
+  normalized (umlaut-insensitive) title search, Unicode font for non-WinAnsi
+  text in the PDF layer.
