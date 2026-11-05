@@ -11,6 +11,20 @@ class StorageService {
     return `${FileSystem.cacheDirectory || ''}scanflow-export/`;
   }
 
+  /** Temporary page images for text recognition – deleted right after use. */
+  get ocrTempDir(): string {
+    return `${FileSystem.cacheDirectory || ''}scanflow-ocr/`;
+  }
+
+  /** Writes a temporary file below the cache directory (remove it with deleteTempFile). */
+  async writeTempBase64(base64: string, prefix: string, extension: string): Promise<string> {
+    const dir = await this.ensureDir(this.ocrTempDir);
+    const random = Math.random().toString(36).substring(2, 8);
+    const target = `${dir}${prefix.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}_${random}.${extension}`;
+    await FileSystem.writeAsStringAsync(target, base64, { encoding: FileSystem.EncodingType.Base64 });
+    return target;
+  }
+
   async ensureDir(dir: string): Promise<string> {
     const info = await FileSystem.getInfoAsync(dir);
     if (!info.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
@@ -157,12 +171,14 @@ class StorageService {
     return total;
   }
 
-  /** Removes temporary export files (PDF/JPG). */
+  /** Removes temporary export files (PDF/JPG) and leftover OCR page images. */
   async clearCaches(): Promise<void> {
-    try {
-      await FileSystem.deleteAsync(this.exportDir, { idempotent: true });
-    } catch {
-      // ignore
+    for (const dir of [this.exportDir, this.ocrTempDir]) {
+      try {
+        await FileSystem.deleteAsync(dir, { idempotent: true });
+      } catch {
+        // ignore
+      }
     }
   }
 

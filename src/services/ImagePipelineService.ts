@@ -5,6 +5,7 @@ import {
   PageRenderer,
   detectDocument,
   renderKey,
+  DEFAULT_ADJUSTMENTS,
   JPEG_QUALITY,
   type DetectionResult,
   type ExportDpi,
@@ -32,6 +33,10 @@ export const PREVIEW_JPEG_QUALITY = 85;
 export const THUMB_LONG_SIDE = 160;
 /** Max. long side of stored originals (12 MP camera photos stay untouched). */
 export const ORIGINAL_MAX_LONG_SIDE = 4096;
+/** Text recognition input: page geometry of the export, unfiltered, ~200 dpi. */
+export const OCR_DPI = 200;
+export const OCR_MAX_LONG_SIDE = 2400;
+export const OCR_JPEG_QUALITY = 90;
 
 export interface ImportedImage {
   originalUri: string;
@@ -273,6 +278,30 @@ class ImagePipelineService {
           heightPx: res.heightPx,
           dpi: res.dpi,
         };
+      } finally {
+        if (!this.decoded.has(page.originalUri)) src.dispose?.();
+      }
+    });
+  }
+
+  /**
+   * Page image for text recognition: same geometry as the export (crop,
+   * perspective, rotation, page format) from the original, but without filter
+   * and adjustments, written to a temporary file (delete it after use).
+   */
+  renderForOcr(page: PageLike): Promise<{ uri: string; widthPx: number; heightPx: number }> {
+    return this.enqueue(async () => {
+      const src = await this.decodeFile(page.originalUri, false);
+      try {
+        const res = this.r.render(src, {
+          ...this.options(page, OCR_DPI, OCR_MAX_LONG_SIDE),
+          filter: 'original',
+          adjustments: DEFAULT_ADJUSTMENTS,
+        });
+        const base64 = this.r.encodeJpeg(res.image, OCR_JPEG_QUALITY);
+        res.image.dispose?.();
+        const uri = await storageService.writeTempBase64(base64, 'ocr', 'jpg');
+        return { uri, widthPx: res.widthPx, heightPx: res.heightPx };
       } finally {
         if (!this.decoded.has(page.originalUri)) src.dispose?.();
       }

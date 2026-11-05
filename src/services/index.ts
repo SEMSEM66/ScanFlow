@@ -6,3 +6,5 @@ export * from './PageRenderService';
 export * from './ExportService';
 export * from './ScanImportService';
 export * from './DocumentScannerService';
+export * from './PageTextRepository';
+export * from './OcrService';

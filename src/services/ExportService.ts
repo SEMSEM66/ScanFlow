@@ -2,6 +2,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { buildPdf, estimatePdfKb, ESTIMATED_PAGE_KB } from '../imaging/pdf';
+import type { OcrLine } from '../ocr/types';
 import type { DocumentPage, ExportDpi, ExportFormat, ExportQuality } from '../types';
 import { imagePipeline } from './ImagePipelineService';
 import { storageService } from './StorageService';
@@ -11,6 +12,11 @@ export interface ExportOptions {
   quality: ExportQuality;
   /** Diagonal watermark text, already localized (e.g. "VERTRAULICH"). */
   watermark?: string;
+  /**
+   * Recognized text of a page for the invisible PDF text layer (searchable
+   * PDF); null / errors → page without text layer.
+   */
+  textForPage?: (page: DocumentPage, index: number) => Promise<OcrLine[] | null>;
   onProgress?: (done: number, total: number) => void;
 }
 
@@ -54,7 +60,8 @@ export class ExportService {
   /**
    * Renders every page from its original (crop, perspective, filter, rotation,
    * adjustments) at the chosen DPI and writes a PDF with exactly one
-   * full-bleed image per page at the exact page size (A4 / Letter / custom).
+   * full-bleed image per page at the exact page size (A4 / Letter / custom),
+   * plus an invisible text layer where recognized text is available.
    */
   async generatePdf(title: string, pages: DocumentPage[], opts: ExportOptions): Promise<string> {
     const dir = await this.freshExportDir();
@@ -63,8 +70,9 @@ export class ExportService {
       const doc = await buildPdf(
         pages.length,
         async (i) => {
+          const text = await this.pageText(pages[i], i, opts);
           const r = await imagePipeline.renderForExport(pages[i], opts.dpi, opts.quality);
-          return { jpeg: r.base64, widthPt: r.widthPt, heightPt: r.heightPt };
+          return { jpeg: r.base64, widthPt: r.widthPt, heightPt: r.heightPt, text };
         },
         {
           title,
@@ -78,6 +86,17 @@ export class ExportService {
     } catch (err) {
       console.warn('[ExportService] pdf-lib export failed, falling back to expo-print', err);
       return this.generatePdfWithPrint(title, pages, opts, dir);
+    }
+  }
+
+  /** Text layer of one page; a failing recognition only costs this page its text layer. */
+  private async pageText(page: DocumentPage, index: number, opts: ExportOptions): Promise<OcrLine[] | null> {
+    if (!opts.textForPage) return null;
+    try {
+      return await opts.textForPage(page, index);
+    } catch (err) {
+      console.warn('[ExportService] No text layer for page', index + 1, err);
+      return null;
     }
   }
 
