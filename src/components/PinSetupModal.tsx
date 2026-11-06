@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from './ui/Icon';
 import { capsule, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { authService } from '../services/AuthService';
@@ -220,7 +220,7 @@ export const PinSetupModal: React.FC<PinSetupModalProps> = ({ visible, flow, onC
 
         <View style={styles.centerSection}>
           <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-            <Ionicons name="keypad-outline" size={38} color={colors.primary} />
+            <Icon name="keyboard" size={38} color={colors.primary} />
           </View>
           <Text style={[typography.title2, styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
             {title}

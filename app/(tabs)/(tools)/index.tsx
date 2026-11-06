@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../../src/components/ui/Icon';
 import { useTheme } from '../../../src/theme';
 import { useTranslation } from '../../../src/i18n';
 
@@ -13,7 +13,7 @@ export default function ToolsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right']}>
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.center}>
       <View style={styles.center}>
-        <Ionicons name="construct-outline" size={48} color={colors.textMuted} />
+        <Icon name="wrench.and.screwdriver" size={48} color={colors.textMuted} />
         <Text style={[typography.title3, { color: colors.textPrimary, marginTop: spacing.md }]}>
           {t.tools.comingTitle}
         </Text>

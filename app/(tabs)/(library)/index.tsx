@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../../src/components/ui/Icon';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { capsule, useTheme } from '../../../src/theme';
 import { useTranslation } from '../../../src/i18n';
@@ -287,7 +287,7 @@ export default function LibraryScreen() {
         ) : (
           <View style={styles.emptyContainer}>
             <View style={[styles.emptyIconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-              <Ionicons name="document-text-outline" size={48} color={colors.primary} />
+              <Icon name="doc.text" size={48} color={colors.primary} />
             </View>
             <Text style={[styles.emptyTitle, typography.title2, { color: colors.textPrimary, marginTop: spacing.base }]}>{isSearching ? t.common.noItems : t.library.emptyTitle}</Text>
             <Text style={[styles.emptySubtitle, typography.body, { color: colors.textSecondary, marginTop: spacing.xs, marginHorizontal: spacing.xl }]}>{isSearching ? t.library.noResultsHint : t.library.emptySubtitle}</Text>

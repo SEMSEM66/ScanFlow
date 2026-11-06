@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from './ui/Icon';
 import { capsule, corner, hairline, radius, shadows, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 
@@ -46,7 +46,7 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
         style={styles.actionItem}
       >
         <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-          <Ionicons name="refresh-outline" size={22} color={colors.textPrimary} />
+          <Icon name="arrow.clockwise" size={22} color={colors.textPrimary} />
         </View>
         <Text style={[typography.caption2, styles.label, { color: colors.textPrimary }]}>
           {t.filters.rotate}
@@ -61,7 +61,7 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
         style={styles.actionItem}
       >
         <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-          <Ionicons name="crop-outline" size={22} color={colors.textPrimary} />
+          <Icon name="crop" size={22} color={colors.textPrimary} />
         </View>
         <Text style={[typography.caption2, styles.label, { color: colors.textPrimary }]}>
           {t.filters.crop}
@@ -76,7 +76,7 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
         style={styles.actionItem}
       >
         <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-          <Ionicons name="options-outline" size={22} color={colors.textPrimary} />
+          <Icon name="slider.horizontal.3" size={22} color={colors.textPrimary} />
         </View>
         <Text style={[typography.caption2, styles.label, { color: colors.textPrimary }]}>
           {t.filters.adjust}
@@ -91,7 +91,7 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
         style={styles.actionItem}
       >
         <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-          <Ionicons name="trash-outline" size={22} color={colors.danger} />
+          <Icon name="trash" size={22} color={colors.danger} />
         </View>
         <Text style={[typography.caption2, styles.label, { color: colors.danger }]}>
           {t.filters.deletePage}
@@ -106,7 +106,7 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
         style={styles.actionItem}
       >
         <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-          <Ionicons name="document-attach-outline" size={22} color={colors.primary} />
+          <Icon name="doc.badge.plus" size={22} color={colors.primary} />
         </View>
         <Text style={[typography.caption2, styles.label, { color: colors.primary }]}>
           {t.filters.addPage}

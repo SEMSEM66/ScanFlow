@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon, type IconName } from './ui/Icon';
 import { capsule, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+type IoniconName = IconName;
 
 export interface PinPadAction {
   icon: IoniconName;
@@ -120,7 +120,7 @@ export const PinPad: React.FC<PinPadProps> = ({
                     accessibilityLabel={leftAction.accessibilityLabel}
                     style={[styles.key, { width: key, height: key }, capsule(key)]}
                   >
-                    <Ionicons name={leftAction.icon} size={28} color={colors.primary} />
+                    <Icon name={leftAction.icon} size={28} color={colors.primary} />
                   </TouchableOpacity>
                 );
               }
@@ -135,7 +135,7 @@ export const PinPad: React.FC<PinPadProps> = ({
                     accessibilityLabel={t.security.deleteDigit}
                     style={[styles.key, { width: key, height: key, opacity: value.length === 0 ? 0.3 : 1 }, capsule(key)]}
                   >
-                    <Ionicons name="backspace-outline" size={26} color={colors.textPrimary} />
+                    <Icon name="delete.left" size={26} color={colors.textPrimary} />
                   </TouchableOpacity>
                 );
               }

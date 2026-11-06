@@ -14,7 +14,7 @@ import {
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../src/components/ui/Icon';
 import { SegmentedControl } from '../src/components/ui/NativeSegmentedControl';
 import { Canvas, Path, Skia, FillType } from '@shopify/react-native-skia';
 import { useTheme, corner, capsule, radius } from '../src/theme';
@@ -220,7 +220,7 @@ export default function CropScreen() {
 
       <View style={styles.noticeContainer}>
         <View style={styles.noticePill}>
-          <Ionicons name="crop" size={14} color={ACCENT} style={{ marginRight: 6 }} />
+          <Icon name="crop" size={14} color={ACCENT} style={{ marginRight: 6 }} />
           <Text style={styles.noticeText}>{t.crop.instruction}</Text>
         </View>
       </View>
@@ -287,16 +287,16 @@ export default function CropScreen() {
           {detecting ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <Ionicons name="scan-outline" size={16} color="#FFFFFF" />
+            <Icon name="viewfinder" size={16} color="#FFFFFF" />
           )}
           <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.pillText}>{t.crop.autoDetect}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.pillButton} onPress={() => setCorners(FULL_QUAD)} disabled={loading}>
-          <Ionicons name="expand-outline" size={16} color="#FFFFFF" />
+          <Icon name="arrow.up.left.and.arrow.down.right" size={16} color="#FFFFFF" />
           <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.pillText}>{t.crop.fullImage}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.pillButton} onPress={() => setCorners(initialCorners)} disabled={loading}>
-          <Ionicons name="refresh-outline" size={16} color="#FFFFFF" />
+          <Icon name="arrow.clockwise" size={16} color="#FFFFFF" />
           <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.pillText}>{t.crop.reset}</Text>
         </TouchableOpacity>
       </View>

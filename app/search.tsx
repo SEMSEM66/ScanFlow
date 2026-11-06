@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon, type IconName } from '../src/components/ui/Icon';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { capsule, radius, useTheme } from '../src/theme';
 import { Thumbnail } from '../src/components';
@@ -100,7 +100,7 @@ export default function SearchScreen() {
         style={[styles.row, { paddingHorizontal: spacing.base, borderBottomColor: colors.borderLight }]}
       >
         <Thumbnail uri={item.thumbnailUri} width={44} height={56} radius={radius.xs} style={styles.thumb}>
-          {item.thumbnailUri ? null : <Ionicons name="document-text-outline" size={22} color={colors.textMuted} />}
+          {item.thumbnailUri ? null : <Icon name="doc.text" size={22} color={colors.textMuted} />}
         </Thumbnail>
         <View style={styles.rowText}>
           <Text numberOfLines={1} style={[typography.headline, { color: colors.textPrimary }]}>
@@ -117,15 +117,15 @@ export default function SearchScreen() {
             </Text>
           ) : null}
         </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={styles.chevron} />
+        <Icon name="chevron.right" size={18} color={colors.textMuted} style={styles.chevron} />
       </TouchableOpacity>
     );
   };
 
-  const message = (icon: keyof typeof Ionicons.glyphMap, title: string, text: string) => (
+  const message = (icon: IconName, title: string, text: string) => (
     <View style={[styles.message, { paddingHorizontal: spacing.xl }]}>
       <View style={[styles.messageIcon, { backgroundColor: colors.surfaceSubdued }]}>
-        <Ionicons name={icon} size={30} color={colors.primary} />
+        <Icon name={icon} size={30} color={colors.primary} />
       </View>
       <Text style={[typography.title3, styles.centered, { color: colors.textPrimary, marginTop: spacing.base }]}>{title}</Text>
       <Text style={[typography.body, styles.centered, { color: colors.textSecondary, marginTop: spacing.xs }]}>{text}</Text>
@@ -134,7 +134,7 @@ export default function SearchScreen() {
 
   let content: React.ReactNode;
   if (!isSearching) {
-    content = message('search', t.search.hintTitle, ocrService.available ? t.search.hintText : t.search.hintTitlesOnly);
+    content = message('magnifyingglass', t.search.hintTitle, ocrService.available ? t.search.hintText : t.search.hintTitlesOnly);
   } else if (results === null) {
     content = (
       <View style={styles.loading}>
@@ -142,7 +142,7 @@ export default function SearchScreen() {
       </View>
     );
   } else if (results.documents.length === 0) {
-    content = message('document-text-outline', t.common.noItems, t.library.noResultsHint);
+    content = message('doc.text', t.common.noItems, t.library.noResultsHint);
   } else {
     content = (
       <FlatList
@@ -169,7 +169,7 @@ export default function SearchScreen() {
           },
         ]}
       >
-        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+        <Icon name="magnifyingglass" size={18} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
           placeholder={ocrService.available ? t.library.searchPlaceholderText : t.library.searchPlaceholder}
           placeholderTextColor={colors.textMuted}
@@ -187,7 +187,7 @@ export default function SearchScreen() {
             accessibilityRole="button"
             accessibilityLabel={t.common.reset}
           >
-            <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+            <Icon name="xmark.circle.fill" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         )}
       </View>

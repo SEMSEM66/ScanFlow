@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../src/components/ui/Icon';
 import { useTheme, capsule } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import {
@@ -388,7 +388,7 @@ export default function DocumentDetailScreen() {
       {/* Review hint: imported pages where no document edge was found */}
       {reviewPages.length > 0 ? (
         <Card radius={radius.md} color={colors.primarySubdued} borderColor={colors.primaryBorder} style={styles.reviewBanner}>
-          <Ionicons name="crop-outline" size={18} color={colors.primary} />
+          <Icon name="crop" size={18} color={colors.primary} />
           <Text numberOfLines={2} style={[typography.footnote, styles.reviewText, { color: colors.textPrimary }]}>
             {reviewPages.length === 1
               ? formatString(t.scan.reviewOne, { page: pages.indexOf(reviewPages[0]) + 1 })
@@ -403,7 +403,7 @@ export default function DocumentDetailScreen() {
             accessibilityLabel={t.common.close}
             style={styles.reviewClose}
           >
-            <Ionicons name="close" size={16} color={colors.textSecondary} />
+            <Icon name="xmark" size={16} color={colors.textSecondary} />
           </TouchableOpacity>
         </Card>
       ) : null}
@@ -451,7 +451,7 @@ export default function DocumentDetailScreen() {
               onPress={() => setCurrentPageIndex((prev) => Math.max(0, prev - 1))}
               style={[styles.arrowButton, { opacity: currentPageIndex === 0 ? 0.3 : 1 }]}
             >
-              <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
+              <Icon name="chevron.left" size={20} color={colors.textPrimary} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setIsPageEditorVisible(true)}>
               <Text style={[typography.footnote, { color: colors.textSecondary, fontWeight: '600' }]}>
@@ -463,7 +463,7 @@ export default function DocumentDetailScreen() {
               onPress={() => setCurrentPageIndex((prev) => Math.min(pages.length - 1, prev + 1))}
               style={[styles.arrowButton, { opacity: currentPageIndex === pages.length - 1 ? 0.3 : 1 }]}
             >
-              <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
+              <Icon name="chevron.right" size={20} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
         )}
@@ -474,7 +474,7 @@ export default function DocumentDetailScreen() {
           disabled={busy || scanner.busy}
           style={[styles.addMoreButton, { opacity: busy || scanner.busy ? 0.5 : 1 }]}
         >
-          <Ionicons name="add-circle" size={20} color={colors.primary} />
+          <Icon name="plus.circle.fill" size={20} color={colors.primary} />
           <Text style={[typography.subhead, styles.addMoreText, { color: colors.primary }]}>{t.scan.addMorePages}</Text>
         </TouchableOpacity>
       </View>

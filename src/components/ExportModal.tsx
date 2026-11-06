@@ -6,7 +6,7 @@ import {
   ActivityIndicator,
   Switch,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from './ui/Icon';
 import { SegmentedControl } from './ui/NativeSegmentedControl';
 import { hairline, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
@@ -115,7 +115,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         {format === 'pdf' && (
           <View style={[styles.watermarkRow, { borderColor: colors.borderLight }]}>
             <View style={styles.watermarkTextWrap}>
-              <Ionicons name="shield-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+              <Icon name="shield" size={18} color={colors.primary} style={{ marginRight: 8 }} />
               <Text style={[typography.body, { color: colors.textPrimary }]}>
                 {t.export.watermark} {language === 'de' ? `„${t.export.watermarkText}“` : `“${t.export.watermarkText}”`}
               </Text>
@@ -130,7 +130,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
         {/* File size info row */}
         <View style={styles.sizeInfoRow}>
-          <Ionicons name="document-outline" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
+          <Icon name="doc" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
           <Text style={[typography.body, { color: colors.textSecondary }]}>
             {formatString(t.export.estimatedSize, { size: estimatedSize })}
           </Text>

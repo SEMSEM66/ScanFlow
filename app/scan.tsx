@@ -17,7 +17,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../src/components/ui/Icon';
 import { useTheme, corner, capsule, corners, radius } from '../src/theme';
 import { useTranslation } from '../src/i18n';
 import { saveScan, ocrService } from '../src/services';
@@ -218,7 +218,7 @@ export default function ScanScreen() {
         {navigationControls}
         <View style={styles.permissionCard}>
           <View style={[styles.permissionIconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-            <Ionicons name="camera-outline" size={54} color={colors.primary} />
+            <Icon name="camera" size={54} color={colors.primary} />
           </View>
           <Text style={[typography.title2, styles.permissionTitle, { color: colors.textPrimary }]}>
             {t.scan.cameraPermissionTitle}
@@ -314,7 +314,7 @@ export default function ScanScreen() {
                 onPress={handleGalleryImport}
                 style={styles.galleryButton}
               >
-                <Ionicons name="images" size={26} color="#FFFFFF" />
+                <Icon name="photo.on.rectangle" size={26} color="#FFFFFF" />
               </TouchableOpacity>
             )}
           </View>
@@ -378,7 +378,7 @@ export default function ScanScreen() {
               onPress={() => setIsReviewOpen(false)}
               style={styles.reviewCloseButton}
             >
-              <Ionicons name="close" size={22} color="#FFFFFF" />
+              <Icon name="xmark" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
@@ -395,7 +395,7 @@ export default function ScanScreen() {
                   onPress={() => removePageFromReview(idx)}
                   style={styles.deletePageButton}
                 >
-                  <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+                  <Icon name="trash" size={18} color="#FFFFFF" />
                   <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.deletePageText}>
                     {t.common.delete}
                   </Text>

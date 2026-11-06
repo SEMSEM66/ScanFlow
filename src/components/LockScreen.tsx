@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from './ui/Icon';
 import { capsule, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { authService, type PinResult, type UnlockCapabilities } from '../services/AuthService';
@@ -94,7 +94,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ checking, caps, authBusy
 
   const biometryLabel =
     caps?.biometry === 'faceId' ? t.security.unlockFaceId : caps?.biometry === 'touchId' ? t.security.unlockTouchId : t.security.unlockPasscode;
-  const biometryIcon = caps?.biometry === 'touchId' ? 'finger-print' : caps?.biometry === 'faceId' ? 'scan-outline' : 'keypad-outline';
+  const biometryIcon = caps?.biometry === 'touchId' ? 'touchid' : caps?.biometry === 'faceId' ? 'faceid' : 'keyboard';
   const noMethod = !!caps && !caps.passcodeSet && caps.pinLength === null;
 
   const message =
@@ -117,7 +117,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ checking, caps, authBusy
         <>
           <View style={styles.header}>
             <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-              <Ionicons name="lock-closed" size={36} color={colors.primary} />
+              <Icon name="lock.fill" size={36} color={colors.primary} />
             </View>
             <Text style={[typography.title2, styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
               {t.security.lockedTitle}
@@ -169,7 +169,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ checking, caps, authBusy
                   { backgroundColor: colors.primary, opacity: authBusy ? 0.6 : 1 },
                 ]}
               >
-                <Ionicons name={biometryIcon} size={22} color="#FFFFFF" style={styles.unlockIcon} />
+                <Icon name={biometryIcon} size={22} color="#FFFFFF" style={styles.unlockIcon} />
                 <Text style={[typography.bodyBold, { color: '#FFFFFF' }]}>{biometryLabel}</Text>
               </TouchableOpacity>
             </View>

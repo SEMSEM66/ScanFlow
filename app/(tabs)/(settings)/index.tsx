@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '../../../src/components/ui/Icon';
 import { SegmentedControl } from '../../../src/components/ui/NativeSegmentedControl';
 import { useFocusEffect } from 'expo-router';
 import { capsule, concentric, corner, hairline, radius, useTheme } from '../../../src/theme';
@@ -404,7 +404,7 @@ export default function SettingsScreen() {
           <View style={styles.toggleRow}>
             <View style={styles.toggleRowLeft}>
               <View style={[styles.iconBox, { backgroundColor: colors.primarySubdued }]}>
-                <Ionicons name="document-text-outline" size={20} color={colors.primary} />
+                <Icon name="doc.text" size={20} color={colors.primary} />
               </View>
               <View style={styles.rowText}>
                 <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>{t.ocr.enable}</Text>
@@ -427,7 +427,7 @@ export default function SettingsScreen() {
             <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]}>{ocrStatus}</Text>
           </View>
           <View style={[styles.securityFeatureBadge, { backgroundColor: colors.surfaceSubdued, marginTop: 12 }]}>
-            <Ionicons name="phone-portrait-outline" size={16} color={colors.success} style={{ marginRight: 8 }} />
+            <Icon name="iphone" size={16} color={colors.success} style={{ marginRight: 8 }} />
             <Text style={[typography.caption2, { color: colors.textSecondary, flex: 1 }]}>{t.ocr.privacyNote}</Text>
           </View>
         </View>
@@ -441,7 +441,7 @@ export default function SettingsScreen() {
           <View style={styles.toggleRow}>
             <View style={styles.toggleRowLeft}>
               <View style={[styles.iconBox, { backgroundColor: colors.primarySubdued }]}>
-                <Ionicons name="lock-closed" size={20} color={colors.primary} />
+                <Icon name="lock.fill" size={20} color={colors.primary} />
               </View>
               <View style={styles.rowText}>
                 <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>{t.settings.appLock}</Text>
@@ -497,7 +497,7 @@ export default function SettingsScreen() {
             <View style={styles.actionRow}>
               <View style={styles.toggleRowLeft}>
                 <View style={[styles.iconBox, { backgroundColor: colors.surfaceSubdued }]}>
-                  <Ionicons name="keypad-outline" size={20} color={colors.textPrimary} />
+                  <Icon name="keyboard" size={20} color={colors.textPrimary} />
                 </View>
                 <View style={styles.rowText}>
                   <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>{t.security.pinTitle}</Text>
@@ -540,7 +540,7 @@ export default function SettingsScreen() {
           <View style={[styles.toggleRow, styles.divided, { borderTopColor: colors.borderLight }]}>
             <View style={styles.toggleRowLeft}>
               <View style={[styles.iconBox, { backgroundColor: colors.surfaceSubdued }]}>
-                <Ionicons name="albums-outline" size={20} color={colors.textPrimary} />
+                <Icon name="square.stack" size={20} color={colors.textPrimary} />
               </View>
               <View style={styles.rowText}>
                 <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>{t.security.hidePreview}</Text>
@@ -560,7 +560,7 @@ export default function SettingsScreen() {
           <View style={[styles.toggleRow, styles.divided, { borderTopColor: colors.borderLight }]}>
             <View style={styles.toggleRowLeft}>
               <View style={[styles.iconBox, { backgroundColor: colors.surfaceSubdued }]}>
-                <Ionicons name="eye-off-outline" size={20} color={colors.textPrimary} />
+                <Icon name="eye.slash" size={20} color={colors.textPrimary} />
               </View>
               <View style={styles.rowText}>
                 <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>{t.security.screenCapture}</Text>
@@ -578,7 +578,7 @@ export default function SettingsScreen() {
 
           {/* What deleting and local storage really mean */}
           <View style={[styles.securityFeatureBadge, { backgroundColor: colors.surfaceSubdued, marginTop: 14 }]}>
-            <Ionicons name="phone-portrait-outline" size={16} color={colors.success} style={{ marginRight: 8 }} />
+            <Icon name="iphone" size={16} color={colors.success} style={{ marginRight: 8 }} />
             <Text style={[typography.caption2, { color: colors.textSecondary, flex: 1 }]}>{t.security.storageNote}</Text>
           </View>
         </View>
@@ -647,7 +647,7 @@ export default function SettingsScreen() {
         {/* Section 6: Privacy Guarantee */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: spacing.lg, marginBottom: 40 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons name="shield-checkmark" size={24} color={colors.success} style={{ marginRight: 12 }} />
+            <Icon name="checkmark.shield" size={24} color={colors.success} style={{ marginRight: 12 }} />
             <View style={{ flex: 1 }}>
               <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
                 {t.settings.privacy}
