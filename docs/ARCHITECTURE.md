@@ -689,12 +689,40 @@ All native functions live in the single local Expo module `modules/scanflow-ocr`
 
 ---
 
-## 16. Not yet implemented (see ROADMAP)
+## 16. Compliance, Legal & Release Architecture (v2.0.0-rc, M6 & M7)
+
+### Apple Privacy Manifest (`PrivacyInfo.xcprivacy`, `app.json`)
+- Declared in `app.json` under `ios.privacyManifests` according to Apple's Spring 2024 compliance policy.
+- `NSPrivacyTracking`: `false`.
+- `NSPrivacyTrackingDomains`: `[]` (empty array).
+- `NSPrivacyCollectedDataTypes`: `[]` (empty array — 0 personal data, analytics, or telemetry collected).
+- Required Reason APIs declared with official justification codes:
+  - `UserDefaults` (`CA92.1`): persisting app configuration (theme, language, scanner preferences) locally.
+  - `FileTimestamp` (`C617.1`): maintaining document creation and modification timestamps inside the sandbox.
+  - `DiskSpace` (`E174.1`): checking available storage space before large multi-page scans.
+  - `SystemBootTime` (`35F9.1`): measuring elapsed time for App Lock background timeout policy.
+
+### Zero-Network Guarantee & CI Verification (`scripts/check-network.mjs`)
+- Automated regex audit script `npm run check:network` scans all TypeScript and Swift source files in `src/`, `app/`, and `modules/`.
+- Verifies zero usage of networking APIs (`fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`) and zero imports of tracking/analytics SDKs.
+
+### In-App Legal Views (`LegalModal.tsx`)
+- Native formSheet modal accessible via *Einstellungen → Über* displaying complete, offline-rendered legal documents:
+  - **Datenschutzerklärung (Privacy Policy):** details zero-data collection, local on-device processing, and device permissions.
+  - **Nutzungsbedingungen (Terms of Service / EULA):** covers local licensing, non-destructive editing, visual signature disclaimer (not a QES), and subscription auto-renewal terms.
+  - **Lizenzen (Open Source):** attribution for React Native, Expo, Skia, pdf-lib, etc.
+
+### Release & Distribution Pipelines (`docs/RELEASING.md`)
+- **Path A (EAS Build & Submit):** primary cloud distribution pipeline using Expo Application Services for automated certificate management and TestFlight submission.
+- **Path B (GitHub Actions):** CI workflow (`.github/workflows/build-ipa.yml`) for unsigned sideloadable IPAs on `macos-15`, and prepared template (`.github/workflows/appstore-release.yml.disabled`) for signed App Store releases.
+
+---
+
+## 17. Not yet implemented / Deferred (see ROADMAP)
 
 - Live edge overlay / auto-capture in ScanFlow's *own* camera (`app/scan.tsx`).
   Live detection and auto-capture are provided by the iOS document scanner
   (default); Expo Go offers no camera frame processors for a custom overlay.
 - Text recognition, PDF import rasterization, and PDF password encryption in
   Expo Go (require the native `modules/scanflow-ocr` module in the IPA build).
-- Milestones M6–M7 of Phase V2 (store compliance, legal screens, store
-  package & TestFlight submission prep – see `docs/ROADMAP.md`).
+- Deferred Phase V2 P2 spikes (App Intents / Siri Shortcuts, WidgetKit Lock Screen Widget, Share Extension — deferred to v2.1 per `docs/spikes/`).

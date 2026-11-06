@@ -1,80 +1,149 @@
-# Releasing ScanFlow & CI Budget Guide
+# ScanFlow — Release & Distribution Guide (v2.0.0-rc)
 
-This document explains how ScanFlow builds iOS IPA packages from a Windows machine without a Mac, how GitHub Actions macOS minutes are budgeted, how to switch between branch-triggered and tag-only builds, and the preparation path for signed TestFlight / App Store builds (Milestone M7).
-
----
-
-## 1. GitHub Actions macOS Budget & Expected CI Cost per Release
-
-ScanFlow compiles its iOS binary and the local Swift module (`modules/scanflow-ocr`) on GitHub Actions using `macos-15` runners (`.github/workflows/build-ipa.yml`).
-
-### Expected CI Minutes per Build
-- **Wall-clock time per run:** ~11 to 15 minutes (`npm ci` with cache + `expo prebuild` + CocoaPods + `xcodebuild` Release ARM64 + `.ipa` packaging + GitHub Release upload).
-- **GitHub Actions billing / quota impact:**
-  - **Public repository:** GitHub Actions is free with standard runners (no minute cap), though concurrent macOS jobs are throttled.
-  - **Private repository (GitHub Free = 2,000 min/month, $0 spending limit):** GitHub applies a **10× multiplier** to `macos-15` runners. One 13-minute wall-clock macOS build consumes **~130 billable minutes** (allowing ~15 macOS builds per month on the free tier).
-
-### Built-In Minute Savers in `.github/workflows/build-ipa.yml`
-1. **Feature-branch workflow (`feat/<milestone>`):**
-   - Pushes to `feat/*` branches trigger **0 workflows**.
-   - Only after a milestone passes all local quality gates (`tsc`, `lint`, `check:corners`, `jest`) and is fast-forward merged into `main` is a single push made → **exactly 1 IPA build per milestone**.
-2. **`concurrency` (`cancel-in-progress: true`):**
-   - If two pushes happen in quick succession on the same ref, the older in-progress macOS build is cancelled immediately instead of burning another 13 minutes.
-3. **`paths-ignore` (`docs/**`, `*.md`, `design/**`):**
-   - Documentation-only commits on `main` (e.g. updating `docs/ROADMAP.md`, `README.md`, or `docs/store/`) never trigger a macOS build.
-4. **Node/npm caching (`cache: 'npm'`):**
-   - Caches `~/.npm` across runs so dependency installation is faster and more reliable.
+This guide provides end-to-end instructions for building, signing, and releasing **ScanFlow** to **Apple TestFlight** and the **Apple App Store**.
 
 ---
 
-## 2. Optional: Tag-Only Build Trigger (`v*`)
+## 1. Release Architecture Comparison: EAS vs. GitHub Actions
 
-By default, `.github/workflows/build-ipa.yml` runs on pushes to `main` (excluding docs-only changes) and on `v*` tags.
+| Factor | Path A: Expo Application Services (EAS) *(Recommended)* | Path B: GitHub Actions macOS Runner |
+| :--- | :--- | :--- |
+| **Setup Complexity** | **Very Low** (`eas build -p ios --auto-submit`) | **High** (requires Fastlane / manual keychain scripting) |
+| **Certificate Management** | **Automatic**: EAS generates and rotates Distribution Certificates & Profiles | **Manual**: Must export `.p12`, provisioning profiles, and store as GitHub Secrets |
+| **Cost** | **Free Tier:** 30 iOS builds / month. Paid plan: \$29 / mo (priority queue) | Uses GitHub macOS minutes (macos-15 is billed at 10× minute multiplier) |
+| **App Store Submission** | **One command:** `eas submit -p ios --latest` automatically uploads to TestFlight | Requires App Store Connect API Key (`altool` / Fastlane `pilot`) |
+| **Suitability for Windows Devs** | **Ideal**: Cloud-native, zero macOS hardware or local simulator required | Cloud-native via GitHub, but complex to debug signing errors |
+| **Recommendation** | **PRIMARY RECOMMENDED PATH** for TestFlight & App Store submission. | **SECONDARY / FALLBACK** (currently used for unsigned sideloadable IPAs). |
 
-If you prefer that pushing to `main` **never** builds automatically, and an IPA build is triggered **only** when you push an explicit version tag (e.g. `git tag v1.9.0` followed by `git push origin v1.9.0`), change the `on:` block at the top of `.github/workflows/build-ipa.yml` to:
+---
 
-```yaml
-on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
+## 2. Prerequisites & Apple Developer Account Setup
+
+To publish on TestFlight and the App Store, you need:
+1. **Apple Developer Program Enrollment** ($99 USD / year): [developer.apple.com](https://developer.apple.com).
+2. **App Store Connect Account**: [appstoreconnect.apple.com](https://appstoreconnect.apple.com).
+3. **App Identifier Registered**:
+   - Bundle ID: `com.scanflow.app` (configured in `app.json`).
+   - Capabilities enabled: **In-App Purchase**.
+4. **App Store Connect App Record**:
+   - Create a new App with Name: **ScanFlow - Offline PDF Scanner** (or desired title).
+   - Primary Language: **German** (or English).
+   - Bundle ID: Select `com.scanflow.app`.
+   - SKU: `SCANFLOW_IOS_01`.
+
+---
+
+## 3. Configuring In-App Purchases & Subscriptions
+
+Before submitting the app or testing paywalls, configure the 3 In-App Purchase products in App Store Connect under **Monetization → Subscriptions / In-App Purchases**:
+
+### A. Subscription Group: `ScanFlow Pro Access`
+1. **Yearly Subscription with 7-Day Free Trial:**
+   - **Product ID:** `com.scanflow.app.pro.yearly`
+   - **Reference Name:** ScanFlow Pro Jährlich
+   - **Price Tier:** 19,99 € / $19.99 (Tier 20)
+   - **Introductory Offer:** Free Trial (7 Days)
+2. **Monthly Subscription:**
+   - **Product ID:** `com.scanflow.app.pro.monthly`
+   - **Reference Name:** ScanFlow Pro Monatlich
+   - **Price Tier:** 2,99 € / $2.99 (Tier 3)
+
+### B. Non-Consumable (One-Time Purchase):
+1. **Lifetime Pro License:**
+   - **Product ID:** `com.scanflow.app.pro.lifetime`
+   - **Reference Name:** ScanFlow Pro Lifetime
+   - **Price Tier:** 49,99 € / $49.99 (Tier 50)
+
+> [!IMPORTANT]
+> The product IDs in App Store Connect must **strictly match** the product IDs defined in `src/entitlements/index.ts` (`PRO_PRODUCT_IDS`).
+
+---
+
+## 4. Path A: Releasing via EAS (Step-by-Step)
+
+### Step 1: Install & Authenticate EAS CLI
+On your development machine (Windows PowerShell):
+```powershell
+npm install -g eas-cli
+eas login
 ```
 
-With tag-only builds:
-1. You can push to `main` as often as you want with **0 macOS minutes used**.
-2. When ready for an IPA build, run in PowerShell:
-   ```powershell
-   git tag v1.9.0
-   git push origin main
-   git push origin v1.9.0
-   ```
-   Or trigger a one-off build manually in the GitHub UI (**Actions → Build iOS IPA & Publish Release → Run workflow**).
+### Step 2: Configure Project & Credentials
+Link your repository to your Expo account:
+```powershell
+eas init --id <your-expo-project-id>
+```
+EAS will inspect `app.json` and configure `eas.json`.
+
+### Step 3: Run Cloud Production Build
+Trigger a signed release build on EAS servers:
+```powershell
+eas build --platform ios --profile production
+```
+- EAS will prompt: *"Do you want EAS to manage your Apple credentials?"* → Choose **Yes**.
+- Log in with your Apple Developer Account when prompted.
+- EAS automatically creates the iOS Distribution Certificate, App ID, and App Store Provisioning Profile.
+- The build completes in ~12–15 minutes and generates an App Store signed `.ipa`.
+
+### Step 4: Submit to TestFlight
+Once built, submit directly to TestFlight:
+```powershell
+eas submit --platform ios --latest
+```
+Alternatively, combine build and submission into a single command:
+```powershell
+eas build --platform ios --profile production --auto-submit
+```
 
 ---
 
-## 3. Version Bump Checklist (Every Release)
+## 5. Path B: Releasing via GitHub Actions
 
-Before merging a milestone branch into `main` for a release:
-1. Bump `"version"` in `package.json`.
-2. Bump `"expo.version"` in `app.json`.
-3. Bump both root `"version"` entries in `package-lock.json` (lines 3 and 9).
-4. Add a `## [x.y.z] - YYYY-MM-DD` section at the top of `CHANGELOG.md` (the workflow extracts this exact section for the GitHub Release notes).
+ScanFlow currently uses GitHub Actions (`.github/workflows/build-ipa.yml`) for building unsigned sideloadable IPAs on `macos-15`. To build and submit an App Store signed IPA via GitHub Actions, the following secrets must be added to your GitHub repository settings (**Settings → Secrets and variables → Actions**):
+
+### Required Repository Secrets:
+| Secret Name | Description |
+| :--- | :--- |
+| `APPLE_CERTIFICATE_BASE64` | Base64-encoded `.p12` Distribution Certificate |
+| `APPLE_CERTIFICATE_PASSWORD` | Password for the `.p12` certificate |
+| `APPLE_PROVISIONING_PROFILE_BASE64` | Base64-encoded `.mobileprovision` App Store profile |
+| `APP_STORE_CONNECT_API_KEY_KEY_ID` | Key ID from App Store Connect API Keys |
+| `APP_STORE_CONNECT_API_KEY_ISSUER_ID` | Issuer ID from App Store Connect |
+| `APP_STORE_CONNECT_API_KEY_BASE64` | Base64-encoded `AuthKey_<KeyID>.p8` private key |
+
+### Workflow Configuration Template:
+See `.github/workflows/appstore-release.yml.disabled` for the ready-to-enable workflow that imports the certificate into a temporary keychain, signs the archive with `xcodebuild -exportArchive`, and uploads to TestFlight via `xcrun altool`.
 
 ---
 
-## 4. TestFlight & App Store Submission Pipeline (M7 Preview)
+## 6. TestFlight Distribution & Verification
 
-*(Full signed-pipeline configuration and step-by-step App Store Connect guide will be completed in Milestone M7. Summary of the two options from Windows without a Mac:)*
+1. Once uploaded, open **App Store Connect → Apps → ScanFlow → TestFlight**.
+2. Processing takes ~5–10 minutes while Apple scans the binary.
+3. Once processed:
+   - If prompted for **Export Compliance**, select **No** (ScanFlow qualifies for standard exemptions; documented in `docs/store/export-compliance.md`).
+4. **Internal Testing:** Add yourself and your test devices under *Internal Groups*. TestFlight sends an email / notification immediately.
+5. Install ScanFlow via the TestFlight app on your physical iPhone.
+6. Verify:
+   - Native Apple Vision OCR & PDFKit rasterization
+   - StoreKit 2 Sandbox purchase flow (using a Sandbox Apple ID)
+   - App Lock with Face ID & PIN
+   - 30-Day Trash, Smart Naming, and Backup & Restore
 
-| Criterion | Option A: EAS Build + EAS Submit | Option B: GitHub Actions macOS Signing + `xcrun altool` |
-| --- | --- | --- |
-| **How it works** | `npx eas-cli build --platform ios --profile production --auto-submit` runs `expo prebuild` (including `modules/scanflow-ocr`) on Expo's cloud macOS builders and submits via App Store Connect API Key. | Existing `.github/workflows/build-ipa.yml` imports an Apple Distribution `.p12` certificate + provisioning profile from GitHub Secrets into a temporary Keychain, archives with `xcodebuild archive -exportArchive`, and uploads via `xcrun altool` / `Notary` API Key. |
-| **Credential management from Windows** | Automatic: `eas credentials` generates the Distribution Certificate and Provisioning Profile directly via your App Store Connect API Key—no Mac Keychain Assistant needed. | Requires generating the CSR + `.p12` via OpenSSL on Windows and manually creating the App Store Provisioning Profile in the Apple Developer Portal. |
-| **Free quota** | EAS Free Plan includes 30 builds/month (up to 15 iOS builds/month, queued). | Uses your GitHub Actions runner minutes (~15 min wall-clock per build). |
+---
 
-### User Actions Required Before First TestFlight Build (Never Block Development)
-1. **Apple Developer Program Enrollment** (individual or organization, €99 / $99 per year at `developer.apple.com`).
-2. **EU Digital Services Act (DSA) Trader Status:** In App Store Connect → *Business*, declare trader status (requires a public address, email, and phone number on the European App Store; consider a PO Box / business address if you do not want your home address public).
-3. **Final App Name & Bundle ID (`com.scanflow.app` or custom):** Must be fixed before the first TestFlight upload, because Apple binds a Bundle ID permanently to an App Store Connect app record.
-4. **App Store Connect API Key (`.p8`):** Generate under *App Store Connect → Users and Access → Integrations → App Store Connect API* (Role: *Admin* or *App Manager*) for automated Windows uploads.
+## 7. App Store Submission Checklist
+
+When ready to submit for public App Store review:
+1. **Metadata & Descriptions:**
+   - Copy German and English descriptions, keywords, and URLs from `docs/store/app-store-metadata.md`.
+2. **Screenshots:**
+   - Upload screenshots following the dimensions and layouts specified in `tools/store-screenshots/README.md`.
+3. **App Privacy:**
+   - Answer the App Store Connect Privacy Nutrition Label questions according to `docs/store/privacy-nutrition-label.md` (**Data Not Collected**).
+4. **Review Notes:**
+   - Paste the contents of `docs/store/review-notes.md` into the *Review Notes (Prüfhinweise)* field in App Store Connect.
+5. **Age Rating:**
+   - Complete the Age Rating questionnaire using the answers in `docs/store/age-rating.md` (**4+**).
+6. **Submit for Review:**
+   - Click **Add for Review** → **Submit to App Review**. Apple typically completes review within 24–48 hours.

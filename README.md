@@ -85,6 +85,13 @@ Designed as a clean, ad-free alternative to apps like CamScanner, ScanFlow proce
 - **✈️ Offline Keychain Entitlements:** purchased Pro entitlements are securely cached in Keychain (`scanflow_pro_entitlement`), guaranteeing full Pro access on flights or offline without network checks (`verified by tests` in `__tests__/monetization.test.ts`).
 - **⭐ Fair App Store Review Trigger:** automatically asks for an App Store rating after your 3rd successful document export (`expo-store-review`), rate-limited to once per version.
 
+### Phase V2 – Compliance, Legal & Store Package (v2.0.0-rc, M6 & M7)
+- **📋 Apple Privacy Manifest (`PrivacyInfo.xcprivacy`):** full compliance with Apple's spring 2024 privacy mandate (`NSPrivacyTracking: false`, zero tracking domains, zero collected data types, and documented required reason API codes).
+- **🔒 Zero-Network Quality Gate:** automated CI quality gate (`npm run check:network`) verifying 0 network calls and 0 telemetry SDKs across all 122 application source files.
+- **⚖️ In-App Legal Readers:** native offline viewers for Privacy Policy, Terms of Service (EULA), and Open Source Licenses under *Einstellungen → Über*.
+- **📦 Complete Store Submission Package (`docs/store/`):** localized German and English metadata, descriptions, keywords, review notes, age rating declaration (4+), and EAR Category 5 exemption documentation for `ITSAppUsesNonExemptEncryption = false`.
+- **🚀 Dual Distribution Guide (`docs/RELEASING.md`):** step-by-step instructions for publishing via EAS Build + EAS Submit (primary) or signed GitHub Actions macOS runner.
+
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow, the pipeline, the app lock, the text recognition, the PDF toolkit and the native sheets, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phases.
 
 ### Known limitations
