@@ -1,4 +1,4 @@
-import type { DocumentPage, NewPageInput } from '../types';
+import type { DocumentPage, FilterType, NewPageInput } from '../types';
 import { documentRepository } from './DocumentRepository';
 import { imagePipeline, type ImportOptions } from './ImagePipelineService';
 import { storageService } from './StorageService';
@@ -40,9 +40,10 @@ export async function ensurePagePreview(pageId: string): Promise<DocumentPage | 
 export async function importPages(
   uris: string[],
   onProgress?: (current: number, total: number) => void,
-  options: ImportOptions = {}
+  options: ImportOptions & { defaultFilter?: FilterType } = {}
 ): Promise<NewPageInput[]> {
   const out: NewPageInput[] = [];
+  const filter: FilterType = options.defaultFilter ?? 'auto';
   try {
     for (let i = 0; i < uris.length; i++) {
       onProgress?.(i + 1, uris.length);
@@ -51,7 +52,7 @@ export async function importPages(
         originalUri: img.originalUri,
         proxyUri: img.proxyUri,
         corners: img.detection?.detected ? img.detection.corners : null,
-        filter: 'auto',
+        filter,
         rotation: 0,
         pageFormat: 'auto',
       });

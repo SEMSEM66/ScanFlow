@@ -1,7 +1,10 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import { buildDocxBase64, type DocxPageInput } from '../docx';
+import { ScanFlowOcr } from '../../modules/scanflow-ocr';
+import { deduplicateFileNames } from '../db/documentOperations';
+import { base64ToUint8, buildDocxBase64, buildZip, uint8ToBase64, type DocxPageInput, type ZipEntryInput } from '../docx';
+import { isUnlocked } from '../entitlements';
 import { buildPdf, estimatePdfKb, ESTIMATED_PAGE_KB } from '../imaging/pdf';
 import type { OcrLine } from '../ocr/types';
 import type { DocumentPage, ExportDpi, ExportFormat, ExportQuality } from '../types';
@@ -13,6 +16,8 @@ export interface ExportOptions {
   quality: ExportQuality;
   /** Diagonal watermark text, already localized (e.g. "VERTRAULICH"). */
   watermark?: string;
+  /** Optional PDF user/owner password (encrypted via iOS PDFKit in the installed app). */
+  password?: string;
   /**
    * Recognized text of a page for the invisible PDF text layer (searchable
    * PDF); null / errors → page without text layer.
@@ -50,6 +55,15 @@ function winAnsi(text: string): string {
 }
 
 export class ExportService {
+  /** True when native iOS PDFKit password encryption is available (installed IPA). */
+  get canEncryptPdf(): boolean {
+    return (
+      isUnlocked('pdf_password') &&
+      ScanFlowOcr !== null &&
+      typeof ScanFlowOcr.encryptPdfAsync === 'function'
+    );
+  }
+
   private async freshExportDir(): Promise<string> {
     // Old export files are no longer needed once a new export starts.
     await FileSystem.deleteAsync(storageService.exportDir, { idempotent: true });
@@ -63,31 +77,100 @@ export class ExportService {
    * adjustments) at the chosen DPI and writes a PDF with exactly one
    * full-bleed image per page at the exact page size (A4 / Letter / custom),
    * plus an invisible text layer where recognized text is available.
+   *
+   * When `opts.password` is set, the unencrypted PDF is written to a temporary
+   * file inside the export folder, encrypted via iOS PDFKit (`encryptPdfAsync`),
+   * verified (`isEncrypted && isLocked`), and the unencrypted temp file is deleted.
    */
   async generatePdf(title: string, pages: DocumentPage[], opts: ExportOptions): Promise<string> {
     const dir = await this.freshExportDir();
     const target = `${dir}${sanitizeFileName(title)}.pdf`;
+    const wantsPassword = typeof opts.password === 'string' && opts.password.length > 0;
+    const rawTarget = wantsPassword ? `${dir}__unencrypted_${Date.now()}.pdf` : target;
+
+    let rawUri = rawTarget;
     try {
-      const doc = await buildPdf(
-        pages.length,
-        async (i) => {
-          const text = await this.pageText(pages[i], i, opts);
-          const r = await imagePipeline.renderForExport(pages[i], opts.dpi, opts.quality);
-          return { jpeg: r.base64, widthPt: r.widthPt, heightPt: r.heightPt, text };
-        },
-        {
-          title,
-          watermark: opts.watermark ? winAnsi(opts.watermark) || undefined : undefined,
-          onProgress: opts.onProgress,
-        }
-      );
-      const b64 = await doc.saveAsBase64();
-      await FileSystem.writeAsStringAsync(target, b64, { encoding: FileSystem.EncodingType.Base64 });
-      return target;
+      const b64 = await this.renderPdfBase64(title, pages, opts);
+      await FileSystem.writeAsStringAsync(rawTarget, b64, { encoding: FileSystem.EncodingType.Base64 });
     } catch (err) {
       console.warn('[ExportService] pdf-lib export failed, falling back to expo-print', err);
-      return this.generatePdfWithPrint(title, pages, opts, dir);
+      rawUri = await this.generatePdfWithPrint(title, pages, opts, dir, wantsPassword ? rawTarget : undefined);
     }
+
+    if (!wantsPassword) {
+      return rawUri;
+    }
+
+    try {
+      const native = ScanFlowOcr;
+      if (!native || typeof native.encryptPdfAsync !== 'function') {
+        throw new Error('PDF password encryption requires the native ScanFlow module.');
+      }
+      const encrypted = await native.encryptPdfAsync(rawUri, target, opts.password!);
+      if (!encrypted || !encrypted.isEncrypted || !encrypted.isLocked) {
+        await FileSystem.deleteAsync(target, { idempotent: true });
+        throw new Error('Encrypted PDF failed post-write lock verification.');
+      }
+      return target;
+    } finally {
+      await FileSystem.deleteAsync(rawUri, { idempotent: true });
+    }
+  }
+
+  private async renderPdfBase64(title: string, pages: DocumentPage[], opts: ExportOptions): Promise<string> {
+    const doc = await buildPdf(
+      pages.length,
+      async (i) => {
+        const text = await this.pageText(pages[i], i, opts);
+        const r = await imagePipeline.renderForExport(pages[i], opts.dpi, opts.quality);
+        return { jpeg: r.base64, widthPt: r.widthPt, heightPt: r.heightPt, text };
+      },
+      {
+        title,
+        watermark: opts.watermark ? winAnsi(opts.watermark) || undefined : undefined,
+        onProgress: opts.onProgress,
+      }
+    );
+    return doc.saveAsBase64();
+  }
+
+  /**
+   * Serial multi-document batch export: generates each document's PDF one by one
+   * and packages all PDFs into a single `.zip` archive in the export directory.
+   */
+  async generateBatchZip(
+    items: { title: string; pages: DocumentPage[] }[],
+    opts: ExportOptions,
+    archiveTitle = 'ScanFlow-Export'
+  ): Promise<string> {
+    if (items.length === 0) {
+      throw new Error('generateBatchZip: no documents to export');
+    }
+    const dir = await this.freshExportDir();
+    const fileNames = deduplicateFileNames(
+      items.map((item) => item.title),
+      '.pdf',
+      sanitizeFileName
+    );
+    const zipEntries: ZipEntryInput[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      opts.onProgress?.(i + 1, items.length);
+      const pdfB64 = await this.renderPdfBase64(item.title, item.pages, {
+        ...opts,
+        onProgress: undefined,
+      });
+      zipEntries.push({
+        name: fileNames[i],
+        data: base64ToUint8(pdfB64),
+      });
+    }
+    const zipBytes = buildZip(zipEntries);
+    const target = `${dir}${sanitizeFileName(archiveTitle)}.zip`;
+    await FileSystem.writeAsStringAsync(target, uint8ToBase64(zipBytes), {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return target;
   }
 
   /** Text layer of one page; a failing recognition only costs this page its text layer. */
@@ -105,7 +188,13 @@ export class ExportService {
    * Fallback: expo-print. One page size for the whole document (the size of
    * the first page); the rendered images still fill each page edge to edge.
    */
-  private async generatePdfWithPrint(title: string, pages: DocumentPage[], opts: ExportOptions, dir: string): Promise<string> {
+  private async generatePdfWithPrint(
+    title: string,
+    pages: DocumentPage[],
+    opts: ExportOptions,
+    dir: string,
+    overrideTarget?: string
+  ): Promise<string> {
     const parts: string[] = [];
     let size = { widthPt: 595.28, heightPt: 841.89 };
     for (let i = 0; i < pages.length; i++) {
@@ -125,7 +214,7 @@ img { width: 100%; height: 100%; object-fit: fill; display: block; }
 .wm { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font: 800 48px -apple-system, sans-serif; color: rgba(220,20,60,0.2); white-space: nowrap; }
 </style></head><body>${parts.join('')}</body></html>`;
     const { uri } = await Print.printToFileAsync({ html, width: size.widthPt, height: size.heightPt });
-    const target = `${dir}${sanitizeFileName(title)}.pdf`;
+    const target = overrideTarget ?? `${dir}${sanitizeFileName(title)}.pdf`;
     await FileSystem.moveAsync({ from: uri, to: target });
     return target;
   }
@@ -194,7 +283,7 @@ img { width: 100%; height: 100%; object-fit: fill; display: block; }
    * survive the deletion below until the next share. iOS derives the type
    * from the .jpg extension.
    */
-  async shareDocument(uri: string, format: ExportFormat, dialogTitle?: string): Promise<void> {
+  async shareDocument(uri: string, format: ExportFormat | 'zip', dialogTitle?: string): Promise<void> {
     try {
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) throw new Error('Sharing is not available on this device.');
@@ -207,7 +296,13 @@ img { width: 100%; height: 100%; object-fit: fill; display: block; }
                 UTI: 'org.openxmlformats.wordprocessingml.document',
                 dialogTitle,
               }
-            : { dialogTitle };
+            : format === 'zip'
+              ? {
+                  mimeType: 'application/zip',
+                  UTI: 'public.zip-archive',
+                  dialogTitle,
+                }
+              : { dialogTitle };
       await Sharing.shareAsync(uri, shareOptions);
     } finally {
       await this.discardExport(uri);

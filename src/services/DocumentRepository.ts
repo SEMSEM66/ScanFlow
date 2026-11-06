@@ -19,6 +19,7 @@ import {
   serializeCorners,
 } from '../imaging/pageState';
 import { documentSearchClauses } from '../db/textSearch';
+import { planPageExtraction, planPageSplit } from '../db/documentOperations';
 import { ocrKey } from '../ocr/text';
 import { storageService } from './StorageService';
 import { pageTextRepository } from './PageTextRepository';
@@ -270,6 +271,12 @@ export class DocumentRepository {
     );
   }
 
+  async moveManyToFolder(documentIds: string[], folderId: string | null): Promise<void> {
+    for (const id of documentIds) {
+      await this.moveToFolder(id, folderId);
+    }
+  }
+
   async delete(id: string): Promise<void> {
     const db = await getDatabase();
     const pageRows = await db.getAllAsync<PageRow>(`SELECT ${PAGE_COLUMNS} FROM pages WHERE document_id = ?`, [id]);
@@ -283,11 +290,14 @@ export class DocumentRepository {
     await db.runAsync('DELETE FROM documents WHERE id = ?', [id]);
   }
 
-  /** Duplicates a document incl. its files (previews are re-rendered on demand). */
-  async duplicate(id: string, copySuffix = 'Kopie'): Promise<Document | null> {
-    const existing = await this.getById(id);
-    if (!existing) return null;
-    const { document, pages } = existing;
+  async deleteMany(documentIds: string[]): Promise<void> {
+    for (const id of documentIds) {
+      await this.delete(id);
+    }
+  }
+
+  /** Helper that clones a list of existing DocumentPages (files + state) into NewPageInputs. */
+  private async clonePages(pages: DocumentPage[]): Promise<NewPageInput[]> {
     const copied: NewPageInput[] = [];
     for (const p of pages) {
       const originalUri = await storageService.saveImage(p.originalUri, 'orig_copy');
@@ -307,14 +317,17 @@ export class DocumentRepository {
         adjustments: p.adjustments,
       });
     }
-    const created = await this.create({ title: `${document.title} (${copySuffix})`, folderId: document.folderId, pages: copied });
-    // the copies show the same image content → reuse the recognized text instead of running OCR again
+    return copied;
+  }
+
+  /** Copies recognized OCR text rows from source pages to newly created target pages. */
+  private async copyOcrTextForClonedPages(sourcePages: DocumentPage[], targetDocId: string): Promise<void> {
     try {
-      const copy = await this.getById(created.id);
-      if (copy) {
+      const created = await this.getById(targetDocId);
+      if (created) {
         await pageTextRepository.copy(
-          pages
-            .map((p, i) => ({ p, np: copy.pages[i] }))
+          sourcePages
+            .map((p, i) => ({ p, np: created.pages[i] }))
             .filter(({ np }) => !!np)
             .map(({ p, np }) => ({ from: p.id, fromKey: ocrKey(p), to: np.id, key: ocrKey(np) }))
         );
@@ -322,7 +335,126 @@ export class DocumentRepository {
     } catch (err) {
       console.warn('[DocumentRepository] Recognized text not copied:', err);
     }
+  }
+
+  /** Duplicates a document incl. its files (previews are re-rendered on demand). */
+  async duplicate(id: string, copySuffix = 'Kopie'): Promise<Document | null> {
+    const existing = await this.getById(id);
+    if (!existing) return null;
+    const { document, pages } = existing;
+    const copied = await this.clonePages(pages);
+    const created = await this.create({ title: `${document.title} (${copySuffix})`, folderId: document.folderId, pages: copied });
+    await this.copyOcrTextForClonedPages(pages, created.id);
     return created;
+  }
+
+  /**
+   * Merges 2+ documents (in the order of `documentIds`) into a new combined
+   * document, preserving non-destructive page states, rendered previews, and
+   * recognized OCR text. The original documents remain untouched unless the
+   * caller deletes them.
+   */
+  async mergeDocuments(
+    documentIds: string[],
+    newTitle: string,
+    folderId?: string | null
+  ): Promise<Document | null> {
+    const sourcePages: DocumentPage[] = [];
+    let resolvedFolderId: string | null | undefined = folderId;
+    for (const docId of documentIds) {
+      const data = await this.getById(docId);
+      if (!data) continue;
+      if (resolvedFolderId === undefined) {
+        resolvedFolderId = data.document.folderId;
+      }
+      sourcePages.push(...data.pages);
+    }
+    if (sourcePages.length === 0) return null;
+    const copied = await this.clonePages(sourcePages);
+    const created = await this.create({
+      title: newTitle,
+      folderId: resolvedFolderId ?? null,
+      pages: copied,
+    });
+    await this.copyOcrTextForClonedPages(sourcePages, created.id);
+    return created;
+  }
+
+  /**
+   * Extracts a subset of pages from `sourceDocId` (preserving their document
+   * order) into a new document, including their files and recognized OCR text.
+   */
+  async extractPagesToDocument(
+    sourceDocId: string,
+    selectedPageIds: Iterable<string>,
+    newTitle: string
+  ): Promise<Document | null> {
+    const existing = await this.getById(sourceDocId);
+    if (!existing) return null;
+    const orderedIds = planPageExtraction(
+      existing.pages.map((p) => p.id),
+      selectedPageIds
+    );
+    if (orderedIds.length === 0) return null;
+    const pageById = new Map(existing.pages.map((p) => [p.id, p]));
+    const pagesToExtract = orderedIds.map((id) => pageById.get(id)!).filter(Boolean);
+    const copied = await this.clonePages(pagesToExtract);
+    const created = await this.create({
+      title: newTitle,
+      folderId: existing.document.folderId,
+      pages: copied,
+    });
+    await this.copyOcrTextForClonedPages(pagesToExtract, created.id);
+    return created;
+  }
+
+  /**
+   * Splits `sourceDocId` at 1-based `splitPageNumber` (>= 2):
+   * - Pages 1 .. splitPageNumber - 1 stay in `sourceDocId`
+   * - Pages splitPageNumber .. N move into a new document (`newTitle`) in the same folder
+   * Since pages are moved in SQLite (`UPDATE pages SET document_id = ?, page_number = ?`),
+   * all image files and `page_text` rows stay attached without duplicating storage.
+   */
+  async splitDocumentAtPage(
+    sourceDocId: string,
+    splitPageNumber: number,
+    newTitle: string
+  ): Promise<Document | null> {
+    const existing = await this.getById(sourceDocId);
+    if (!existing) return null;
+    const plan = planPageSplit(
+      existing.pages.map((p) => p.id),
+      splitPageNumber
+    );
+    if (!plan) return null;
+
+    const db = await getDatabase();
+    const newDocId = newId('doc');
+    const now = Date.now();
+
+    await db.withTransactionAsync(async () => {
+      await db.runAsync(
+        'INSERT INTO documents (id, title, folder_id, page_count, thumbnail_uri, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [newDocId, newTitle.trim(), existing.document.folderId, 0, null, now, now]
+      );
+      for (let i = 0; i < plan.movePageIds.length; i++) {
+        await db.runAsync(
+          'UPDATE pages SET document_id = ?, page_number = ?, updated_at = ? WHERE id = ?',
+          [newDocId, i + 1, now, plan.movePageIds[i]]
+        );
+      }
+      for (let i = 0; i < plan.keepPageIds.length; i++) {
+        await db.runAsync(
+          'UPDATE pages SET page_number = ?, updated_at = ? WHERE id = ?',
+          [i + 1, now, plan.keepPageIds[i]]
+        );
+      }
+    });
+
+    await this.refreshSummary(sourceDocId);
+    await this.refreshSummary(newDocId);
+    const created = await this.getById(newDocId);
+    return created ? created.document : null;
   }
 
   /** Updates the edit state of a page (does not touch files). */

@@ -34,6 +34,18 @@ internal final class OcrFailedException: GenericException<String>, @unchecked Se
   }
 }
 
+internal final class PdfLockedException: GenericException<String>, @unchecked Sendable {
+  override var reason: String {
+    "PDF document is password-locked: \(param)"
+  }
+}
+
+internal final class PdfEncryptionFailedException: GenericException<String>, @unchecked Sendable {
+  override var reason: String {
+    "PDF encryption failed: \(param)"
+  }
+}
+
 public final class ScanFlowOcrModule: Module {
   // One recognition at a time, off the JS thread and off Expo's shared async queue.
   private let ocrQueue = DispatchQueue(label: "app.scanflow.ocr", qos: .userInitiated)
@@ -51,6 +63,18 @@ public final class ScanFlowOcrModule: Module {
 
     AsyncFunction("recognizePdfAsync") { (url: URL, options: RecognizeOptions) throws -> [String: Any] in
       return try ScanFlowOcrModule.recognizePdf(url: url, options: options)
+    }.runOnQueue(ocrQueue)
+
+    AsyncFunction("getPdfInfoAsync") { (url: URL) throws -> [String: Any] in
+      return try ScanFlowOcrModule.getPdfInfo(url: url)
+    }.runOnQueue(ocrQueue)
+
+    AsyncFunction("renderPdfPageAsync") { (url: URL, pageIndex: Int, dpi: Double, outputUrl: URL) throws -> [String: Any] in
+      return try ScanFlowOcrModule.renderPdfPage(url: url, pageIndex: pageIndex, dpi: dpi, outputUrl: outputUrl)
+    }.runOnQueue(ocrQueue)
+
+    AsyncFunction("encryptPdfAsync") { (sourceUrl: URL, outputUrl: URL, password: String) throws -> [String: Any] in
+      return try ScanFlowOcrModule.encryptPdf(sourceUrl: sourceUrl, outputUrl: outputUrl, password: password)
     }.runOnQueue(ocrQueue)
   }
 
@@ -202,6 +226,129 @@ public final class ScanFlowOcrModule: Module {
       "pageCount": doc.pageCount,
       "pages": pages
     ]
+  }
+
+  private static func getPdfInfo(url: URL) throws -> [String: Any] {
+    return try autoreleasepool { () throws -> [String: Any] in
+      guard let doc = PDFDocument(url: url) else {
+        throw OcrImageException(url.lastPathComponent)
+      }
+      var title = ""
+      if let attrs = doc.documentAttributes,
+         let rawTitle = attrs[PDFDocumentAttribute.titleAttribute] as? String {
+        title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+      }
+      return [
+        "pageCount": doc.pageCount,
+        "isEncrypted": doc.isEncrypted,
+        "isLocked": doc.isLocked,
+        "title": title
+      ]
+    }
+  }
+
+  /// Rasterizes one PDF page at `dpi` (e.g. 200 dpi) to a JPEG file at `outputUrl`.
+  /// Bounded to a single page inside `autoreleasepool` so 50+ page PDFs stay memory-safe.
+  private static func renderPdfPage(url: URL, pageIndex: Int, dpi: Double, outputUrl: URL) throws -> [String: Any] {
+    return try autoreleasepool { () throws -> [String: Any] in
+      guard let doc = PDFDocument(url: url) else {
+        throw OcrImageException(url.lastPathComponent)
+      }
+      if doc.isLocked {
+        throw PdfLockedException(url.lastPathComponent)
+      }
+      guard pageIndex >= 0, pageIndex < doc.pageCount, let page = doc.page(at: pageIndex) else {
+        throw OcrImageException("\(url.lastPathComponent)#\(pageIndex)")
+      }
+
+      let rawBounds = page.bounds(for: .mediaBox)
+      let bounds = (rawBounds.width > 0 && rawBounds.height > 0)
+        ? rawBounds
+        : CGRect(x: 0, y: 0, width: 595, height: 842)
+      let requestedScale = max(1.0, dpi / 72.0)
+      let maxDim = max(bounds.width, bounds.height)
+      let scale = min(requestedScale, 2400.0 / max(1.0, maxDim))
+      let pixelWidth = max(1, Int((bounds.width * scale).rounded()))
+      let pixelHeight = max(1, Int((bounds.height * scale).rounded()))
+
+      let colorSpace = CGColorSpaceCreateDeviceRGB()
+      let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+      guard let ctx = CGContext(
+        data: nil,
+        width: pixelWidth,
+        height: pixelHeight,
+        bitsPerComponent: 8,
+        bytesPerRow: 0,
+        space: colorSpace,
+        bitmapInfo: bitmapInfo
+      ) else {
+        throw OcrImageException(url.lastPathComponent)
+      }
+
+      ctx.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
+      ctx.fill(CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+      ctx.saveGState()
+      ctx.scaleBy(x: scale, y: scale)
+      ctx.translateBy(x: -bounds.origin.x, y: -bounds.origin.y)
+      page.draw(with: .mediaBox, to: ctx)
+      ctx.restoreGState()
+
+      guard let cgImage = ctx.makeImage(),
+            let dest = CGImageDestinationCreateWithURL(outputUrl as CFURL, "public.jpeg" as CFString, 1, nil) else {
+        throw OcrImageException(outputUrl.lastPathComponent)
+      }
+      let jpegProps: [CFString: Any] = [
+        kCGImageDestinationLossyCompressionQuality: 0.90
+      ]
+      CGImageDestinationAddImage(dest, cgImage, jpegProps as CFDictionary)
+      guard CGImageDestinationFinalize(dest) else {
+        try? FileManager.default.removeItem(at: outputUrl)
+        throw OcrImageException(outputUrl.lastPathComponent)
+      }
+
+      return [
+        "pageIndex": pageIndex,
+        "width": pixelWidth,
+        "height": pixelHeight,
+        "uri": outputUrl.absoluteString
+      ]
+    }
+  }
+
+  /// Writes an encrypted PDF using PDFKit write options, deletes `sourceUrl`, and re-opens
+  /// `outputUrl` to assert `isEncrypted`, `isLocked`, and `unlock(withPassword:)`.
+  private static func encryptPdf(sourceUrl: URL, outputUrl: URL, password: String) throws -> [String: Any] {
+    return try autoreleasepool { () throws -> [String: Any] in
+      defer {
+        try? FileManager.default.removeItem(at: sourceUrl)
+      }
+      guard !password.isEmpty else {
+        throw PdfEncryptionFailedException("Empty password")
+      }
+      guard let doc = PDFDocument(url: sourceUrl), doc.pageCount > 0 else {
+        throw OcrImageException(sourceUrl.lastPathComponent)
+      }
+      let writeOptions: [PDFDocumentWriteOption: Any] = [
+        .userPasswordOption: password,
+        .ownerPasswordOption: password
+      ]
+      guard doc.write(to: outputUrl, withOptions: writeOptions) else {
+        try? FileManager.default.removeItem(at: outputUrl)
+        throw PdfEncryptionFailedException("PDFDocument.write returned false")
+      }
+      guard let verifyDoc = PDFDocument(url: outputUrl),
+            verifyDoc.isEncrypted,
+            verifyDoc.isLocked,
+            verifyDoc.unlock(withPassword: password) else {
+        try? FileManager.default.removeItem(at: outputUrl)
+        throw PdfEncryptionFailedException("Verification of encrypted PDF failed")
+      }
+      return [
+        "uri": outputUrl.absoluteString,
+        "isEncrypted": true,
+        "isLocked": true
+      ]
+    }
   }
 
   /// Whitespace-separated tokens with the union of the boxes of their first and last character.

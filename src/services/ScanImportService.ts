@@ -1,4 +1,4 @@
-import type { NewPageInput } from '../types';
+import type { FilterType, NewPageInput } from '../types';
 import { documentRepository } from './DocumentRepository';
 import { importPages } from './PageRenderService';
 import { storageService } from './StorageService';
@@ -26,6 +26,8 @@ export interface SaveScanOptions extends ScanTarget {
   detect: boolean;
   /** Title of a new document. */
   title: string;
+  /** Initial filter for newly imported pages (defaults to 'auto'; 'original' for imported PDFs). */
+  defaultFilter?: FilterType;
   onProgress?: (current: number, total: number) => void;
 }
 
@@ -89,7 +91,7 @@ export async function saveScan(options: SaveScanOptions): Promise<SavedScan> {
   if (replacePageId && !replaced) throw new Error(`saveScan: page ${replacePageId} not found`);
 
   // importPages removes its files again if one image fails
-  const pages = await importPages(uris, onProgress, { detect });
+  const pages = await importPages(uris, onProgress, { detect, defaultFilter: options.defaultFilter });
   let result: SavedScan;
   if (replaced) {
     const [first, ...rest] = pages;

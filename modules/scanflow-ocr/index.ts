@@ -50,12 +50,47 @@ export interface NativePdfOcrResult {
   pages: NativePdfPageOcrResult[];
 }
 
+export interface NativePdfInfoResult {
+  pageCount: number;
+  isEncrypted: boolean;
+  isLocked: boolean;
+  title?: string;
+}
+
+export interface NativePdfRenderPageResult {
+  pageIndex: number;
+  width: number;
+  height: number;
+  uri: string;
+}
+
+export interface NativePdfEncryptResult {
+  uri: string;
+  isEncrypted: boolean;
+  isLocked: boolean;
+}
+
 export interface ScanFlowOcrNativeModule {
   supportedLanguagesAsync(): Promise<string[]>;
   /** `uri`: file:// URL of a JPEG / PNG. */
   recognizeAsync(uri: string, options: NativeOcrOptions): Promise<NativeOcrResult>;
   /** `uri`: file:// URL of a PDF document. */
   recognizePdfAsync?(uri: string, options: NativeOcrOptions): Promise<NativePdfOcrResult>;
+  /** Reads PDF metadata and lock status without rasterizing pages. */
+  getPdfInfoAsync?(uri: string): Promise<NativePdfInfoResult>;
+  /** Rasterizes one PDF page at `dpi` (e.g. 200) to a JPEG file at `outputUri`. */
+  renderPdfPageAsync?(
+    uri: string,
+    pageIndex: number,
+    dpi: number,
+    outputUri: string
+  ): Promise<NativePdfRenderPageResult>;
+  /** Encrypts a PDF with a user/owner password, verifies `isEncrypted && isLocked`, and deletes `sourceUri`. */
+  encryptPdfAsync?(
+    sourceUri: string,
+    outputUri: string,
+    password: string
+  ): Promise<NativePdfEncryptResult>;
 }
 
 export const ScanFlowOcr = requireOptionalNativeModule<ScanFlowOcrNativeModule>('ScanFlowOcr');

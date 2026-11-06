@@ -14,7 +14,20 @@
         "NSCameraUsageDescription": "ScanFlow benötigt Zugriff auf Ihre Kamera, um Dokumente zu scannen.",
         "NSPhotoLibraryUsageDescription": "ScanFlow benötigt Zugriff auf Ihre Fotomediathek, um Dokumente zu importieren.",
         "NSFaceIDUsageDescription": "ScanFlow verwendet Face ID, um die App zu entsperren.",
-        "CFBundleLocalizations": ["de", "en"]
+        "CFBundleLocalizations": ["de", "en"],
+        "LSSupportsOpeningDocumentsInPlace": false,
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "PDF Document",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["com.adobe.pdf"]
+          },
+          {
+            "CFBundleTypeName": "Image",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["public.image"]
+          }
+        ]
       }
     },
     "android": {

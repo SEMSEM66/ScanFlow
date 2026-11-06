@@ -8,3 +8,4 @@ export * from './ScanImportService';
 export * from './DocumentScannerService';
 export * from './PageTextRepository';
 export * from './OcrService';
+export * from './PdfToolkitService';
