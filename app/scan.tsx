@@ -388,7 +388,8 @@ export default function ScanScreen() {
       <Modal
         visible={isReviewOpen}
         animationType="slide"
-        transparent
+        presentationStyle="pageSheet"
+        allowSwipeDismissal
         onRequestClose={() => setIsReviewOpen(false)}
       >
         <SafeAreaView style={styles.reviewModalContainer}>
@@ -719,7 +720,7 @@ const styles = StyleSheet.create({
   },
   reviewModalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
+    backgroundColor: '#000000',
   },
   reviewHeader: {
     flexDirection: 'row',

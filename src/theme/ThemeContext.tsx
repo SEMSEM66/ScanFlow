@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import { Appearance, useColorScheme } from 'react-native';
 import { lightColors, darkColors, spacing, typography } from './tokens';
 import { radius } from './shape';
 import { ThemeMode } from '../types';
@@ -21,6 +21,12 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const systemScheme = useColorScheme();
   const [mode, setMode] = useState<ThemeMode>('light'); // default to warm light theme matching designs
+
+  // Keep native alerts, menus, and sheets consistent with the selected app theme.
+  useEffect(() => {
+    Appearance.setColorScheme(mode === 'system' ? 'auto' : mode);
+    return () => Appearance.setColorScheme('auto');
+  }, [mode]);
 
   const isDark = useMemo(() => {
     if (mode === 'system') {

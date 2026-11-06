@@ -9,9 +9,8 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { capsule, concentric, hairline, radius, useTheme } from '../theme';
-import { Card, Thumbnail } from './ui';
+import { Button, Card, Icon, Thumbnail } from './ui';
 import { useTranslation } from '../i18n';
 import { DocumentPage } from '../types';
 
@@ -41,7 +40,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
   onAddPage,
   onDismiss,
 }) => {
-  const { colors, typography, spacing } = useTheme();
+  const { colors, typography } = useTheme();
   const { t, formatString } = useTranslation();
   const filterLabel = (f: DocumentPage['filter']) =>
     ({
@@ -57,7 +56,8 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
   return (
     <Modal
       visible={visible}
-      transparent
+      presentationStyle="pageSheet"
+      allowSwipeDismissal
       animationType="slide"
       onRequestClose={onClose}
       onDismiss={onDismiss}
@@ -65,14 +65,12 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Top Header */}
         <View style={[styles.header, { borderBottomColor: colors.borderLight }]}>
-          <TouchableOpacity onPress={onClose} style={styles.headerButton}>
-            <Text style={[typography.bodyBold, { color: colors.primary }]}>{t.common.done}</Text>
-          </TouchableOpacity>
-          <Text style={[typography.headline, { color: colors.textPrimary }]}>
+          <View style={styles.headerButton} />
+          <Text numberOfLines={1} style={[typography.headline, styles.headerTitle, { color: colors.textPrimary }]}>
             {formatString(t.filters.managePages, { count: pages.length })}
           </Text>
-          <TouchableOpacity onPress={onAddPage} style={styles.headerButton}>
-            <Ionicons name="add" size={24} color={colors.primary} />
+          <TouchableOpacity onPress={onClose} style={styles.headerButton} accessibilityRole="button">
+            <Text maxFontSizeMultiplier={1.3} style={[typography.bodyBold, { color: colors.primary }]}>{t.common.done}</Text>
           </TouchableOpacity>
         </View>
 
@@ -106,7 +104,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
                       { backgroundColor: colors.surfaceSubdued, opacity: index === 0 ? 0.3 : 1 },
                     ]}
                   >
-                    <Ionicons name="arrow-up" size={18} color={colors.textPrimary} />
+                    <Icon name="arrow.up" size={18} color={colors.textPrimary} />
                   </TouchableOpacity>
 
                   {/* Move Down/Right */}
@@ -121,7 +119,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
                       },
                     ]}
                   >
-                    <Ionicons name="arrow-down" size={18} color={colors.textPrimary} />
+                    <Icon name="arrow.down" size={18} color={colors.textPrimary} />
                   </TouchableOpacity>
 
                   {/* Retake */}
@@ -129,7 +127,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
                     onPress={() => onRetakePage(index)}
                     style={[styles.iconBtn, { backgroundColor: colors.surfaceSubdued }]}
                   >
-                    <Ionicons name="camera-reverse-outline" size={18} color={colors.primary} />
+                    <Icon name="camera.rotate" size={18} color={colors.primary} />
                   </TouchableOpacity>
 
                   {/* Delete */}
@@ -143,13 +141,16 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
                     }}
                     style={[styles.iconBtn, { backgroundColor: colors.surfaceSubdued }]}
                   >
-                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                    <Icon name="trash" size={18} color={colors.danger} />
                   </TouchableOpacity>
                 </View>
               </View>
             </Card>
           ))}
         </ScrollView>
+        <View style={styles.footer}>
+          <Button variant="tinted" title={t.filters.addPage} icon="plus" onPress={onAddPage} />
+        </View>
       </SafeAreaView>
     </Modal>
   );
@@ -168,8 +169,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: hairline,
   },
   headerButton: {
-    padding: 6,
+    width: 72,
+    minHeight: 44,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
+  headerTitle: { flex: 1, textAlign: 'center' },
+  footer: { paddingHorizontal: 16, paddingVertical: 8 },
   scrollContent: {
     padding: 16,
     gap: 12,
@@ -187,13 +193,13 @@ const styles = StyleSheet.create({
   },
   controlsRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     marginTop: 12,
   },
   iconBtn: {
-    width: 36,
-    height: 36,
-    ...capsule(36),
+    width: 44,
+    height: 44,
+    ...capsule(44),
     alignItems: 'center',
     justifyContent: 'center',
   },

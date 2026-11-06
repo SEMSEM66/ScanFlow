@@ -210,7 +210,7 @@ export const PinSetupModal: React.FC<PinSetupModalProps> = ({ visible, flow, onC
   const biometryName = biometry === 'touchId' ? 'Touch ID' : 'Face ID';
 
   return (
-    <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={cancel}>
+    <Modal visible={visible} presentationStyle="pageSheet" allowSwipeDismissal={!busy} animationType="slide" onRequestClose={cancel}>
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.topHeader}>
           <TouchableOpacity onPress={cancel} style={styles.cancelBtn} accessibilityRole="button">
