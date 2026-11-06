@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { SegmentedControl } from '../../../src/components/ui/NativeSegmentedControl';
 import { useFocusEffect } from 'expo-router';
 import { capsule, concentric, corner, hairline, radius, useTheme } from '../../../src/theme';
 import { useTranslation } from '../../../src/i18n';
@@ -28,7 +29,7 @@ import { PinSetupModal, type PinFlow } from '../../../src/components/PinSetupMod
 import { useAppLock } from '../../../src/components/AppLockOverlay';
 
 export default function SettingsScreen() {
-  const { colors, typography, spacing, mode, setMode } = useTheme();
+  const { colors, typography, spacing, mode, setMode, isDark } = useTheme();
   const { t, language, setLanguage, formatString } = useTranslation();
   const { reload: reloadSecurity } = useAppLock();
 
@@ -587,38 +588,9 @@ export default function SettingsScreen() {
           {t.settings.appearance}
         </Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={styles.segmentedRow}>
-            {(['system', 'light', 'dark'] as const).map((m) => {
-              const isSelected = mode === m;
-              const label =
-                m === 'system'
-                  ? t.settings.appearanceSystem
-                  : m === 'light'
-                  ? t.settings.appearanceLight
-                  : t.settings.appearanceDark;
-
-              return (
-                <TouchableOpacity
-                  key={m}
-                  activeOpacity={0.8}
-                  onPress={() => setMode(m)}
-                  style={[
-                    styles.segmentButton,
-                    isSelected && { backgroundColor: colors.primary },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      typography.bodyMedium,
-                      { color: isSelected ? '#FFFFFF' : colors.textPrimary, fontWeight: isSelected ? '700' : '500' },
-                    ]}
-                  >
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <SegmentedControl values={[t.settings.appearanceSystem, t.settings.appearanceLight, t.settings.appearanceDark]}
+            selectedIndex={(['system', 'light', 'dark'] as const).indexOf(mode)} appearance={isDark ? 'dark' : 'light'} style={styles.nativeSegment}
+            onChange={(event) => { const value = (['system', 'light', 'dark'] as const)[event.nativeEvent.selectedSegmentIndex]; if (value) setMode(value); }} />
         </View>
 
         {/* Section 3: Language */}
@@ -626,43 +598,9 @@ export default function SettingsScreen() {
           {t.settings.language}
         </Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={styles.segmentedRow}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => setLanguage('de')}
-              style={[
-                styles.segmentButton,
-                language === 'de' && { backgroundColor: colors.primary },
-              ]}
-            >
-              <Text
-                style={[
-                  typography.bodyMedium,
-                  { color: language === 'de' ? '#FFFFFF' : colors.textPrimary, fontWeight: language === 'de' ? '700' : '500' },
-                ]}
-              >
-                Deutsch (Standard)
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => setLanguage('en')}
-              style={[
-                styles.segmentButton,
-                language === 'en' && { backgroundColor: colors.primary },
-              ]}
-            >
-              <Text
-                style={[
-                  typography.bodyMedium,
-                  { color: language === 'en' ? '#FFFFFF' : colors.textPrimary, fontWeight: language === 'en' ? '700' : '500' },
-                ]}
-              >
-                English
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <SegmentedControl values={['Deutsch (Standard)', 'English']} selectedIndex={language === 'de' ? 0 : 1}
+            appearance={isDark ? 'dark' : 'light'} style={styles.nativeSegment}
+            onChange={(event) => setLanguage(event.nativeEvent.selectedSegmentIndex === 0 ? 'de' : 'en')} />
         </View>
 
         {/* Section 4: Default PDF Quality */}
@@ -670,38 +608,9 @@ export default function SettingsScreen() {
           {t.settings.defaultQuality}
         </Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={styles.segmentedRow}>
-            {(['low', 'medium', 'high'] as ExportQuality[]).map((q) => {
-              const isSelected = defaultQuality === q;
-              const label =
-                q === 'low'
-                  ? t.export.low
-                  : q === 'medium'
-                  ? t.export.medium
-                  : t.export.high;
-
-              return (
-                <TouchableOpacity
-                  key={q}
-                  activeOpacity={0.8}
-                  onPress={() => handleSetQuality(q)}
-                  style={[
-                    styles.segmentButton,
-                    isSelected && { backgroundColor: colors.primary },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      typography.bodyMedium,
-                      { color: isSelected ? '#FFFFFF' : colors.textPrimary, fontWeight: isSelected ? '700' : '500' },
-                    ]}
-                  >
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <SegmentedControl values={[t.export.low, t.export.medium, t.export.high]}
+            selectedIndex={(['low', 'medium', 'high'] as ExportQuality[]).indexOf(defaultQuality)} appearance={isDark ? 'dark' : 'light'} style={styles.nativeSegment}
+            onChange={(event) => { const value = (['low', 'medium', 'high'] as ExportQuality[])[event.nativeEvent.selectedSegmentIndex]; if (value) void handleSetQuality(value); }} />
         </View>
 
         {/* Section 4b: Default export resolution */}
@@ -709,28 +618,9 @@ export default function SettingsScreen() {
           {t.settings.defaultResolution}
         </Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={styles.segmentedRow}>
-            {EXPORT_DPI_PRESETS.map((d) => {
-              const isSelected = defaultDpi === d;
-              return (
-                <TouchableOpacity
-                  key={d}
-                  activeOpacity={0.8}
-                  onPress={() => handleSetDpi(d)}
-                  style={[styles.segmentButton, isSelected && { backgroundColor: colors.primary }]}
-                >
-                  <Text
-                    style={[
-                      typography.bodyMedium,
-                      { color: isSelected ? '#FFFFFF' : colors.textPrimary, fontWeight: isSelected ? '700' : '500' },
-                    ]}
-                  >
-                    {formatString(t.export.dpi, { dpi: d })}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <SegmentedControl values={EXPORT_DPI_PRESETS.map((d) => formatString(t.export.dpi, { dpi: d }))}
+            selectedIndex={EXPORT_DPI_PRESETS.indexOf(defaultDpi)} appearance={isDark ? 'dark' : 'light'} style={styles.nativeSegment}
+            onChange={(event) => { const value = EXPORT_DPI_PRESETS[event.nativeEvent.selectedSegmentIndex]; if (value) void handleSetDpi(value); }} />
         </View>
 
         {/* Section 5: Storage Info */}
@@ -811,6 +701,7 @@ const styles = StyleSheet.create({
     borderWidth: hairline,
     padding: CARD_PADDING,
   },
+  nativeSegment: { minHeight: 44 },
   segmentedRow: {
     flexDirection: 'row',
     gap: 8,

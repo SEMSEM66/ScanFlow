@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ActivityIndicator,
   Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { concentric, corner, hairline, radius, shadows, useTheme } from '../theme';
+import { SegmentedControl } from './ui/NativeSegmentedControl';
+import { hairline, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { ExportDpi, ExportFormat, ExportQuality } from '../types';
 import { exportService } from '../services/ExportService';
@@ -33,7 +33,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   isGenerating = false,
   progress = null,
 }) => {
-  const { colors, typography, spacing } = useTheme();
+  const { colors, typography, spacing, isDark } = useTheme();
   const { t, formatString, language } = useTranslation();
 
   const [format, setFormat] = useState<ExportFormat>('pdf');
@@ -72,57 +72,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           {t.export.format}
         </Text>
 
-        <View style={[styles.formatContainer, { backgroundColor: colors.surfaceSubdued }]}>
-          {/* PDF option */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setFormat('pdf')}
-            style={[
-              styles.formatOption,
-              format === 'pdf' && [styles.formatOptionSelected, { backgroundColor: colors.surface }],
-            ]}
-          >
-            <Ionicons
-              name="document-text"
-              size={20}
-              color={format === 'pdf' ? colors.primary : colors.textMuted}
-              style={{ marginRight: 8 }}
-            />
-            <Text
-              style={[
-                typography.bodyBold,
-                { color: format === 'pdf' ? colors.textPrimary : colors.textMuted },
-              ]}
-            >
-              {t.export.pdf}
-            </Text>
-          </TouchableOpacity>
-
-          {/* JPG option */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setFormat('jpg')}
-            style={[
-              styles.formatOption,
-              format === 'jpg' && [styles.formatOptionSelected, { backgroundColor: colors.surface }],
-            ]}
-          >
-            <Ionicons
-              name="image"
-              size={20}
-              color={format === 'jpg' ? colors.primary : colors.textMuted}
-              style={{ marginRight: 8 }}
-            />
-            <Text
-              style={[
-                typography.bodyBold,
-                { color: format === 'jpg' ? colors.textPrimary : colors.textMuted },
-              ]}
-            >
-              {t.export.jpg}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <SegmentedControl values={[t.export.pdf, t.export.jpg]} selectedIndex={format === 'pdf' ? 0 : 1}
+          appearance={isDark ? 'dark' : 'light'} enabled={!isGenerating} style={styles.segment}
+          onChange={(event) => setFormat(event.nativeEvent.selectedSegmentIndex === 0 ? 'pdf' : 'jpg')} />
 
         {format === 'jpg' && (
           <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 6 }]}>
@@ -140,34 +92,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         >
           {t.export.resolution}
         </Text>
-        <View style={[styles.qualityContainer, { backgroundColor: colors.surfaceSubdued }]}>
-          {EXPORT_DPI_PRESETS.map((d) => {
-            const isSelected = dpi === d;
-            return (
-              <TouchableOpacity
-                key={d}
-                activeOpacity={0.8}
-                onPress={() => setDpi(d)}
-                style={[
-                  styles.qualityOption,
-                  isSelected && [styles.qualityOptionSelected, { backgroundColor: colors.surface }],
-                ]}
-              >
-                <Text
-                  style={[
-                    typography.bodyMedium,
-                    {
-                      color: isSelected ? colors.primary : colors.textSecondary,
-                      fontWeight: isSelected ? '700' : '500',
-                    },
-                  ]}
-                >
-                  {formatString(t.export.dpi, { dpi: d })}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <SegmentedControl values={EXPORT_DPI_PRESETS.map((d) => formatString(t.export.dpi, { dpi: d }))}
+          selectedIndex={EXPORT_DPI_PRESETS.indexOf(dpi)} appearance={isDark ? 'dark' : 'light'} enabled={!isGenerating} style={styles.segment}
+          onChange={(event) => { const value = EXPORT_DPI_PRESETS[event.nativeEvent.selectedSegmentIndex]; if (value) setDpi(value); }} />
 
         {/* Section: Qualität */}
         <Text
@@ -180,41 +107,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           {t.export.quality}
         </Text>
 
-        <View style={[styles.qualityContainer, { backgroundColor: colors.surfaceSubdued }]}>
-          {(['low', 'medium', 'high'] as ExportQuality[]).map((q) => {
-            const isSelected = quality === q;
-            const label =
-              q === 'low'
-                ? t.export.low
-                : q === 'medium'
-                ? t.export.medium
-                : t.export.high;
-
-            return (
-              <TouchableOpacity
-                key={q}
-                activeOpacity={0.8}
-                onPress={() => setQuality(q)}
-                style={[
-                  styles.qualityOption,
-                  isSelected && [styles.qualityOptionSelected, { backgroundColor: colors.surface }],
-                ]}
-              >
-                <Text
-                  style={[
-                    typography.bodyMedium,
-                    {
-                      color: isSelected ? colors.primary : colors.textSecondary,
-                      fontWeight: isSelected ? '700' : '500',
-                    },
-                  ]}
-                >
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <SegmentedControl values={[t.export.low, t.export.medium, t.export.high]}
+          selectedIndex={(['low', 'medium', 'high'] as ExportQuality[]).indexOf(quality)} appearance={isDark ? 'dark' : 'light'} enabled={!isGenerating} style={styles.segment}
+          onChange={(event) => { const value = (['low', 'medium', 'high'] as ExportQuality[])[event.nativeEvent.selectedSegmentIndex]; if (value) setQuality(value); }} />
 
         {/* Security Feature: Watermark Toggle (PDF only) */}
         {format === 'pdf' && (
@@ -264,10 +159,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   );
 };
 
-/** Segmented controls: track radius and the inset of the selected segment (concentric). */
-const SEGMENT_RADIUS = radius.md;
-const SEGMENT_INSET = 3;
-
 const styles = StyleSheet.create({
   content: { paddingTop: 24 },
   title: {
@@ -278,39 +169,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontWeight: '500',
   },
-  formatContainer: {
-    flexDirection: 'row',
-    ...corner(SEGMENT_RADIUS),
-    padding: SEGMENT_INSET,
-  },
-  formatOption: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    ...corner(concentric(SEGMENT_RADIUS, SEGMENT_INSET)),
-  },
-  formatOptionSelected: {
-    shadowColor: '#000',
-    ...shadows.low,
-  },
-  qualityContainer: {
-    flexDirection: 'row',
-    ...corner(SEGMENT_RADIUS),
-    padding: SEGMENT_INSET,
-  },
-  qualityOption: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    ...corner(concentric(SEGMENT_RADIUS, SEGMENT_INSET)),
-  },
-  qualityOptionSelected: {
-    shadowColor: '#000',
-    ...shadows.low,
-  },
+  segment: { minHeight: 44 },
   watermarkRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -14,8 +14,9 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { SegmentedControl } from '../src/components/ui/NativeSegmentedControl';
 import { Canvas, Path, Skia, FillType } from '@shopify/react-native-skia';
-import { useTheme, corner, capsule, concentric, radius } from '../src/theme';
+import { useTheme, corner, capsule, radius } from '../src/theme';
 import { useTranslation } from '../src/i18n';
 import { documentRepository, imagePipeline } from '../src/services';
 import { FULL_QUAD, isConvexQuad, polygonArea } from '../src/imaging/geometry';
@@ -26,7 +27,6 @@ const LOUPE_SIZE = 112;
 const LOUPE_ZOOM = 2.5;
 const HANDLE_RING = 26;
 const PILL_HEIGHT = 40;
-const SEGMENT_INSET = 2;
 const ACCENT = '#00D2FF';
 const INVALID = '#FF453A';
 
@@ -281,19 +281,9 @@ export default function CropScreen() {
       {/* Page format */}
       <View style={styles.formatRow}>
         <Text style={styles.formatLabel}>{t.crop.pageFormat}</Text>
-        <View style={styles.segment}>
-          {(['auto', 'a4', 'letter'] as PageFormat[]).map((f) => (
-            <TouchableOpacity
-              key={f}
-              onPress={() => setPageFormat(f)}
-              style={[styles.segmentItem, pageFormat === f && { backgroundColor: colors.primary }]}
-            >
-              <Text style={[styles.segmentText, { color: pageFormat === f ? '#FFFFFF' : 'rgba(255,255,255,0.75)' }]}>
-                {f === 'auto' ? t.crop.formatAuto : f === 'a4' ? t.crop.formatA4 : t.crop.formatLetter}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <SegmentedControl values={[t.crop.formatAuto, t.crop.formatA4, t.crop.formatLetter]}
+          selectedIndex={(['auto', 'a4', 'letter'] as PageFormat[]).indexOf(pageFormat)} appearance="dark" style={styles.nativeSegment}
+          onChange={(event) => { const value = (['auto', 'a4', 'letter'] as PageFormat[])[event.nativeEvent.selectedSegmentIndex]; if (value) setPageFormat(value); }} />
       </View>
 
       <View style={styles.bottomBar}>
@@ -373,9 +363,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   formatLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '500' },
-  segment: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.12)', ...corner(radius.sm), padding: SEGMENT_INSET },
-  segmentItem: { paddingHorizontal: 14, paddingVertical: 6, ...corner(concentric(radius.sm, SEGMENT_INSET)) },
-  segmentText: { fontSize: 13, fontWeight: '600' },
+  nativeSegment: { flex: 1, maxWidth: 210, marginLeft: 8, minHeight: 44 },
   bottomBar: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, paddingVertical: 14 },
   pillButton: {
     flexDirection: 'row',
