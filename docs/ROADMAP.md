@@ -353,10 +353,10 @@ Requested by the user after STOP C: the dark background of *Anpassen* slid up to
 - [x] `docs/COMMITS.md` with Conventional Commit grouping for the v1.2.0, v1.3.0 and v1.4.0 change sets.
 - [x] ESLint flat config (`eslint.config.js`) + `npm test` / `npm run test:imaging` / `npm run test:security` scripts.
 - [x] Fix the pre-existing lint error in `src/components/AppLockOverlay.tsx` (v1.4.0 – file rewritten).
-- [ ] Fix the remaining lint warnings (unused variables).
-- [ ] Localize remaining hard-coded German strings (library actions). *(App lock, PIN and security settings localized in v1.4.0.)*
+- [x] Fix the remaining lint warnings (unused variables) (v1.8.0).
+- [x] Localize remaining hard-coded German strings (library actions) (v1.8.0). *(App lock, PIN and security settings localized in v1.4.0.)*
 - [ ] Remove the unused `react-native-webview` dependency after STOP A confirms the Skia pipeline on device.
-- [ ] Document screen: *…* → *Dokument löschen* deletes at once, without the confirmation the library shows – add the same confirmation (found while preparing v1.6.0).
+- [x] Document screen: *…* → *Dokument löschen* deletes at once, without the confirmation the library shows – add the same confirmation (v1.8.0).
 - [x] Release per version instead of the hard-coded `v1.1.0` in `.github/workflows/build-ipa.yml` (v1.4.0: tag `v<package.json version>`, notes from `CHANGELOG.md`).
 - [ ] Optional: GitHub Action running `npx tsc --noEmit`, `npm run lint`, `npm run test:imaging` on pull requests.
 

@@ -43,6 +43,7 @@ import {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HEADER_BUTTON = 36;
+const PAGINATION_PILL_HEIGHT = 34;
 
 const thumbKeyOf = (p: DocumentPage) =>
   `${p.id}|${p.originalUri}|${JSON.stringify(p.corners)}|${p.rotation}|${p.pageFormat}|${JSON.stringify(p.adjustments)}`;
@@ -69,6 +70,11 @@ export default function DocumentDetailScreen() {
 
   // Modals
   const [isPageEditorVisible, setIsPageEditorVisible] = useState(false);
+  const [pageEditorKey, setPageEditorKey] = useState(0);
+  const openPageEditor = () => {
+    setPageEditorKey((k) => k + 1);
+    setIsPageEditorVisible(true);
+  };
   const [adjustOwner] = useState(() => Symbol('adjust-owner'));
   const [promptState, setPromptState] = useState<{
     visible: boolean;
@@ -130,7 +136,6 @@ export default function DocumentDetailScreen() {
       loadDocumentData();
       if (!id) return undefined;
       ocrService.prioritize(id);
-      ocrService.kick();
       return () => ocrService.prioritize(null);
     }, [id, loadDocumentData])
   );
@@ -139,29 +144,36 @@ export default function DocumentDetailScreen() {
   const previewKey = currentPage ? imagePipeline.previewKey(currentPage) : null;
   const isPreviewCurrent = !!currentPage && currentPage.renderKey === previewKey && currentPage.previewUri !== currentPage.originalUri;
 
-  // Render the current page preview + filter thumbnails, then the other pages in the background.
+  // Render the current page preview + filter thumbnails first (with background OCR paused),
+  // then kick OCR and render the remaining pages in the background.
   useEffect(() => {
     if (!currentPage) return;
     let cancelled = false;
+    const resumeOcr = ocrService.hold();
     (async () => {
       try {
-        if (!isPreviewCurrent) {
-          setIsRendering(true);
-          const updated = await ensurePagePreview(currentPage.id);
-          if (!cancelled && updated) replacePage(updated);
+        try {
+          if (!isPreviewCurrent) {
+            setIsRendering(true);
+            const updated = await ensurePagePreview(currentPage.id);
+            if (!cancelled && updated) replacePage(updated);
+          }
+        } catch (err) {
+          console.error('[DocumentDetailScreen] render error', err);
+          if (!cancelled) Alert.alert(t.common.error, t.filters.renderFailed);
+        } finally {
+          if (!cancelled && mounted.current) setIsRendering(false);
         }
-      } catch (err) {
-        console.error('[DocumentDetailScreen] render error', err);
-        if (!cancelled) Alert.alert(t.common.error, t.filters.renderFailed);
+        try {
+          const page = (await documentRepository.getPage(currentPage.id)) ?? currentPage;
+          const th = await imagePipeline.renderThumbnails(page, FILTER_ORDER);
+          if (!cancelled && mounted.current) setThumbState({ key: thumbKeyOf(page), map: th });
+        } catch (err) {
+          console.warn('[DocumentDetailScreen] thumbnails failed', err);
+        }
       } finally {
-        if (!cancelled && mounted.current) setIsRendering(false);
-      }
-      try {
-        const page = (await documentRepository.getPage(currentPage.id)) ?? currentPage;
-        const th = await imagePipeline.renderThumbnails(page, FILTER_ORDER);
-        if (!cancelled && mounted.current) setThumbState({ key: thumbKeyOf(page), map: th });
-      } catch (err) {
-        console.warn('[DocumentDetailScreen] thumbnails failed', err);
+        resumeOcr();
+        if (!cancelled && mounted.current) ocrService.kick(400);
       }
       // background: keep the other previews (page list, library thumbnail) up to date
       for (const p of pages) {
@@ -177,6 +189,7 @@ export default function DocumentDetailScreen() {
     })();
     return () => {
       cancelled = true;
+      resumeOcr();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage?.id, previewKey, pages.length]);
@@ -243,6 +256,7 @@ export default function DocumentDetailScreen() {
 
   const handleCrop = () => {
     if (!currentPage) return;
+    setReviewIds((prev) => prev.filter((pid) => pid !== currentPage.id));
     router.push({ pathname: '/crop', params: { pageId: currentPage.id, documentId: id } });
   };
 
@@ -378,9 +392,18 @@ export default function DocumentDetailScreen() {
             if (dup) router.replace(`/document/${dup.id}` as never);
           }}>{t.library.duplicateDocument}</Stack.Toolbar.MenuAction>
           {ocrService.available ? <Stack.Toolbar.MenuAction icon="doc.text" onPress={() => router.push({ pathname: '/sheets/text', params: { documentId: document.id, title: document.title } })}>{t.ocr.menuAction}</Stack.Toolbar.MenuAction> : null}
-          <Stack.Toolbar.MenuAction icon="trash" destructive onPress={async () => {
-            await documentRepository.delete(document.id);
-            router.replace('/(tabs)/(library)');
+          <Stack.Toolbar.MenuAction icon="trash" destructive onPress={() => {
+            Alert.alert(t.library.deleteDocument, t.library.deleteConfirm, [
+              { text: t.common.cancel, style: 'cancel' },
+              {
+                text: t.common.delete,
+                style: 'destructive',
+                onPress: async () => {
+                  await documentRepository.delete(document.id);
+                  router.replace('/(tabs)/(library)');
+                },
+              },
+            ]);
           }}>{t.library.deleteDocument}</Stack.Toolbar.MenuAction>
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
@@ -449,21 +472,31 @@ export default function DocumentDetailScreen() {
             <TouchableOpacity
               disabled={currentPageIndex === 0}
               onPress={() => setCurrentPageIndex((prev) => Math.max(0, prev - 1))}
-              style={[styles.arrowButton, { opacity: currentPageIndex === 0 ? 0.3 : 1 }]}
+              hitSlop={{ top: 10, bottom: 10, left: 12, right: 12 }}
+              style={[styles.arrowButton, { backgroundColor: colors.surfaceSubdued, opacity: currentPageIndex === 0 ? 0.35 : 1 }]}
+              accessibilityRole="button"
             >
-              <Icon name="chevron.left" size={20} color={colors.textPrimary} />
+              <Icon name="chevron.left" size={18} color={colors.textPrimary} weight="semibold" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setIsPageEditorVisible(true)}>
-              <Text style={[typography.footnote, { color: colors.textSecondary, fontWeight: '600' }]}>
+            <TouchableOpacity
+              onPress={openPageEditor}
+              hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+              style={[styles.pageCountPill, { backgroundColor: colors.surfaceSubdued }]}
+              accessibilityRole="button"
+            >
+              <Text style={[typography.footnote, { color: colors.textPrimary, fontWeight: '600' }]}>
                 {currentPageIndex + 1} / {pages.length}
               </Text>
+              <Icon name="square.grid.2x2" size={13} color={colors.textSecondary} />
             </TouchableOpacity>
             <TouchableOpacity
               disabled={currentPageIndex === pages.length - 1}
               onPress={() => setCurrentPageIndex((prev) => Math.min(pages.length - 1, prev + 1))}
-              style={[styles.arrowButton, { opacity: currentPageIndex === pages.length - 1 ? 0.3 : 1 }]}
+              hitSlop={{ top: 10, bottom: 10, left: 12, right: 12 }}
+              style={[styles.arrowButton, { backgroundColor: colors.surfaceSubdued, opacity: currentPageIndex === pages.length - 1 ? 0.35 : 1 }]}
+              accessibilityRole="button"
             >
-              <Icon name="chevron.right" size={20} color={colors.textPrimary} />
+              <Icon name="chevron.right" size={18} color={colors.textPrimary} weight="semibold" />
             </TouchableOpacity>
           </View>
         )}
@@ -502,6 +535,7 @@ export default function DocumentDetailScreen() {
 
       <PageEditorModal
         visible={isPageEditorVisible}
+        modalKey={pageEditorKey}
         pages={pages}
         onClose={() => setIsPageEditorVisible(false)}
         onMovePage={handleMovePage}
@@ -603,7 +637,19 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   arrowButton: {
-    padding: 6,
+    width: PAGINATION_PILL_HEIGHT,
+    height: PAGINATION_PILL_HEIGHT,
+    ...capsule(PAGINATION_PILL_HEIGHT),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageCountPill: {
+    height: PAGINATION_PILL_HEIGHT,
+    ...capsule(PAGINATION_PILL_HEIGHT),
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    gap: 6,
   },
   addMoreButton: {
     flexDirection: 'row',

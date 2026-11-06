@@ -21,6 +21,7 @@ import {
   type LockState,
 } from '../security/lockPolicy';
 import { LockScreen } from './LockScreen';
+import { PinSetupModal } from './PinSetupModal';
 
 /**
  * App lock + privacy (v1.4.0).
@@ -115,7 +116,9 @@ export const AppLockOverlay: React.FC<{ children: React.ReactNode }> = ({ childr
   /** Reads the settings; the first successful read decides the initial lock. */
   const loadConfig = useCallback(async (): Promise<boolean> => {
     try {
-      applyConfig(await authService.getSecurityConfig());
+      const [cfg, c] = await Promise.all([authService.getSecurityConfig(), authService.getCapabilities()]);
+      setCaps(c);
+      applyConfig(cfg);
       return true;
     } catch (err) {
       console.warn('[AppLock] Security settings not readable:', err);
@@ -228,6 +231,10 @@ export const AppLockOverlay: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const value = useMemo(() => ({ config, reload }), [config, reload]);
   const showCover = !config || lock.locked;
+  // Legacy state migration: if App Lock was turned on without a ScanFlow PIN,
+  // prompt the user to create a ScanFlow PIN as soon as the app is unlocked
+  // so failed attempts never fall back to the iOS device passcode.
+  const needsPinSetup = !!config && config.lockEnabled && !lock.locked && !!caps && caps.pinLength === null;
 
   return (
     <AppLockContext.Provider value={value}>
@@ -244,6 +251,21 @@ export const AppLockOverlay: React.FC<{ children: React.ReactNode }> = ({ childr
           />
         </Cover>
       ) : null}
+      <PinSetupModal
+        visible={needsPinSetup}
+        flow="create"
+        onClose={async () => {
+          try {
+            await authService.setAppLockEnabled(false);
+          } catch (err) {
+            console.warn('[AppLock] Could not disable app lock after PIN setup cancel:', err);
+          }
+          await loadConfig();
+        }}
+        onSuccess={async () => {
+          await loadConfig();
+        }}
+      />
     </AppLockContext.Provider>
   );
 };

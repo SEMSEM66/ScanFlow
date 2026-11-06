@@ -163,7 +163,7 @@ export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ document, 
             ) : null}
           </View>
           <TouchableOpacity onPress={onClose} style={[styles.headerButton, { alignItems: 'flex-end' }]}>
-            <Text maxFontSizeMultiplier={1.3} style={[typography.bodyBold, { color: colors.primary }]}>{t.common.done}</Text>
+            <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[typography.bodyBold, { color: colors.primary }]}>{t.common.done}</Text>
           </TouchableOpacity>
         </View>
 
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   headerButton: {
-    width: 72,
+    minWidth: 84,
     minHeight: 44,
     justifyContent: 'center',
   },

@@ -13,8 +13,11 @@ import { useTranslation } from '../i18n';
 import { ExportDpi, ExportFormat, ExportQuality } from '../types';
 import { exportService } from '../services/ExportService';
 import { authService } from '../services/AuthService';
+import { ocrService } from '../services/OcrService';
 import { EXPORT_DPI_PRESETS } from '../imaging/pageFormat';
 import { Button } from './ui';
+
+const FORMAT_OPTIONS: ExportFormat[] = ['pdf', 'docx', 'jpg'];
 
 interface ExportModalProps {
   documentTitle: string;
@@ -48,12 +51,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   }, []);
 
   const estimatedSize = exportService.formatBytes(
-    exportService.estimateBytes(format === 'pdf' ? pageCount : 1, format, dpi, quality),
+    exportService.estimateBytes(format === 'jpg' ? 1 : pageCount, format, dpi, quality),
     language
   );
 
   const handleSharePress = async () => {
-    const watermarkText = includeWatermark ? t.export.watermarkText : undefined;
+    const watermarkText = format === 'pdf' && includeWatermark ? t.export.watermarkText : undefined;
     await onShare(format, quality, dpi, watermarkText);
   };
 
@@ -72,9 +75,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           {t.export.format}
         </Text>
 
-        <SegmentedControl values={[t.export.pdf, t.export.jpg]} selectedIndex={format === 'pdf' ? 0 : 1}
-          appearance={isDark ? 'dark' : 'light'} enabled={!isGenerating} style={styles.segment}
-          onChange={(event) => setFormat(event.nativeEvent.selectedSegmentIndex === 0 ? 'pdf' : 'jpg')} />
+        <SegmentedControl
+          values={[t.export.pdf, t.export.docx, t.export.jpg]}
+          selectedIndex={FORMAT_OPTIONS.indexOf(format)}
+          appearance={isDark ? 'dark' : 'light'}
+          enabled={!isGenerating}
+          style={styles.segment}
+          onChange={(event) => {
+            const next = FORMAT_OPTIONS[event.nativeEvent.selectedSegmentIndex];
+            if (next) setFormat(next);
+          }}
+        />
 
         {format === 'jpg' && (
           <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 6 }]}>
@@ -82,34 +93,51 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           </Text>
         )}
 
-        {/* Section: Auflösung */}
-        <Text
-          style={[
-            typography.subhead,
-            styles.sectionHeader,
-            { color: colors.textSecondary, marginTop: spacing.md },
-          ]}
-        >
-          {t.export.resolution}
-        </Text>
-        <SegmentedControl values={EXPORT_DPI_PRESETS.map((d) => formatString(t.export.dpi, { dpi: d }))}
-          selectedIndex={EXPORT_DPI_PRESETS.indexOf(dpi)} appearance={isDark ? 'dark' : 'light'} enabled={!isGenerating} style={styles.segment}
-          onChange={(event) => { const value = EXPORT_DPI_PRESETS[event.nativeEvent.selectedSegmentIndex]; if (value) setDpi(value); }} />
+        {format === 'docx' && (
+          <View style={{ marginTop: 8 }}>
+            <Text style={[typography.footnote, { color: colors.textSecondary }]}>
+              {t.export.docxHint}
+            </Text>
+            {!ocrService.available && (
+              <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 4 }]}>
+                {t.export.docxExpoGoHint}
+              </Text>
+            )}
+          </View>
+        )}
 
-        {/* Section: Qualität */}
-        <Text
-          style={[
-            typography.subhead,
-            styles.sectionHeader,
-            { color: colors.textSecondary, marginTop: spacing.md },
-          ]}
-        >
-          {t.export.quality}
-        </Text>
+        {format !== 'docx' && (
+          <>
+            {/* Section: Auflösung */}
+            <Text
+              style={[
+                typography.subhead,
+                styles.sectionHeader,
+                { color: colors.textSecondary, marginTop: spacing.md },
+              ]}
+            >
+              {t.export.resolution}
+            </Text>
+            <SegmentedControl values={EXPORT_DPI_PRESETS.map((d) => formatString(t.export.dpi, { dpi: d }))}
+              selectedIndex={EXPORT_DPI_PRESETS.indexOf(dpi)} appearance={isDark ? 'dark' : 'light'} enabled={!isGenerating} style={styles.segment}
+              onChange={(event) => { const value = EXPORT_DPI_PRESETS[event.nativeEvent.selectedSegmentIndex]; if (value) setDpi(value); }} />
 
-        <SegmentedControl values={[t.export.low, t.export.medium, t.export.high]}
-          selectedIndex={(['low', 'medium', 'high'] as ExportQuality[]).indexOf(quality)} appearance={isDark ? 'dark' : 'light'} enabled={!isGenerating} style={styles.segment}
-          onChange={(event) => { const value = (['low', 'medium', 'high'] as ExportQuality[])[event.nativeEvent.selectedSegmentIndex]; if (value) setQuality(value); }} />
+            {/* Section: Qualität */}
+            <Text
+              style={[
+                typography.subhead,
+                styles.sectionHeader,
+                { color: colors.textSecondary, marginTop: spacing.md },
+              ]}
+            >
+              {t.export.quality}
+            </Text>
+
+            <SegmentedControl values={[t.export.low, t.export.medium, t.export.high]}
+              selectedIndex={(['low', 'medium', 'high'] as ExportQuality[]).indexOf(quality)} appearance={isDark ? 'dark' : 'light'} enabled={!isGenerating} style={styles.segment}
+              onChange={(event) => { const value = (['low', 'medium', 'high'] as ExportQuality[])[event.nativeEvent.selectedSegmentIndex]; if (value) setQuality(value); }} />
+          </>
+        )}
 
         {/* Security Feature: Watermark Toggle (PDF only) */}
         {format === 'pdf' && (

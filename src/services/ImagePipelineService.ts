@@ -63,6 +63,8 @@ export interface RenderedPage {
 
 type PageLike = Pick<DocumentPage, 'originalUri' | 'proxyUri' | 'corners' | 'rotation' | 'filter' | 'pageFormat' | 'adjustments'>;
 
+const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 export function renderStateOf(p: PageLike): RenderState {
   return {
     originalUri: p.originalUri,
@@ -222,7 +224,9 @@ class ImagePipelineService {
     return this.enqueue(async () => {
       const key = this.previewKey(page);
       const src = await this.decodeFile(page.proxyUri ?? page.originalUri, true);
+      await yieldToUi();
       const res = this.r.render(src, this.options(page, 150, PREVIEW_LONG_SIDE));
+      await yieldToUi();
       const b64 = this.r.encodeJpeg(res.image, PREVIEW_JPEG_QUALITY);
       res.image.dispose?.();
       const uri = await storageService.writeBase64(b64, `prev_${key}`, 'jpg', 'renders');
@@ -247,6 +251,7 @@ class ImagePipelineService {
       const small = this.r.downscale(full, 600);
       try {
         for (const f of todo) {
+          await yieldToUi();
           const res = this.r.render(small, this.options({ ...page, filter: f }, 72, THUMB_LONG_SIDE));
           const uri = `data:image/jpeg;base64,${this.r.encodeJpeg(res.image, 70)}`;
           res.image.dispose?.();
@@ -291,19 +296,23 @@ class ImagePipelineService {
    */
   renderForOcr(page: PageLike): Promise<{ uri: string; widthPx: number; heightPx: number }> {
     return this.enqueue(async () => {
-      const src = await this.decodeFile(page.originalUri, false);
+      await yieldToUi();
+      const sourceUri = page.proxyUri ?? page.originalUri;
+      const src = await this.decodeFile(sourceUri, true);
       try {
+        await yieldToUi();
         const res = this.r.render(src, {
           ...this.options(page, OCR_DPI, OCR_MAX_LONG_SIDE),
           filter: 'original',
           adjustments: DEFAULT_ADJUSTMENTS,
         });
+        await yieldToUi();
         const base64 = this.r.encodeJpeg(res.image, OCR_JPEG_QUALITY);
         res.image.dispose?.();
         const uri = await storageService.writeTempBase64(base64, 'ocr', 'jpg');
         return { uri, widthPx: res.widthPx, heightPx: res.heightPx };
       } finally {
-        if (!this.decoded.has(page.originalUri)) src.dispose?.();
+        if (!this.decoded.has(sourceUri)) src.dispose?.();
       }
     });
   }

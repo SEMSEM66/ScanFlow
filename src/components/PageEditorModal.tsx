@@ -20,6 +20,7 @@ const CARD_PADDING = 12;
 
 interface PageEditorModalProps {
   visible: boolean;
+  modalKey?: number;
   pages: DocumentPage[];
   onClose: () => void;
   onMovePage: (fromIndex: number, toIndex: number) => void;
@@ -32,6 +33,7 @@ interface PageEditorModalProps {
 
 export const PageEditorModal: React.FC<PageEditorModalProps> = ({
   visible,
+  modalKey,
   pages,
   onClose,
   onMovePage,
@@ -55,6 +57,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
 
   return (
     <Modal
+      key={modalKey}
       visible={visible}
       presentationStyle="pageSheet"
       allowSwipeDismissal
@@ -70,7 +73,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
             {formatString(t.filters.managePages, { count: pages.length })}
           </Text>
           <TouchableOpacity onPress={onClose} style={styles.headerButton} accessibilityRole="button">
-            <Text maxFontSizeMultiplier={1.3} style={[typography.bodyBold, { color: colors.primary }]}>{t.common.done}</Text>
+            <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[typography.bodyBold, { color: colors.primary }]}>{t.common.done}</Text>
           </TouchableOpacity>
         </View>
 
@@ -169,7 +172,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: hairline,
   },
   headerButton: {
-    width: 72,
+    minWidth: 84,
     minHeight: 44,
     alignItems: 'flex-end',
     justifyContent: 'center',

@@ -293,9 +293,13 @@ export class DocumentRepository {
       const originalUri = await storageService.saveImage(p.originalUri, 'orig_copy');
       const proxyUri =
         p.proxyUri && p.proxyUri !== p.originalUri ? await storageService.saveImage(p.proxyUri, 'proxy_copy', 'proxies') : null;
+      const previewUri =
+        p.previewUri && p.previewUri !== p.originalUri ? await storageService.saveImage(p.previewUri, 'prev_copy', 'renders') : originalUri;
       copied.push({
         originalUri,
+        previewUri,
         proxyUri: proxyUri ?? (p.proxyUri ? originalUri : null),
+        renderKey: previewUri !== originalUri ? p.renderKey : null,
         filter: p.filter,
         rotation: p.rotation,
         corners: p.corners,

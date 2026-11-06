@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 import { Icon } from '../../../src/components/ui/Icon';
 import { SegmentedControl } from '../../../src/components/ui/NativeSegmentedControl';
 import { useFocusEffect } from 'expo-router';
@@ -40,7 +41,7 @@ export default function SettingsScreen() {
   const [screenCaptureProtection, setScreenCaptureProtection] = useState(false);
   const [caps, setCaps] = useState<UnlockCapabilities | null>(null);
   const [securityBusy, setSecurityBusy] = useState(false);
-  const [pinModal, setPinModal] = useState<{ visible: boolean; flow: PinFlow }>({ visible: false, flow: 'create' });
+  const [pinModal, setPinModal] = useState<{ visible: boolean; flow: PinFlow; key: number }>({ visible: false, flow: 'create', key: 0 });
   const pinFlowDone = useRef<((ok: boolean) => void) | null>(null);
 
   // Scanner preference
@@ -110,32 +111,44 @@ export default function SettingsScreen() {
     await refreshCaps();
   }, [refreshCaps]);
 
+  const loadStorage = useCallback(async () => {
+    try {
+      const [size, docs] = await Promise.all([
+        storageService.getStorageSize(),
+        documentRepository.getAll(),
+      ]);
+      setStorageBytes(size);
+      setDocCount(docs.length);
+    } catch (err) {
+      console.warn('[Settings] Storage info not readable:', err);
+    }
+  }, []);
+
   useEffect(() => {
     async function loadSettings() {
       const qual = await authService.getDefaultQuality();
       setDefaultQuality(qual);
       setDefaultDpiState(await authService.getDefaultDpi());
       setScannerModeState(await authService.getScannerMode());
-      const size = await storageService.getStorageSize();
-      setStorageBytes(size);
-      const docs = await documentRepository.getAll();
-      setDocCount(docs.length);
     }
     loadSettings();
   }, []);
 
-  // Face ID / passcode may have changed in iOS Settings meanwhile.
+  // Face ID / passcode / storage may have changed meanwhile.
   useFocusEffect(
     useCallback(() => {
       loadSecurity();
-    }, [loadSecurity])
+      loadStorage();
+    }, [loadSecurity, loadStorage])
   );
 
   /** Opens the PIN dialog; resolves true when the flow completed. */
-  const runPinFlow = (flow: PinFlow) =>
+  const runPinFlow = (flow: PinFlow, delayMs = 0) =>
     new Promise<boolean>((resolve) => {
       pinFlowDone.current = resolve;
-      setPinModal({ visible: true, flow });
+      const open = () => setPinModal((m) => ({ visible: true, flow, key: m.key + 1 }));
+      if (delayMs > 0) setTimeout(open, delayMs);
+      else open();
     });
 
   const endPinFlow = (ok: boolean) => {
@@ -153,7 +166,7 @@ export default function SettingsScreen() {
       cancel: t.common.cancel,
     });
     if (result === 'success') return true;
-    if (result === 'use-pin') return runPinFlow('verify');
+    if (result === 'use-pin') return runPinFlow('verify', 250);
     if (result === 'unavailable') Alert.alert(t.security.noMethodTitle, t.security.noMethodMessage);
     return false;
   };
@@ -178,11 +191,8 @@ export default function SettingsScreen() {
     try {
       const c = await authService.getCapabilities();
       setCaps(c);
-      if (value && !authService.canUseAppLock(c)) {
-        Alert.alert(t.security.noMethodTitle, t.security.noMethodMessage, [
-          { text: t.common.cancel, style: 'cancel' },
-          { text: t.security.setPinAction, onPress: () => enableLockWithNewPin() },
-        ]);
+      if (value && c.pinLength === null) {
+        await enableLockWithNewPin();
         return;
       }
       // Turning the lock on proves the unlock method works; turning it off needs the owner.
@@ -210,19 +220,21 @@ export default function SettingsScreen() {
   const handleRemovePin = async () => {
     const c = await authService.getCapabilities();
     setCaps(c);
-    if (appLockEnabled && !c.passcodeSet) {
-      Alert.alert(t.security.pinTitle, t.security.pinRemoveBlocked);
-      return;
-    }
     Alert.alert(t.security.pinRemoveTitle, t.security.pinRemoveMessage, [
       { text: t.common.cancel, style: 'cancel' },
       {
         text: t.security.pinRemove,
         style: 'destructive',
         onPress: async () => {
-          if (!(await runPinFlow('verify'))) return;
+          // Wait briefly for the native alert to finish dismissing before presenting the PIN sheet
+          if (!(await runPinFlow('verify', 300))) return;
           try {
+            if (appLockEnabled) {
+              await authService.setAppLockEnabled(false);
+              setAppLockEnabled(false);
+            }
             await authService.removePinCode();
+            await reloadSecurity();
           } catch (err) {
             console.error('[Settings] Removing the PIN failed:', err);
             Alert.alert(t.common.error, t.security.saveFailed);
@@ -278,11 +290,8 @@ export default function SettingsScreen() {
     const methods: string[] = [];
     if (caps.biometry === 'faceId') methods.push('Face ID');
     else if (caps.biometry === 'touchId') methods.push('Touch ID');
-    if (caps.pinLength !== null) methods.push(t.security.methodPin);
-    else if (caps.passcodeSet) methods.push(t.security.methodPasscode);
-    return methods.length > 0
-      ? formatString(t.security.lockMethods, { methods: methods.join(t.security.or) })
-      : t.security.lockUnavailable;
+    methods.push(t.security.methodPin);
+    return formatString(t.security.lockMethods, { methods: methods.join(t.security.or) });
   })();
   const pinLength = caps?.pinLength ?? null;
 
@@ -645,7 +654,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* Section 6: Privacy Guarantee */}
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: spacing.lg, marginBottom: 40 }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: spacing.lg }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Icon name="checkmark.shield" size={24} color={colors.success} style={{ marginRight: 12 }} />
             <View style={{ flex: 1 }}>
@@ -658,11 +667,31 @@ export default function SettingsScreen() {
             </View>
           </View>
         </View>
+
+        {/* Section 7: About ("Über") */}
+        <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary, marginTop: spacing.lg }]}>
+          {t.settings.about}
+        </Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder, marginBottom: 40 }]}>
+          <View style={styles.infoRow}>
+            <Text style={[typography.body, { color: colors.textPrimary }]}>{t.settings.version}</Text>
+            <Text style={[typography.bodyBold, { color: colors.textSecondary }]}>
+              {Constants.expoConfig?.version ?? '1.8.0'}
+            </Text>
+          </View>
+          <View style={[styles.infoRow, { borderTopWidth: hairline, borderTopColor: colors.borderLight, marginTop: 10, paddingTop: 10 }]}>
+            <Text style={[typography.body, { color: colors.textPrimary }]}>{t.settings.developer}</Text>
+            <Text style={[typography.bodyBold, { color: colors.textSecondary }]}>
+              {t.settings.developerName}
+            </Text>
+          </View>
+        </View>
       </ScrollView>
 
       {/* ScanFlow PIN: set up / change / confirm */}
       <PinSetupModal
         visible={pinModal.visible}
+        modalKey={pinModal.key}
         flow={pinModal.flow}
         onClose={() => endPinFlow(false)}
         onSuccess={() => endPinFlow(true)}

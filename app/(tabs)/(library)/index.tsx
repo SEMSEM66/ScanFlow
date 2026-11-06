@@ -30,7 +30,7 @@ import {
 
 export default function LibraryScreen() {
   const { colors, typography, spacing } = useTheme();
-  const { t } = useTranslation();
+  const { t, formatString } = useTranslation();
   const router = useRouter();
   const scanner = useScanner();
 
@@ -140,8 +140,8 @@ export default function LibraryScreen() {
           const newFolder = await folderRepository.create(name);
           await loadData();
           setSelectedFolderId(newFolder.id);
-        } catch (err) {
-          Alert.alert(t.common.error, 'Ordner konnte nicht erstellt werden.');
+        } catch {
+          Alert.alert(t.common.error, t.library.createFolderFailed);
         }
       },
     });
@@ -157,8 +157,8 @@ export default function LibraryScreen() {
         try {
           await folderRepository.rename(folder.id, newName);
           loadData();
-        } catch (err) {
-          Alert.alert(t.common.error, 'Ordner konnte nicht umbenannt werden.');
+        } catch {
+          Alert.alert(t.common.error, t.library.renameFolderFailed);
         }
       },
     });
@@ -180,8 +180,8 @@ export default function LibraryScreen() {
                 setSelectedFolderId(null);
               }
               loadData();
-            } catch (err) {
-              Alert.alert(t.common.error, 'Ordner konnte nicht gelöscht werden.');
+            } catch {
+              Alert.alert(t.common.error, t.library.deleteFolderFailed);
             }
           },
         },
@@ -200,8 +200,8 @@ export default function LibraryScreen() {
         try {
           await documentRepository.update(doc.id, { title: newTitle });
           loadData();
-        } catch (err) {
-          Alert.alert(t.common.error, 'Dokument konnte nicht umbenannt werden.');
+        } catch {
+          Alert.alert(t.common.error, t.library.renameDocumentFailed);
         }
       },
     });
@@ -211,8 +211,8 @@ export default function LibraryScreen() {
     try {
       await documentRepository.duplicate(doc.id, t.common.copySuffix);
       loadData();
-    } catch (err) {
-      Alert.alert(t.common.error, 'Dokument konnte nicht dupliziert werden.');
+    } catch {
+      Alert.alert(t.common.error, t.library.duplicateDocumentFailed);
     }
   };
 
@@ -229,14 +229,16 @@ export default function LibraryScreen() {
             try {
               await documentRepository.delete(doc.id);
               loadData();
-            } catch (err) {
-              Alert.alert(t.common.error, 'Dokument konnte nicht gelöscht werden.');
+            } catch {
+              Alert.alert(t.common.error, t.library.deleteDocumentFailed);
             }
           },
         },
       ]
     );
   };
+
+  const selectedFolder = folders.find((f) => f.id === selectedFolderId) ?? null;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right']}>
@@ -275,10 +277,24 @@ export default function LibraryScreen() {
         ListHeaderComponent={
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsContainer}>
             <Chip label={t.common.all} selected={selectedFolderId === null} onPress={() => setSelectedFolderId(null)} />
-            {folders.map((folder) => (
-              <Chip key={folder.id} label={folder.name} selected={selectedFolderId === folder.id}
-                onPress={() => setSelectedFolderId(folder.id)} onLongPress={() => setActiveFolderForOptions(folder)} />
-            ))}
+            {folders.map((folder) => {
+              const isSelected = selectedFolderId === folder.id;
+              return (
+                <Chip
+                  key={folder.id}
+                  label={folder.name}
+                  selected={isSelected}
+                  onPress={() => {
+                    if (isSelected) {
+                      setActiveFolderForOptions(folder);
+                    } else {
+                      setSelectedFolderId(folder.id);
+                    }
+                  }}
+                  onLongPress={() => setActiveFolderForOptions(folder)}
+                />
+              );
+            })}
             <Chip icon="plus" label={t.library.newFolder} tint={colors.primary} onPress={handleOpenCreateFolder} />
           </ScrollView>
         }
@@ -287,12 +303,37 @@ export default function LibraryScreen() {
         ) : (
           <View style={styles.emptyContainer}>
             <View style={[styles.emptyIconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-              <Icon name="doc.text" size={48} color={colors.primary} />
+              <Icon name={selectedFolder && !isSearching ? 'folder' : 'doc.text'} size={48} color={colors.primary} />
             </View>
-            <Text style={[styles.emptyTitle, typography.title2, { color: colors.textPrimary, marginTop: spacing.base }]}>{isSearching ? t.common.noItems : t.library.emptyTitle}</Text>
-            <Text style={[styles.emptySubtitle, typography.body, { color: colors.textSecondary, marginTop: spacing.xs, marginHorizontal: spacing.xl }]}>{isSearching ? t.library.noResultsHint : t.library.emptySubtitle}</Text>
+            <Text style={[styles.emptyTitle, typography.title2, { color: colors.textPrimary, marginTop: spacing.base }]}>
+              {isSearching
+                ? t.common.noItems
+                : selectedFolder
+                  ? formatString(t.library.emptyFolderTitle, { folder: selectedFolder.name })
+                  : t.library.emptyTitle}
+            </Text>
+            <Text style={[styles.emptySubtitle, typography.body, { color: colors.textSecondary, marginTop: spacing.xs, marginHorizontal: spacing.xl }]}>
+              {isSearching ? t.library.noResultsHint : t.library.emptySubtitle}
+            </Text>
             {!isSearching && <Button icon="camera" title={t.library.startScan} onPress={() => scanner.scan()} disabled={scanner.busy} style={{ marginTop: spacing.xl }} />}
             {!isSearching && <Button variant="plain" size="medium" icon="photo.on.rectangle" title={t.scan.importPhotos} onPress={() => scanner.importFromLibrary()} disabled={scanner.busy} style={{ marginTop: spacing.md }} />}
+            {!isSearching && selectedFolder ? (
+              <View style={styles.emptyFolderActions}>
+                <Button
+                  variant="tinted"
+                  size="medium"
+                  icon="ellipsis.circle"
+                  title={t.library.manageFolder}
+                  onPress={() => setActiveFolderForOptions(selectedFolder)}
+                />
+                <Button
+                  variant="plain"
+                  size="medium"
+                  title={t.library.showAllDocuments}
+                  onPress={() => setSelectedFolderId(null)}
+                />
+              </View>
+            ) : null}
           </View>
         )}
         renderItem={({ item }) => (
@@ -426,6 +467,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-
-
+  emptyFolderActions: {
+    marginTop: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
 });

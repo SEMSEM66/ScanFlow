@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.0] - 2026-11-06
+
+Convert to Word (`.docx`), Settings *Über* section, and fixes from the v1.7.0 physical iPhone test.
+
+### Added
+- **In Word umwandeln (`.docx`):** convert any external `.pdf` file (*Werkzeuge → PDF-Datei auswählen*) or any ScanFlow document (*Werkzeuge → Aus ScanFlow-Dokumenten wählen* or *Exportieren → Word (.docx)*) into an editable Word document (`.docx`) with reconstructed headings, paragraphs, multi-column tab stops and page breaks, completely offline on your iPhone (`src/docx/`, `ScanFlowOcrModule.swift` PDFKit + Apple Vision, `ExportService`).
+- **Einstellungen → Über (*About*):** displays the app version (`1.8.0`) and developer name (`SemSem`).
+
+### Fixed
+- **App-Sperre locked the entire iPhone after 5 failed attempts when no ScanFlow-PIN was set:** enabling *App-Sperre* now always requires setting a 4- or 6-digit *ScanFlow-PIN* first (and existing setups with *App-Sperre* on but no *ScanFlow-PIN* automatically prompt to set a *ScanFlow-PIN* on unlock), so failed attempts only trigger ScanFlow's own 30-second countdown timer and never the iOS device passcode lockout.
+- **Unresponsive document menu (`…`) and pagination controls (`<`, `>`, `1 / 2`) while rendering or recognizing text:** `ImagePipelineService` now yields to the UI thread between decode/render/encode steps and between filter thumbnails, `renderForOcr` reuses the 2000 px proxy image, and `DocumentDetailScreen` / `useNativeMenu` pause background OCR while rendering the active page or showing an action menu.
+- **Page overview sheet (`1 / 2`) and pagination buttons:** enlarged `<` and `>` into 34 pt circular pills with hit-slop, styled `1 / 2` as an interactive pill with a grid icon, and keyed `PageEditorModal` so tapping `1 / 2` always opens the page overview reliably.
+- **2-column Library grid card width & duplicated thumbnails:** constrained `DocumentCard` to a single column width (`(windowWidth - 44) / 2`) so odd-numbered rows no longer stretch across 100 % of the screen, and `documentRepository.duplicate()` now copies rendered preview files so duplicated documents immediately display their thumbnail.
+- **Export sheet header wrapping:** widened the header button in `app/sheets/export.tsx` so *Abbrechen* stays on a single line.
+- **Folder pills in Library:** tapping an already-selected custom folder pill now opens the folder options menu (*Bearbeiten / Ordner löschen*), and empty folders clearly show the folder name with quick actions to edit the folder or show all documents.
+- **Crop review banner:** opening *Zuschneiden* from the bottom bar now clears the undetected-edge review banner for that page.
+- **Settings storage info:** *Gespeicherte Dokumente* and *Speicherbelegung* now refresh whenever the *Einstellungen* tab is opened.
+- **Document screen delete confirmation & localization:** *Dokument löschen* in the document detail menu now asks for confirmation (matching the library), all remaining German error alerts in `LibraryScreen` are localized (DE/EN), and all ESLint warnings are resolved.
+
+---
+
 ## [1.7.0] – Native iOS polish
 
 ### Changed

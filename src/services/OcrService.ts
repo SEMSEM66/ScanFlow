@@ -1,8 +1,10 @@
 import { AppState } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as SecureStore from 'expo-secure-store';
 import { ScanFlowOcr } from '../../modules/scanflow-ocr';
+import { base64ToUint8, extractPdfTextFromBytes, type DocxPageInput } from '../docx';
 import { OcrScheduler, type OcrCandidate, type OcrEvent } from '../ocr/scheduler';
-import { ocrKey } from '../ocr/text';
+import { ocrKey, pageText } from '../ocr/text';
 import type { OcrLine, PageTextRecord } from '../ocr/types';
 import { linesFromVision } from '../ocr/vision';
 import type { DocumentPage } from '../types';
@@ -172,6 +174,87 @@ export class OcrService {
     const lines = await this.recognize(page);
     await this.saveIfCurrent(page.id, key, lines);
     return lines;
+  }
+
+  /**
+   * Text lines of a page for explicit Word (.docx) conversion: uses stored text
+   * if current, otherwise runs on-device OCR when available.
+   */
+  async linesForWordExport(page: PageState): Promise<OcrLine[] | null> {
+    const key = ocrKeyOf(page);
+    const stored = await pageTextRepository.get(page.id);
+    if (stored && stored.key === key) return stored.lines;
+    if (!this.available) return null;
+    const lines = await this.recognize(page);
+    await this.saveIfCurrent(page.id, key, lines);
+    return lines;
+  }
+
+  /**
+   * Extracts text and layout lines from an external PDF file (file:// URI).
+   * Uses native PDFKit + Apple Vision in the installed IPA (supporting both
+   * digital and scanned image-only PDFs), and falls back to the pure-TS PDF
+   * stream extractor in Expo Go.
+   */
+  async recognizePdfFile(pdfUri: string): Promise<DocxPageInput[]> {
+    const native = ScanFlowOcr;
+    if (native && typeof native.recognizePdfAsync === 'function') {
+      const result = await native.recognizePdfAsync(pdfUri, {
+        languages: OCR_LANGUAGES,
+        level: 'accurate',
+        usesLanguageCorrection: true,
+        minimumTextHeight: OCR_MIN_TEXT_HEIGHT,
+      });
+      const pages: DocxPageInput[] = result.pages.map((p, idx) => {
+        const lines = linesFromVision({
+          width: p.width,
+          height: p.height,
+          languages: p.languages,
+          lines: p.lines,
+        });
+        const text = lines.length > 0 ? pageText(lines) : (p.embeddedText ?? '').trim();
+        return {
+          pageNumber: idx + 1,
+          lines,
+          text,
+        };
+      });
+
+      // If any page still has no text, check pure-TS PDF stream extraction as fallback
+      if (pages.some((p) => (!p.lines || p.lines.length === 0) && !p.text)) {
+        try {
+          const b64 = await FileSystem.readAsStringAsync(pdfUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          const fallbackPages = await extractPdfTextFromBytes(base64ToUint8(b64));
+          for (let i = 0; i < pages.length && i < fallbackPages.length; i++) {
+            const cur = pages[i];
+            const fb = fallbackPages[i];
+            if ((!cur.lines || cur.lines.length === 0) && !cur.text && (fb.lines.length > 0 || fb.text)) {
+              pages[i] = {
+                pageNumber: i + 1,
+                lines: fb.lines,
+                text: fb.text,
+              };
+            }
+          }
+        } catch {
+          // ignore fallback parse error
+        }
+      }
+      return pages;
+    }
+
+    // Expo Go fallback: pure-TS PDF text stream extraction
+    const b64 = await FileSystem.readAsStringAsync(pdfUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    const extracted = await extractPdfTextFromBytes(base64ToUint8(b64));
+    return extracted.map((p) => ({
+      pageNumber: p.pageNumber,
+      lines: p.lines,
+      text: p.text,
+    }));
   }
 
   /** Deletes all recognized text (settings). */

@@ -72,6 +72,20 @@ describe('shareDocument', () => {
     expect(mockDelete).toHaveBeenCalledWith(`${EXPORT_DIR}1712000000000/`, { idempotent: true });
   });
 
+  it('shares Word (.docx) files with the OpenXML UTI and deletes the export folder afterwards', async () => {
+    const docx = `${EXPORT_DIR}1712000000000/Vertrag.docx`;
+    await exportService.shareDocument(docx, 'docx', 'Teilen');
+    expect(mockShare).toHaveBeenCalledWith(
+      docx,
+      expect.objectContaining({
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        UTI: 'org.openxmlformats.wordprocessingml.document',
+        dialogTitle: 'Teilen',
+      })
+    );
+    expect(mockDelete).toHaveBeenCalledWith(`${EXPORT_DIR}1712000000000/`, { idempotent: true });
+  });
+
   it('also deletes it when sharing fails or is not available', async () => {
     mockShare.mockRejectedValueOnce(new Error('share failed'));
     await expect(exportService.shareDocument(uri, 'pdf')).rejects.toThrow('share failed');

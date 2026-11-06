@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, useWindowDimensions } from 'react-native';
 import { Document } from '../types';
 import type { Snippet } from '../ocr/text';
 import { capsule, concentric, corner, radius, shadows, useTheme } from '../theme';
@@ -21,7 +21,9 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
   snippet,
 }) => {
   const { colors, typography, spacing } = useTheme();
-  const { t, formatString } = useTranslation();
+  const { t } = useTranslation();
+  const { width: windowWidth } = useWindowDimensions();
+  const cardMaxWidth = Math.max(120, (windowWidth - spacing.base * 2 - 12) / 2);
 
   const formattedDate = new Date(document.createdAt).toLocaleDateString('de-DE', {
     day: '2-digit',
@@ -35,7 +37,12 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
       : `${document.pageCount} ${t.common.pages}`;
 
   return (
-    <TouchableOpacity activeOpacity={0.88} onPress={onPress} onLongPress={onMenuPress} style={styles.cell}>
+    <TouchableOpacity
+      activeOpacity={0.88}
+      onPress={onPress}
+      onLongPress={onMenuPress}
+      style={[styles.cell, { maxWidth: cardMaxWidth }]}
+    >
       <Card elevated="card" clip radius={CARD_RADIUS}>
         {/* Thumbnail area, edge to edge (clipped by the card) */}
         <View style={[styles.thumbnailContainer, { backgroundColor: colors.surfaceSubdued }]}>

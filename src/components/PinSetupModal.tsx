@@ -18,6 +18,7 @@ export type PinFlow = 'create' | 'change' | 'verify';
 
 interface PinSetupModalProps {
   visible: boolean;
+  modalKey?: number;
   flow: PinFlow;
   /** Cancelled by the user. */
   onClose: () => void;
@@ -29,7 +30,7 @@ type Step = 'current' | 'new' | 'confirm';
 
 const nextFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 32));
 
-export const PinSetupModal: React.FC<PinSetupModalProps> = ({ visible, flow, onClose, onSuccess }) => {
+export const PinSetupModal: React.FC<PinSetupModalProps> = ({ visible, modalKey, flow, onClose, onSuccess }) => {
   const { colors, typography } = useTheme();
   const { t, formatString } = useTranslation();
 
@@ -210,11 +211,11 @@ export const PinSetupModal: React.FC<PinSetupModalProps> = ({ visible, flow, onC
   const biometryName = biometry === 'touchId' ? 'Touch ID' : 'Face ID';
 
   return (
-    <Modal visible={visible} presentationStyle="pageSheet" allowSwipeDismissal={!busy} animationType="slide" onRequestClose={cancel}>
+    <Modal key={modalKey} visible={visible} presentationStyle="pageSheet" allowSwipeDismissal={!busy} animationType="slide" onRequestClose={cancel}>
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.topHeader}>
           <TouchableOpacity onPress={cancel} style={styles.cancelBtn} accessibilityRole="button">
-            <Text style={[typography.body, { color: colors.primary }]}>{t.common.cancel}</Text>
+            <Text numberOfLines={1} style={[typography.body, { color: colors.primary }]}>{t.common.cancel}</Text>
           </TouchableOpacity>
         </View>
 

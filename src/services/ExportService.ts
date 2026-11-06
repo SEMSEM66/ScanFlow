@@ -1,6 +1,7 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
+import { buildDocxBase64, type DocxPageInput } from '../docx';
 import { buildPdf, estimatePdfKb, ESTIMATED_PAGE_KB } from '../imaging/pdf';
 import type { OcrLine } from '../ocr/types';
 import type { DocumentPage, ExportDpi, ExportFormat, ExportQuality } from '../types';
@@ -140,10 +141,52 @@ img { width: 100%; height: 100%; object-fit: fill; display: block; }
   }
 
   /**
+   * Generates an editable OpenXML Word (.docx) file from a ScanFlow document's
+   * pages using their recognized text lines.
+   */
+  async generateDocx(
+    title: string,
+    pages: DocumentPage[],
+    opts: ExportOptions,
+    emptyPageNote?: string
+  ): Promise<string> {
+    const docxPages: DocxPageInput[] = [];
+    for (let i = 0; i < pages.length; i++) {
+      const lines = await this.pageText(pages[i], i, opts);
+      docxPages.push({
+        pageNumber: i + 1,
+        lines: lines ?? [],
+      });
+      opts.onProgress?.(i + 1, pages.length);
+    }
+    return this.generateDocxFromPages(title, docxPages, emptyPageNote);
+  }
+
+  /**
+   * Writes an editable OpenXML Word (.docx) file inside the temporary export
+   * directory from extracted or recognized page text inputs.
+   */
+  async generateDocxFromPages(
+    title: string,
+    pages: DocxPageInput[],
+    emptyPageNote?: string
+  ): Promise<string> {
+    const dir = await this.freshExportDir();
+    const target = `${dir}${sanitizeFileName(title)}.docx`;
+    const b64 = buildDocxBase64({
+      title,
+      pages,
+      emptyPageNote,
+    });
+    await FileSystem.writeAsStringAsync(target, b64, { encoding: FileSystem.EncodingType.Base64 });
+    return target;
+  }
+
+  /**
    * Native iOS share sheet. The exported file is deleted as soon as the sheet
    * is closed (expo-sharing resolves on dismissal, after the target app or
-   * "Save to Files" has taken its copy) – no readable PDF/JPG copy stays in
-   * the app cache.
+   * "Save to Files" has taken its copy) – no readable PDF/JPG/DOCX copy stays
+   * in the app cache.
    *
    * JPGs are shared without a declared type: expo-sharing re-stages a file
    * whose extension differs from the type's preferred one ("public.jpeg" →
@@ -155,10 +198,17 @@ img { width: 100%; height: 100%; object-fit: fill; display: block; }
     try {
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) throw new Error('Sharing is not available on this device.');
-      await Sharing.shareAsync(
-        uri,
-        format === 'pdf' ? { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle } : { dialogTitle }
-      );
+      const shareOptions =
+        format === 'pdf'
+          ? { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle }
+          : format === 'docx'
+            ? {
+                mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                UTI: 'org.openxmlformats.wordprocessingml.document',
+                dialogTitle,
+              }
+            : { dialogTitle };
+      await Sharing.shareAsync(uri, shareOptions);
     } finally {
       await this.discardExport(uri);
     }
@@ -177,6 +227,9 @@ img { width: 100%; height: 100%; object-fit: fill; display: block; }
 
   /** Estimated size (rough, from measured JPEG sizes per page). */
   estimateBytes(pageCount: number, format: ExportFormat, dpi: ExportDpi, quality: ExportQuality): number {
+    if (format === 'docx') {
+      return Math.max(12, pageCount * 6) * 1024;
+    }
     const kb = format === 'pdf' ? estimatePdfKb(pageCount, dpi, quality) : (ESTIMATED_PAGE_KB[dpi] ?? ESTIMATED_PAGE_KB[200])[quality];
     return kb * 1024;
   }

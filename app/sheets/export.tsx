@@ -39,15 +39,39 @@ export default function ExportSheet() {
     if (!data || running.current) return;
     running.current = true;
     setBusy(true);
-    setProgress({ current: 0, total: format === 'pdf' ? data.pages.length : 1 });
+    setProgress({ current: 0, total: format === 'jpg' ? 1 : data.pages.length });
     const onProgress = (current: number, total: number) => { if (mounted.current) setProgress({ current, total }); };
     let uri: string;
     const resumeOcr = ocrService.hold();
     try {
       const index = Math.max(0, Math.min(data.pages.length - 1, Number(pageIndex) || 0));
-      uri = format === 'pdf'
-        ? await exportService.generatePdf(data.document.title, data.pages, { dpi, quality, watermark, onProgress, textForPage: (page) => ocrService.linesForExport(page) })
-        : await exportService.generateJpg(data.document.title, data.pages[index], index, { dpi, quality, onProgress });
+      if (format === 'pdf') {
+        uri = await exportService.generatePdf(data.document.title, data.pages, {
+          dpi,
+          quality,
+          watermark,
+          onProgress,
+          textForPage: (page) => ocrService.linesForExport(page),
+        });
+      } else if (format === 'docx') {
+        uri = await exportService.generateDocx(
+          data.document.title,
+          data.pages,
+          {
+            dpi,
+            quality,
+            onProgress,
+            textForPage: (page) => ocrService.linesForWordExport(page),
+          },
+          t.export.docxEmptyPageNote
+        );
+      } else {
+        uri = await exportService.generateJpg(data.document.title, data.pages[index], index, {
+          dpi,
+          quality,
+          onProgress,
+        });
+      }
     } catch (error) {
       console.error('[ExportSheet] export failed:', error);
       running.current = false;
@@ -71,9 +95,9 @@ export default function ExportSheet() {
     <ScrollView contentInsetAdjustmentBehavior="automatic">
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} disabled={busy} style={styles.headerButton}>
-          <Text maxFontSizeMultiplier={1.3} style={[typography.body, { color: colors.primary, opacity: busy ? 0.4 : 1 }]}>{t.common.cancel}</Text>
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[typography.body, { color: colors.primary, opacity: busy ? 0.4 : 1 }]}>{t.common.cancel}</Text>
         </TouchableOpacity>
-        <Text style={[typography.headline, styles.headerTitle, { color: colors.textPrimary }]}>{t.export.title}</Text>
+        <Text numberOfLines={1} style={[typography.headline, styles.headerTitle, { color: colors.textPrimary }]}>{t.export.title}</Text>
         <View style={styles.headerButton} />
       </View>
       <ExportModal documentTitle={data.document.title} pageCount={data.pages.length} onShare={share} isGenerating={busy} progress={progress} />
@@ -83,6 +107,6 @@ export default function ExportSheet() {
 const styles = StyleSheet.create({
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 20 },
-  headerButton: { width: 80, minHeight: 44, justifyContent: 'center' },
+  headerButton: { minWidth: 96, minHeight: 44, justifyContent: 'center' },
   headerTitle: { flex: 1, textAlign: 'center' },
 });

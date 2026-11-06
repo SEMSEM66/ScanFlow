@@ -132,7 +132,8 @@ function lineOf(code, index) {
 }
 
 const problems = [];
-const report = (file, code, index, message) => problems.push(`${relative(ROOT, file)}:${lineOf(code, index)}  ${message}`);
+const report = (file, code, index, message) =>
+  problems.push(`${relative(ROOT, file).replace(/\\/g, '/')}:${lineOf(code, index)}  ${message}`);
 
 const files = SCAN_DIRS.flatMap((d) => listFiles(join(ROOT, d)));
 for (const file of files) {
