@@ -48,10 +48,10 @@ Designed as a clean, ad-free alternative to apps like CamScanner, ScanFlow proce
 - **⚙️ Settings → Texterkennung:** on/off with progress; when turning it off, keep or delete the recognized text.
 - Needs the IPA build (local native module `modules/scanflow-ocr`); in Expo Go the app works as before without text recognition.
 
-### iOS-style panels & navigation (v1.6.0)
-- **🪟 Bottom panels like on the iPhone:** the background darkens gently while the panel glides up with a soft bounce; pull it down or tap outside to close it (*Anpassen*, *Exportieren*, *…* menus, *Sortieren*, *In Ordner verschieben*).
-- **🧭 Symmetric tab bar:** *Dokumente*, *Suchen*, the camera button in the middle, *Werkzeuge*, *Einstellungen*.
-- **🔎 Suchen tab:** searches titles and recognized text (installed app) in all folders, with folder name and excerpt for every hit.
+### Native iOS interface (v1.7.0)
+- **Native sheets and menus:** export, text, folder selection and adjustments use iOS form sheets; page overview, PIN setup and scan review use page sheets. Actions and naming use system menus and prompts.
+- **Native navigation:** *Dokumente*, *Scannen*, *Werkzeuge*, *Einstellungen*. Scannen opens the scanner without switching tabs. Search across all folders is available from the library menu.
+- Continuous corners, SF Symbols and native segmented controls keep the interface consistent in light and dark mode. Test the native UI and share flow on an iPhone.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow, the pipeline, the app lock, the text recognition and the bottom panels, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phases.
 
