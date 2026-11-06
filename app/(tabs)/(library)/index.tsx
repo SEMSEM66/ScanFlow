@@ -380,57 +380,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 8,
-  },
-  largeTitle: {
-    letterSpacing: -0.5,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerIconButton: {
-    width: 36,
-    height: 36,
-    ...capsule(36),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  searchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 40,
-    ...capsule(40),
-    paddingHorizontal: 12,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: '100%',
-    fontSize: 15,
-  },
   pillsContainer: {
     flexDirection: 'row',
     gap: 8,
     paddingVertical: 6,
-  },
-
-
-
-  content: {
-    flex: 1,
   },
   centerContainer: {
     flex: 1,
@@ -442,11 +395,6 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingTop: 8,
-  },
-  emptyScroll: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   emptyContainer: {
     alignItems: 'center',

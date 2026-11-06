@@ -21,11 +21,11 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
   snippet,
 }) => {
   const { colors, typography, spacing } = useTheme();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { width: windowWidth } = useWindowDimensions();
   const cardMaxWidth = Math.max(120, (windowWidth - spacing.base * 2 - 12) / 2);
 
-  const formattedDate = new Date(document.createdAt).toLocaleDateString('de-DE', {
+  const formattedDate = new Date(document.createdAt).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

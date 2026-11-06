@@ -26,7 +26,7 @@ interface SearchResults {
  */
 export default function SearchScreen() {
   const { colors, typography, spacing } = useTheme();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const router = useRouter();
 
   const [query, setQuery] = useState('');
@@ -90,7 +90,7 @@ export default function SearchScreen() {
   const renderItem = ({ item }: { item: Document }) => {
     const snippet = results?.snippets.get(item.id) ?? null;
     const folderName = item.folderId ? results?.folderNames.get(item.folderId) : undefined;
-    const date = new Date(item.createdAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const date = new Date(item.createdAt).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const pageText = item.pageCount === 1 ? `1 ${t.common.page}` : `${item.pageCount} ${t.common.pages}`;
     const meta = folderName ? `${date} · ${pageText} · ${folderName}` : `${date} · ${pageText}`;
     return (
@@ -200,12 +200,6 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    paddingTop: 8,
-  },
-  largeTitle: {
-    letterSpacing: -0.5,
   },
   searchBar: {
     flexDirection: 'row',

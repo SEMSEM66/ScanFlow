@@ -42,7 +42,6 @@ import {
 } from '../../src/components';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const HEADER_BUTTON = 36;
 const PAGINATION_PILL_HEIGHT = 34;
 
 const thumbKeyOf = (p: DocumentPage) =>
@@ -371,16 +370,14 @@ export default function DocumentDetailScreen() {
       })()
     : { width: SCREEN_WIDTH * 0.8, height: (SCREEN_WIDTH * 0.8) / aspect };
   const showUri = isPreviewCurrent || currentPage.previewUri !== currentPage.originalUri ? currentPage.previewUri : null;
-  // The native export sheet blocks interaction with this screen while active.
-  const busy = false;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
       <Stack.Screen options={{ title: document.title }} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="square.and.arrow.up" accessibilityLabel={t.export.title} disabled={busy}
+        <Stack.Toolbar.Button icon="square.and.arrow.up" accessibilityLabel={t.export.title}
           onPress={() => router.push({ pathname: '/sheets/export', params: { documentId: document.id, pageIndex: String(currentPageIndex) } })} />
-        <Stack.Toolbar.Menu icon="ellipsis.circle" accessibilityLabel={t.library.options} disabled={busy}>
+        <Stack.Toolbar.Menu icon="ellipsis.circle" accessibilityLabel={t.library.options}>
           <Stack.Toolbar.MenuAction icon="pencil" onPress={() => {
             setPromptState({ visible: true, title: t.library.renameDocument, initialValue: document.title,
               onConfirm: async (newTitle) => { await documentRepository.update(document.id, { title: newTitle }); loadDocumentData(); },
@@ -417,7 +414,7 @@ export default function DocumentDetailScreen() {
               ? formatString(t.scan.reviewOne, { page: pages.indexOf(reviewPages[0]) + 1 })
               : formatString(t.scan.reviewMany, { count: reviewPages.length })}
           </Text>
-          <TouchableOpacity onPress={handleReview} disabled={busy} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity onPress={handleReview} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text style={[typography.footnote, { color: colors.primary, fontWeight: '700' }]}>{t.scan.reviewAction}</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -504,8 +501,8 @@ export default function DocumentDetailScreen() {
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={() => scanPages()}
-          disabled={busy || scanner.busy}
-          style={[styles.addMoreButton, { opacity: busy || scanner.busy ? 0.5 : 1 }]}
+          disabled={scanner.busy}
+          style={[styles.addMoreButton, { opacity: scanner.busy ? 0.5 : 1 }]}
         >
           <Icon name="plus.circle.fill" size={20} color={colors.primary} />
           <Text style={[typography.subhead, styles.addMoreText, { color: colors.primary }]}>{t.scan.addMorePages}</Text>
@@ -518,7 +515,6 @@ export default function DocumentDetailScreen() {
         thumbnails={thumbnails}
         fallbackUri={currentPage.proxyUri ?? currentPage.originalUri}
         onSelectFilter={handleSelectFilter}
-        disabled={busy}
       />
 
       <DocumentBottomBar
@@ -530,7 +526,6 @@ export default function DocumentDetailScreen() {
         }}
         onDeletePage={() => deletePageAt(currentPageIndex)}
         onAddPage={handleAddPage}
-        disabled={busy}
       />
 
       <PageEditorModal
@@ -566,34 +561,6 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  navTitle: {
-    maxWidth: SCREEN_WIDTH * 0.45,
-    textAlign: 'center',
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerCircleBtn: {
-    width: HEADER_BUTTON,
-    height: HEADER_BUTTON,
-    ...capsule(HEADER_BUTTON),
-    backgroundColor: 'rgba(0,0,0,0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },

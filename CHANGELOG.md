@@ -24,7 +24,8 @@ Convert to Word (`.docx`), Settings *Über* section, and fixes from the v1.7.0 p
 - **Folder pills in Library:** tapping an already-selected custom folder pill now opens the folder options menu (*Bearbeiten / Ordner löschen*), and empty folders clearly show the folder name with quick actions to edit the folder or show all documents.
 - **Crop review banner:** opening *Zuschneiden* from the bottom bar now clears the undetected-edge review banner for that page.
 - **Settings storage info:** *Gespeicherte Dokumente* and *Speicherbelegung* now refresh whenever the *Einstellungen* tab is opened.
-- **Document screen delete confirmation & localization:** *Dokument löschen* in the document detail menu now asks for confirmation (matching the library), all remaining German error alerts in `LibraryScreen` are localized (DE/EN), and all ESLint warnings are resolved.
+- **Document screen delete confirmation & localization:** *Dokument löschen* in the document detail menu now asks for confirmation (matching the library), all remaining German error alerts in `LibraryScreen` are localized (DE/EN), date formatting in `DocumentCard` and `SearchScreen` follows the selected language, and all ESLint warnings are resolved.
+- **Phase D cleanup & bloat removal:** normalized document title search (`src/db/textSearch.ts`) so queries are case- and umlaut/ß-insensitive (`MÜLLER` / `muller` / `Müller`, `STRASSE` / `Straße`), replaced the remaining custom segmented button rows in `SettingsScreen` with the native `<SegmentedControl>`, removed leftover pre-1.7.0 style definitions and unused constants across screens, and removed the unused dependencies `react-native-webview`, `@expo/vector-icons` and `expo-image`.
 
 ---
 

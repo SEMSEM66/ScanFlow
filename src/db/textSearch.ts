@@ -10,8 +10,22 @@ import { escapeLike, normalizeForSearch } from '../ocr/text';
 export const MAX_SEARCH_WORDS = 6;
 
 /**
+ * SQLite's built-in LOWER() only folds ASCII A–Z. Folding German umlauts, ß
+ * and common accents in SQL lets title search match "muller", "Müller" and
+ * "MÜLLER" (or "strasse" and "Straße") identically to the OCR text search.
+ */
+const FOLDED_TITLE_SQL = [
+  ['ä', 'a'], ['Ä', 'a'],
+  ['ö', 'o'], ['Ö', 'o'],
+  ['ü', 'u'], ['Ü', 'u'],
+  ['ß', 'ss'], ['ẞ', 'ss'],
+  ['é', 'e'], ['É', 'e'], ['è', 'e'], ['ê', 'e'],
+  ['á', 'a'], ['Á', 'a'], ['à', 'a'], ['â', 'a'],
+].reduce((expr, [from, to]) => `REPLACE(${expr}, '${from}', '${to}')`, 'LOWER(title)');
+
+/**
  * WHERE clauses (AND-ed) for a library search on `documents`: every word of
- * the query must occur in the title (LIKE, case-insensitive for ASCII) or in
+ * the query must occur in the title (case- and umlaut-insensitive) or in
  * the recognized text of one of the document's pages (normalized: case and
  * diacritics ignored).
  */
@@ -26,10 +40,11 @@ export function documentSearchClauses(query: string | null | undefined): { claus
   for (const word of words) {
     const folded = normalizeForSearch(word);
     if (folded.length > 0) {
+      const foldedPattern = `%${escapeLike(folded)}%`;
       clauses.push(
-        `(title LIKE ? ESCAPE '\\' OR id IN (SELECT p.document_id FROM pages p JOIN page_text t ON t.page_id = p.id WHERE t.search_text LIKE ? ESCAPE '\\'))`
+        `(title LIKE ? ESCAPE '\\' OR ${FOLDED_TITLE_SQL} LIKE ? ESCAPE '\\' OR id IN (SELECT p.document_id FROM pages p JOIN page_text t ON t.page_id = p.id WHERE t.search_text LIKE ? ESCAPE '\\'))`
       );
-      params.push(`%${escapeLike(word)}%`, `%${escapeLike(folded)}%`);
+      params.push(`%${escapeLike(word)}%`, foldedPattern, foldedPattern);
     } else {
       clauses.push(`title LIKE ? ESCAPE '\\'`);
       params.push(`%${escapeLike(word)}%`);

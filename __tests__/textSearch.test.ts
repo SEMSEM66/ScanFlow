@@ -84,6 +84,13 @@ describe('library search (title + recognized text)', () => {
     expect(search('maerz')).toEqual([]);
     expect(search('märz')).toEqual(['d-letter']);
     expect(search('12.03')).toEqual(['d-scan']);
+
+    // Title search also ignores case and umlauts/ß even when a page has no OCR text yet
+    addDoc('d-umlaut-title', 'Vertrag Müller — Kaufbeleg Hauptstraße');
+    expect(search('MÜLLER')).toEqual(['d-letter', 'd-umlaut-title']);
+    expect(search('muller')).toEqual(['d-letter', 'd-umlaut-title']);
+    expect(search('kaufbeleg')).toEqual(['d-umlaut-title']);
+    expect(search('KAUFBELEG HAUPTSTRASSE')).toEqual(['d-umlaut-title']);
   });
 
   it('requires every word (in the title or in the text)', () => {

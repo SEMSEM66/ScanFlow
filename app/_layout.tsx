@@ -45,6 +45,17 @@ function RootNavigation() {
     );
   }
 
+  const sheetBackground =
+    Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26
+      ? 'transparent'
+      : colors.surface;
+  const sheetOptions = {
+    presentation: 'formSheet' as const,
+    sheetGrabberVisible: true,
+    sheetExpandsWhenScrolledToEdge: true,
+    contentStyle: { backgroundColor: sheetBackground },
+  };
+
   // AppLockOverlay keeps its children mounted and draws the lock screen above
   // the whole window (also above modal screens and the iOS scanner), so
   // navigation and a running scan import survive locking.
@@ -71,43 +82,19 @@ function RootNavigation() {
           <Stack.Screen name="search" options={{ headerShown: true, title: t.search.title, headerTransparent: false, headerTintColor: colors.primary, headerStyle: { backgroundColor: colors.background }, headerTitleStyle: { color: colors.textPrimary } }} />
           <Stack.Screen
             name="sheets/adjust"
-            options={{
-              presentation: 'formSheet',
-              sheetAllowedDetents: [0.75, 1],
-              sheetGrabberVisible: true,
-              sheetExpandsWhenScrolledToEdge: true,
-              contentStyle: { backgroundColor: Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 ? 'transparent' : colors.surface },
-            }}
+            options={{ ...sheetOptions, sheetAllowedDetents: [0.75, 1] }}
           />
           <Stack.Screen
             name="sheets/export"
-            options={{
-              presentation: 'formSheet',
-              sheetAllowedDetents: [0.85, 1],
-              sheetGrabberVisible: true,
-              sheetExpandsWhenScrolledToEdge: true,
-              contentStyle: { backgroundColor: Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 ? 'transparent' : colors.surface },
-            }}
+            options={{ ...sheetOptions, sheetAllowedDetents: [0.85, 1] }}
           />
           <Stack.Screen
             name="sheets/move"
-            options={{
-              presentation: 'formSheet',
-              sheetAllowedDetents: [0.5, 1],
-              sheetGrabberVisible: true,
-              sheetExpandsWhenScrolledToEdge: true,
-              contentStyle: { backgroundColor: Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 ? 'transparent' : colors.surface },
-            }}
+            options={{ ...sheetOptions, sheetAllowedDetents: [0.5, 1] }}
           />
           <Stack.Screen
             name="sheets/text"
-            options={{
-              presentation: 'formSheet',
-              sheetAllowedDetents: [0.5, 1],
-              sheetGrabberVisible: true,
-              sheetExpandsWhenScrolledToEdge: true,
-              contentStyle: { backgroundColor: Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 ? 'transparent' : colors.surface },
-            }}
+            options={{ ...sheetOptions, sheetAllowedDetents: [0.5, 1] }}
           />
           <Stack.Screen
             name="scan"

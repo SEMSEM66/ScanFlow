@@ -368,34 +368,17 @@ export default function SettingsScreen() {
           {t.settings.scanner}
         </Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={styles.segmentedRow}>
-            {(['system', 'camera'] as ScannerMode[]).map((m) => {
-              const isSelected = effectiveScannerMode === m;
-              const isDisabled = m === 'system' && !systemScannerAvailable;
-              return (
-                <TouchableOpacity
-                  key={m}
-                  activeOpacity={0.8}
-                  disabled={isDisabled}
-                  onPress={() => handleSetScannerMode(m)}
-                  style={[
-                    styles.segmentButton,
-                    isSelected && { backgroundColor: colors.primary },
-                    isDisabled && { opacity: 0.4 },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      typography.bodyMedium,
-                      { color: isSelected ? '#FFFFFF' : colors.textPrimary, fontWeight: isSelected ? '700' : '500' },
-                    ]}
-                  >
-                    {m === 'system' ? t.settings.scannerSystem : t.settings.scannerCamera}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <SegmentedControl
+            values={[t.settings.scannerSystem, t.settings.scannerCamera]}
+            selectedIndex={effectiveScannerMode === 'system' ? 0 : 1}
+            enabled={systemScannerAvailable}
+            appearance={isDark ? 'dark' : 'light'}
+            style={styles.nativeSegment}
+            onChange={(event) => {
+              const nextMode: ScannerMode = event.nativeEvent.selectedSegmentIndex === 0 ? 'system' : 'camera';
+              void handleSetScannerMode(nextMode);
+            }}
+          />
           <Text style={[typography.footnote, styles.scannerHint, { color: colors.textSecondary }]}>
             {!systemScannerAvailable
               ? t.settings.scannerUnavailable
@@ -471,32 +454,20 @@ export default function SettingsScreen() {
               <Text style={[typography.footnote, { color: colors.textSecondary, marginBottom: 8 }]}>
                 {t.security.lockTimeout}
               </Text>
-              <View style={styles.segmentedRow}>
-                {[
-                  { id: 0 as LockTimeoutOption, label: t.security.timeoutImmediately },
-                  { id: 60 as LockTimeoutOption, label: t.security.timeoutOneMinute },
-                  { id: 300 as LockTimeoutOption, label: t.security.timeoutFiveMinutes },
-                ].map((item) => {
-                  const isSelected = lockTimeout === item.id;
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      activeOpacity={0.8}
-                      onPress={() => handleSetTimeout(item.id)}
-                      style={[styles.segmentButton, isSelected && { backgroundColor: colors.primary }]}
-                    >
-                      <Text
-                        style={[
-                          typography.caption1,
-                          { color: isSelected ? '#FFFFFF' : colors.textPrimary, fontWeight: isSelected ? '700' : '500' },
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              <SegmentedControl
+                values={[
+                  t.security.timeoutImmediately,
+                  t.security.timeoutOneMinute,
+                  t.security.timeoutFiveMinutes,
+                ]}
+                selectedIndex={([0, 60, 300] as LockTimeoutOption[]).indexOf(lockTimeout)}
+                appearance={isDark ? 'dark' : 'light'}
+                style={styles.nativeSegment}
+                onChange={(event) => {
+                  const value = ([0, 60, 300] as LockTimeoutOption[])[event.nativeEvent.selectedSegmentIndex];
+                  if (value !== undefined) void handleSetTimeout(value);
+                }}
+              />
               <Text style={[typography.caption2, styles.hint, { color: colors.textSecondary }]}>{t.security.timeoutHint}</Text>
             </View>
           )}
@@ -710,13 +681,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  title: {
-    letterSpacing: -0.5,
-  },
   scrollContent: {
     paddingTop: 8,
   },
@@ -731,21 +695,9 @@ const styles = StyleSheet.create({
     padding: CARD_PADDING,
   },
   nativeSegment: { minHeight: 44 },
-  segmentedRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
   scannerHint: {
     marginTop: 10,
     paddingHorizontal: 2,
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 10,
-    ...corner(NESTED_RADIUS),
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.04)',
   },
   toggleRow: {
     flexDirection: 'row',

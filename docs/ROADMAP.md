@@ -315,7 +315,8 @@ Spike result / decision: Expo Go contains no OCR engine; tesseract.js in a WebVi
 - [x] Tests: `ocr.test.ts`, `ocrScheduler.test.ts`, `pdfTextLayer.test.ts` (pdf-lib roundtrip + word positions via `pdftotext -bbox`), `textSearch.test.ts` (node:sqlite), migrations v2 → v3 (`npm run test:ocr`).
 - [ ] OCR on synthetic / real pages in CI (needs macOS + Vision; not possible in the Jest/Node tests).
 - [ ] Measure recognition time and memory on an iPhone; tune `OCR_MIN_TEXT_HEIGHT`, `OCR_DPI` / `OCR_MAX_LONG_SIDE` if needed (bump `OCR_VERSION` when the recognition setup changes).
-- [ ] Optional: normalized title search (umlaut case), more recognition languages (setting), embedded Unicode font for non-WinAnsi text in the PDF layer.
+- [x] Normalized title search (umlaut / case-insensitive, matching OCR search).
+- [ ] Optional: more recognition languages (setting), embedded Unicode font for non-WinAnsi text in the PDF layer.
 - [ ] **🛑 STOP C:** Test on physical iPhone (**IPA** v1.5.1; then a short check in Expo Go):
   1. Update from 1.4.0: documents, folders and settings are still there. Settings → *Texterkennung* shows *Text wird erkannt … x von y Seiten*, after a while *y von y Seiten erkannt*. While it runs, scrolling, opening documents and editing stay smooth.
   2. Scan a letter or an invoice → after a few seconds the search finds a word from the body text (not from the title), with the excerpt and the word in bold. Also try `muller` for *Müller*, `strasse` for *Straße*, two words, a word hyphenated at a line end. *(Recognition on the iPhone is confirmed indirectly – the exported PDF was searchable in Files, see item 6; the in-app search is still open.)*
@@ -355,7 +356,7 @@ Requested by the user after STOP C: the dark background of *Anpassen* slid up to
 - [x] Fix the pre-existing lint error in `src/components/AppLockOverlay.tsx` (v1.4.0 – file rewritten).
 - [x] Fix the remaining lint warnings (unused variables) (v1.8.0).
 - [x] Localize remaining hard-coded German strings (library actions) (v1.8.0). *(App lock, PIN and security settings localized in v1.4.0.)*
-- [ ] Remove the unused `react-native-webview` dependency after STOP A confirms the Skia pipeline on device.
+- [x] Remove the unused `react-native-webview` dependency (along with unused `@expo/vector-icons` and `expo-image`) after STOP A confirms the Skia pipeline on device.
 - [x] Document screen: *…* → *Dokument löschen* deletes at once, without the confirmation the library shows – add the same confirmation (v1.8.0).
 - [x] Release per version instead of the hard-coded `v1.1.0` in `.github/workflows/build-ipa.yml` (v1.4.0: tag `v<package.json version>`, notes from `CHANGELOG.md`).
 - [ ] Optional: GitHub Action running `npx tsc --noEmit`, `npm run lint`, `npm run test:imaging` on pull requests.
