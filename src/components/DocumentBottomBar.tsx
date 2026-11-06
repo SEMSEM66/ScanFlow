@@ -48,7 +48,7 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
         <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
           <Icon name="arrow.clockwise" size={22} color={colors.textPrimary} />
         </View>
-        <Text style={[typography.caption2, styles.label, { color: colors.textPrimary }]}>
+        <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={[typography.caption2, styles.label, { color: colors.textPrimary }]}>
           {t.filters.rotate}
         </Text>
       </TouchableOpacity>
@@ -63,7 +63,7 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
         <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
           <Icon name="crop" size={22} color={colors.textPrimary} />
         </View>
-        <Text style={[typography.caption2, styles.label, { color: colors.textPrimary }]}>
+        <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={[typography.caption2, styles.label, { color: colors.textPrimary }]}>
           {t.filters.crop}
         </Text>
       </TouchableOpacity>
@@ -78,7 +78,7 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
         <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
           <Icon name="slider.horizontal.3" size={22} color={colors.textPrimary} />
         </View>
-        <Text style={[typography.caption2, styles.label, { color: colors.textPrimary }]}>
+        <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={[typography.caption2, styles.label, { color: colors.textPrimary }]}>
           {t.filters.adjust}
         </Text>
       </TouchableOpacity>
@@ -93,7 +93,7 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
         <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
           <Icon name="trash" size={22} color={colors.danger} />
         </View>
-        <Text style={[typography.caption2, styles.label, { color: colors.danger }]}>
+        <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={[typography.caption2, styles.label, { color: colors.danger }]}>
           {t.filters.deletePage}
         </Text>
       </TouchableOpacity>
@@ -108,7 +108,7 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
         <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSubdued }]}>
           <Icon name="doc.badge.plus" size={22} color={colors.primary} />
         </View>
-        <Text style={[typography.caption2, styles.label, { color: colors.primary }]}>
+        <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={[typography.caption2, styles.label, { color: colors.primary }]}>
           {t.filters.addPage}
         </Text>
       </TouchableOpacity>

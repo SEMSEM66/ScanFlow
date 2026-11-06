@@ -257,7 +257,7 @@ export default function DocumentDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             await documentRepository.delete(document.id);
-            router.replace('/(tabs)');
+            router.replace('/(tabs)/(library)');
           },
         },
       ]);
@@ -380,7 +380,7 @@ export default function DocumentDetailScreen() {
           {ocrService.available ? <Stack.Toolbar.MenuAction icon="doc.text" onPress={() => router.push({ pathname: '/sheets/text', params: { documentId: document.id, title: document.title } })}>{t.ocr.menuAction}</Stack.Toolbar.MenuAction> : null}
           <Stack.Toolbar.MenuAction icon="trash" destructive onPress={async () => {
             await documentRepository.delete(document.id);
-            router.replace('/(tabs)');
+            router.replace('/(tabs)/(library)');
           }}>{t.library.deleteDocument}</Stack.Toolbar.MenuAction>
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
