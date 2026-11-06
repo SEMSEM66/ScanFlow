@@ -201,3 +201,109 @@ export function buildZip(entries: ZipEntryInput[], date = new Date()): Uint8Arra
 
   return out;
 }
+
+function readU16(buf: Uint8Array, offset: number): number {
+  return buf[offset] | (buf[offset + 1] << 8);
+}
+
+function readU32(buf: Uint8Array, offset: number): number {
+  return (
+    (buf[offset] |
+      (buf[offset + 1] << 8) |
+      (buf[offset + 2] << 16) |
+      (buf[offset + 3] << 24)) >>>
+    0
+  );
+}
+
+/** Decodes UTF-8 bytes into a JavaScript string without relying on Node Buffer. */
+export function utf8Decode(bytes: Uint8Array): string {
+  if (typeof TextDecoder !== 'undefined') {
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+  let out = '';
+  let i = 0;
+  while (i < bytes.length) {
+    const b0 = bytes[i++];
+    if (b0 < 0x80) {
+      out += String.fromCharCode(b0);
+    } else if (b0 < 0xe0) {
+      const b1 = bytes[i++] & 0x3f;
+      out += String.fromCharCode(((b0 & 0x1f) << 6) | b1);
+    } else if (b0 < 0xf0) {
+      const b1 = bytes[i++] & 0x3f;
+      const b2 = bytes[i++] & 0x3f;
+      out += String.fromCharCode(((b0 & 0x0f) << 12) | (b1 << 6) | b2);
+    } else {
+      const b1 = bytes[i++] & 0x3f;
+      const b2 = bytes[i++] & 0x3f;
+      const b3 = bytes[i++] & 0x3f;
+      const cp = ((b0 & 0x07) << 18) | (b1 << 12) | (b2 << 6) | b3;
+      out += String.fromCodePoint(cp);
+    }
+  }
+  return out;
+}
+
+/**
+ * Reads a Store-mode (method 0) ZIP archive created by `buildZip()` and returns
+ * a map of normalized relative path -> `Uint8Array` payload. Verifies CRC-32
+ * checksums and rejects path traversal (`..` or leading `/`).
+ */
+export function readZip(archive: Uint8Array): Map<string, Uint8Array> {
+  if (archive.length < 22) {
+    throw new Error('Invalid ZIP archive: too short');
+  }
+  const entries = new Map<string, Uint8Array>();
+  let pos = 0;
+
+  while (pos + 4 <= archive.length) {
+    const sig = readU32(archive, pos);
+    if (sig === 0x02014b50 || sig === 0x06054b50) {
+      // Reached Central Directory or End of Central Directory
+      break;
+    }
+    if (sig !== 0x04034b50) {
+      throw new Error('Invalid ZIP archive: unexpected local file header signature');
+    }
+    if (pos + 30 > archive.length) {
+      throw new Error('Invalid ZIP archive: truncated local file header');
+    }
+    const method = readU16(archive, pos + 8);
+    if (method !== 0) {
+      throw new Error(`Unsupported ZIP compression method: ${method}`);
+    }
+    const expectedCrc = readU32(archive, pos + 14);
+    const compSize = readU32(archive, pos + 18);
+    const uncompSize = readU32(archive, pos + 22);
+    const nameLen = readU16(archive, pos + 26);
+    const extraLen = readU16(archive, pos + 28);
+
+    const nameStart = pos + 30;
+    const dataStart = nameStart + nameLen + extraLen;
+    const dataEnd = dataStart + compSize;
+    if (compSize !== uncompSize || dataEnd > archive.length) {
+      throw new Error('Invalid ZIP archive: truncated entry payload');
+    }
+
+    const rawName = utf8Decode(archive.subarray(nameStart, nameStart + nameLen)).replace(/\\/g, '/');
+    if (
+      !rawName ||
+      rawName.startsWith('/') ||
+      rawName.split('/').some((seg) => seg === '..' || seg === '')
+    ) {
+      throw new Error(`Unsafe ZIP entry path: ${rawName}`);
+    }
+
+    const payload = archive.slice(dataStart, dataEnd);
+    const actualCrc = crc32(payload);
+    if (actualCrc !== expectedCrc) {
+      throw new Error(`ZIP CRC-32 mismatch for entry: ${rawName}`);
+    }
+
+    entries.set(rawName, payload);
+    pos = dataEnd;
+  }
+
+  return entries;
+}

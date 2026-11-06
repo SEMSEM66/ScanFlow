@@ -14,6 +14,10 @@ CREATE TABLE IF NOT EXISTS documents (
   folder_id TEXT,
   page_count INTEGER NOT NULL DEFAULT 0,
   thumbnail_uri TEXT,
+  deleted_at INTEGER,
+  is_favorite INTEGER NOT NULL DEFAULT 0,
+  tags TEXT,
+  title_auto INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE SET NULL
@@ -52,6 +56,8 @@ CREATE TABLE IF NOT EXISTS pages (
 export const CREATE_INDEXES = `
 CREATE INDEX IF NOT EXISTS idx_documents_folder_id ON documents(folder_id);
 CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_documents_deleted_at ON documents(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_documents_is_favorite ON documents(is_favorite DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pages_document_id ON pages(document_id);
 CREATE INDEX IF NOT EXISTS idx_pages_page_number ON pages(document_id, page_number ASC);
 `;

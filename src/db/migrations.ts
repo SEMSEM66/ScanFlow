@@ -9,12 +9,12 @@ import { CREATE_PAGE_TEXT_TABLE, CREATE_SIGNATURES_TABLE } from './schema';
 
 export interface MigrationDb {
   execAsync(sql: string): Promise<void>;
-  runAsync(sql: string): Promise<unknown>;
-  getAllAsync<T>(sql: string): Promise<T[]>;
-  getFirstAsync<T>(sql: string): Promise<T | null>;
+  runAsync(sql: string, ...params: unknown[]): Promise<unknown>;
+  getAllAsync<T>(sql: string, ...params: unknown[]): Promise<T[]>;
+  getFirstAsync<T>(sql: string, ...params: unknown[]): Promise<T | null>;
 }
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 async function columnNames(db: MigrationDb, table: string): Promise<Set<string>> {
   const rows = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
@@ -78,10 +78,33 @@ async function migrateToV4(db: MigrationDb): Promise<void> {
   await db.execAsync(CREATE_SIGNATURES_TABLE);
 }
 
+/** v5 columns of `documents` (M3: 30-day Trash, Favorites, Tags, Smart Naming auto-title flag). */
+export const DOCUMENT_V5_COLUMNS: [string, string][] = [
+  ['deleted_at', 'INTEGER'],
+  ['is_favorite', 'INTEGER NOT NULL DEFAULT 0'],
+  ['tags', 'TEXT'],
+  ['title_auto', 'INTEGER NOT NULL DEFAULT 0'],
+];
+
+/** v4 → v5: 30-day Trash (`deleted_at`), Favorites (`is_favorite`), Tags (`tags`), and Smart Naming (`title_auto`). */
+async function migrateToV5(db: MigrationDb): Promise<void> {
+  const cols = await columnNames(db, 'documents');
+  for (const [name, type] of DOCUMENT_V5_COLUMNS) {
+    if (!cols.has(name)) {
+      await db.execAsync(`ALTER TABLE documents ADD COLUMN ${name} ${type};`);
+    }
+  }
+  await db.execAsync(
+    `CREATE INDEX IF NOT EXISTS idx_documents_deleted_at ON documents(deleted_at);
+     CREATE INDEX IF NOT EXISTS idx_documents_is_favorite ON documents(is_favorite DESC, created_at DESC);`
+  );
+}
+
 const STEPS: { version: number; up: (db: MigrationDb) => Promise<void> }[] = [
   { version: 2, up: migrateToV2 },
   { version: 3, up: migrateToV3 },
   { version: 4, up: migrateToV4 },
+  { version: 5, up: migrateToV5 },
 ];
 
 /**

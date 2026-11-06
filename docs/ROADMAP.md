@@ -425,12 +425,25 @@ Requested by the user after STOP C: the dark background of *Anpassen* slid up to
   2. **QR & GiroCode Scanner:** In *Werkzeuge → QR- & GiroCode-Scanner*, scan a normal URL QR code (confirm it does NOT open automatically and shows the confirmation dialog) and a German invoice GiroCode (`BCD` payload) → confirm Recipient, IBAN, BIC, Amount, and Reference are parsed with working *Kopieren* buttons; test enabling and clearing local history.
   3. **Visual Signatures & Page Annotations:** Open a document → tap *Unterschrift einfügen* (or `… → Unterschrift einfügen`) → draw a signature, save it, place it on the page, add a *Datumsstempel* and *Textmarker*, drag/scale/rotate, and tap *Speichern* → confirm the page preview and exported PDF include the signature and annotations while clearly stating it is a visual signature. Also test *Unterschrift abfotografieren* (P1).
 
-### ⏳ M3 – Organization & Automation (v1.11.0)
-- [ ] **P0:** Trash (*Zuletzt gelöscht*, 30-day retention, restore, empty trash, auto-purge on launch; schema migration + tests; all delete actions move to trash first).
-- [ ] **P0:** Favorites (pin to top) and tags (chips, filter, search integration).
-- [ ] **P1:** Smart naming templates (`{date}`, `{time}`, `{folder}`, `{firstLine}`, `{counter}`) in Settings; auto-rename after first OCR only while title is still auto-generated; deterministic rules only.
-- [ ] **P1:** Backup to Files: export all documents as one `.zip` (PDFs + `manifest.json` with versioned page state + originals) via Files picker + Import/Restore with version check and manifest round-trip tests.
-- [ ] **🛑 STOP M3:** Physical iPhone test checklist for Trash, Favorites/Tags, Smart Naming, and Full Backup/Restore.
+### ✅ M3 – Organization & Automation (v1.11.0)
+- [x] **P0 – Trash (*Zuletzt gelöscht*, 30-day retention):**
+  - Schema **v5** (`src/db/migrations.ts`, `SCHEMA_VERSION = 5`): adds `documents.deleted_at` timestamp and index. Soft-delete for documents: deleting moves documents into 30-day Trash instead of immediate destruction. Automatic purge of documents older than 30 days on app launch (`app/_layout.tsx` -> `documentRepository.purgeExpiredTrash()`).
+  - *Zuletzt gelöscht* modal (`TrashModal.tsx`): displays trashed documents with remaining retention days (*Noch X Tage*), individual *Wiederherstellen* and *Endgültig löschen* actions, and one-tap *Papierkorb leeren* (`__tests__/organization.test.ts` & `__tests__/migrations.test.ts` – `verified by tests`; UI `UNVERIFIED (needs iPhone)`).
+- [x] **P0 – Favorites & Tags:**
+  - Schema v5 columns: `documents.is_favorite` (with index) and `documents.tags` (JSON array of normalized strings). Pinned favorites at the top of the Library; quick toggle via document menu, toolbar, and multi-select bar. Tag chips & filtering row under folders in Library; case-insensitive search across titles, recognized OCR text, and tags. Tag editor modal (`TagEditModal.tsx`) with suggestions (`__tests__/organization.test.ts` – `verified by tests`).
+- [x] **P1 – Deterministic Smart Naming:**
+  - Template engine (`src/utils/organization.ts`, `SmartNamingService.ts`) with tokens `{date}`, `{time}`, `{folder}`, `{firstLine}`, `{counter}`. Deterministic date extraction from OCR text: recognizes German numeric dates (`DD.MM.YYYY`), ISO dates (`YYYY-MM-DD`), and written German dates (`14. März 2026`).
+  - Auto-rename hook after initial OCR: automatically renames newly scanned documents when page 1 is recognized, strictly protecting user-edited titles (`title_auto = 0`). Settings UI: toggle, template preset selector, and real-time formatted title preview (`__tests__/organization.test.ts` – `verified by tests`).
+- [x] **P1 – Full-Library ZIP Backup & Restore via Files picker:**
+  - Manifest v1 format (`manifest.json`, `src/utils/backupManifest.ts`): serializes folders, documents with non-destructive page states and OCR text, and saved signatures.
+  - ZIP packaging & extraction: pure-TS Store-mode ZIP writer (`buildZip`) and reader (`readZip` with CRC-32 validation and path-traversal protection in `src/docx/zip.ts`).
+  - Backup creation (`BackupService.ts`): serial, memory-safe packaging of all originals, OCR text, and metadata with > 150 MB warning, followed by system share sheet ("Save to Files" / iCloud Drive / AirDrop).
+  - Backup restoration: pick any `.zip` backup from Files, inspect manifest, and restore folders, signatures, and documents (`__tests__/backupManifest.test.ts` – `verified by tests`; Files picker `UNVERIFIED (needs iPhone)`).
+- [ ] **🛑 STOP M3 (queued for v2.0.0-rc single IPA build):**
+  1. **30-Day Trash:** Delete a document from the Library or document view → verify it disappears from active documents and appears under *Zuletzt gelöscht* with *Noch 30 Tage*; test *Wiederherstellen* (reappears in Library) and *Endgültig löschen* / *Papierkorb leeren*.
+  2. **Favorites & Tags:** Tap *Zu Favoriten hinzufügen* on a document → confirm it stays pinned to the top of the Library with a star badge. Open *Tags bearbeiten* → add `#Steuer2026` → tap the tag chip filter above the library → confirm only matching documents appear; search for the tag in search bar.
+  3. **Smart Naming:** In *Einstellungen → Dateibenennung*, select `{date} {firstLine}` → scan a new document with an invoice/letter → confirm that after page 1 OCR finishes, the document title is automatically renamed to the detected date and first line; manually rename a document → confirm future OCR does NOT overwrite it.
+  4. **Full Backup & Restore:** In *Einstellungen → Datensicherung*, tap *Vollständiges Backup erstellen* → *In Dateien sichern* → verify `.zip` contains `manifest.json` and `originals/`. Tap *Backup wiederherstellen* → pick the `.zip` from Files → confirm restore summary and documents.
 
 ### ⏳ M4 – iOS Integration (v1.12.0)
 - [ ] **P0:** Haptics (`expo-haptics`) on page snap, corner lock, filter change, PIN keys, success/error (respecting Reduce Motion).
@@ -463,12 +476,16 @@ Requested by the user after STOP C: the dark background of *Anpassen* slid up to
 ---
 
 ### 📌 Next Steps (Session Handoff for Fresh Agents)
-- **Current Branch:** `feat/m0-m1-pdf-toolkit` (branched from `main` after v1.8.0 + Phase D cleanup).
-- **Completed in Current Session:**
-  - Updated `AGENTS.md`, `.github/workflows/build-ipa.yml` (concurrency, `paths-ignore`, npm cache), `docs/RELEASING.md`, and `docs/ROADMAP.md` (Phase V2 plan).
-  - Implemented **M0 (Foundations)** and **M1 (PDF Toolkit — v1.9.0)** on `feat/m0-m1-pdf-toolkit`.
+- **Current Branch:** `feat/m3-organization` (stacked on `feat/m2-capture-marking` and `feat/m0-m1-pdf-toolkit`).
+- **Completed in Current Program:**
+  - **M0 (Foundations) & M1 (PDF Toolkit — v1.9.0):** `src/entitlements`, i18n parity test, PDF & image import from Files ("Open in ScanFlow") with native 200 dpi PDFKit rasterization, Library multi-select & batch ZIP export, document merge & page split/extract, password-protected PDF export via PDFKit.
+  - **M2 (Capture Modes & Marking — v1.10.0):** ID-Card Mode (true 1:1 `85.6 × 54 mm` scale on A4 with optional purpose watermark), QR/Barcode & SEPA GiroCode (EPC) scanner in *Werkzeuge*, non-destructive visual signatures & annotations layer (schema v4, `RENDER_VERSION = 2`), photo-to-signature thresholding (P1).
+  - **M3 (Organization & Automation — v1.11.0):** 30-day Trash (*Zuletzt gelöscht*, auto-purge on launch, schema v5), Favorites & Tags with search integration, deterministic Smart Naming templates with auto-rename hook, and Full-Library ZIP Backup & Restore via Files picker (`manifest.json` v1).
 - **What to Do Next:**
-  1. Wait for the user's answers to the 5 **Open Decisions** above and their feedback on **STOP M1** (after merging `feat/m0-m1-pdf-toolkit` into `main` to build the `v1.9.0` IPA when the user approves).
-  2. Once **STOP M1** is confirmed, start branch `feat/m2-capture-marking` for **M2 (v1.10.0)**: ID-card mode, QR/GiroCode scanner, and visual signatures & annotations (schema v4).
+  - Proceed to Milestone **M4 – iOS Integration (v1.12.0)** on branch `feat/m4-ios-integration`:
+    1. **P0 – Haptics:** `expo-haptics` on page snap, corner lock, filter change, PIN keys, and success/error (respecting Reduce Motion).
+    2. **P0 – Accessibility Audit & AA Contrast:** VoiceOver labels/hints/traits (DE/EN), Dynamic Type, 44 pt hit targets, automated WCAG AA contrast test (`__tests__/contrast.test.ts`), and Reduce Motion respect.
+    3. **P1 – Home Screen Quick Actions:** `expo-quick-actions` (*Dokument scannen*, *Suchen*).
+    4. **P2 – Time-Boxed Spike Docs:** `docs/spikes/app-intents.md`, `docs/spikes/lock-screen-widget.md`, `docs/spikes/share-extension.md`.
 
 

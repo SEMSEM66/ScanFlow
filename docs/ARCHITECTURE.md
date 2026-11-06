@@ -606,13 +606,42 @@ All native functions live in the single local Expo module `modules/scanflow-ocr`
 
 ---
 
-## 13. Not yet implemented (see ROADMAP)
+## 13. Organization, Automation, Smart Naming & Full Backup (v1.11.0, M3)
+
+### 30-Day Trash (*Zuletzt gelöscht*, Schema v5)
+- **Schema v5 (`src/db/migrations.ts`):** adds `deleted_at INTEGER` and index `idx_documents_deleted_at` to `documents` (`SCHEMA_VERSION = 5`).
+- **Soft delete lifecycle:** `DocumentRepository.delete(id)` and `deleteMany(ids)` set `deleted_at = Date.now()` instead of immediately unlinking rows and disk files.
+- **Query isolation:** all standard repository queries (`getAll`, `getRecent`, `getByFolder`, `countAll`) filter `WHERE deleted_at IS NULL`. Document text searches and OCR queue jobs filter out trashed documents (`WHERE d.deleted_at IS NULL`).
+- **Trash management (`src/components/TrashModal.tsx`):** lists trashed documents with remaining days countdown (30 days retention: `Math.max(0, 30 - elapsedDays)`), one-tap document restoration (`restore(id)`), single permanent deletion (`permanentDelete(id)`), or bulk *Papierkorb leeren*.
+- **Automatic purge on app launch:** `DocumentRepository.purgeExpiredTrash(retentionDays = 30)` runs during app startup in `app/_layout.tsx`, permanently deleting expired documents and unlinking their page image files and OCR text records (`verified by tests` in `__tests__/migrations.test.ts` and `__tests__/organization.test.ts`).
+
+### Favorites & Tags (`src/services/DocumentRepository.ts`, `src/db/textSearch.ts`)
+- **Schema v5 columns:** `is_favorite INTEGER NOT NULL DEFAULT 0` (with index `idx_documents_is_favorite`) and `tags TEXT` (nullable JSON string array).
+- **Favorites sorting:** `DocumentRepository.getAll()` sorts `is_favorite DESC` first, pinning starred documents to the top of the Library across all sort modes. Toggled via `toggleFavorite(id)` from the document screen or library context actions.
+- **Tags management:** `setTags(id, tags)` updates tag lists; `getAllTags()` returns distinct used tags across all non-trashed documents for quick chip suggestions in `TagEditModal.tsx`.
+- **Search integration:** `SEARCH_DOCUMENTS_SQL` in `src/db/textSearch.ts` searches title, recognized OCR text, and `d.tags LIKE %tag%` (`verified by tests` in `__tests__/organization.test.ts`).
+
+### Deterministic Smart Naming (`src/utils/organization.ts`, `SmartNamingService.ts`)
+- **Deterministic tokens:** `{date}`, `{time}`, `{folder}`, `{firstLine}`, `{counter}` configured via template strings (default: `"{date}_{time}"`).
+- **Date parsing:** regex extractors for German numeric dates (`DD.MM.YYYY`), ISO dates (`YYYY-MM-DD`), and written German dates (`14. März 2026`). If no date is found in the recognized text, the document's creation date is used as fallback.
+- **Auto-rename safeguard:** `OcrService.saveIfCurrent` invokes `smartNamingService.applySmartNamingOnOcr(docId, text)` only when page 1 OCR finishes and only while `title_auto = 1`. If the user manually edited the title (`title_auto = 0`), the title is never overwritten. Settings provides preset selection and real-time live preview (`verified by tests` in `__tests__/organization.test.ts`).
+
+### Full-Library ZIP Backup & Restore (`src/utils/backupManifest.ts`, `src/docx/zip.ts`, `BackupService.ts`)
+- **Manifest v1 specification:** `BackupManifest` contains `schemaVersion: 5`, creation timestamp, app version, and serialized arrays of `folders`, `documents`, `pages` (with complete non-destructive page state: `corners`, `rotation`, `filter`, `adjustments`, `page_format`, `annotations`), and vector `signatures`. Validated on restore with strict version compatibility checks (`verified by tests` in `__tests__/backupManifest.test.ts`).
+- **Pure-TS Store-mode ZIP writer & reader (`src/docx/zip.ts`):** `buildZip()` creates standard PKZIP archives; `readZip(archive: Uint8Array)` parses local file headers, validates CRC-32 checksums, and rejects path traversal (`..` or leading `/`). No external native unzip libraries required.
+- **Serial, memory-safe backup & restore (`BackupService`):**
+  - **Backup:** serial image copying into a temporary backup directory, manifest generation, ZIP packaging, size verification (> 150 MB warning prompt), and sharing via the system share sheet (`expo-sharing`).
+  - **Restore:** opens `.zip` archives via `expo-document-picker`, parses `manifest.json`, safely restores folders, documents, page files, and signatures into SQLite and the local sandbox file system with ID remapping to prevent primary key conflicts (`verified by tests` in `__tests__/backupManifest.test.ts`; share sheet & document picker `UNVERIFIED (needs iPhone)`).
+- **Prohibition compliance:** zero network clients (no WebDAV, no SMB, no cloud servers); backups operate strictly through native iOS Files picker and system share sheet.
+
+---
+
+## 14. Not yet implemented (see ROADMAP)
 
 - Live edge overlay / auto-capture in ScanFlow's *own* camera (`app/scan.tsx`).
   Live detection and auto-capture are provided by the iOS document scanner
   (default); Expo Go offers no camera frame processors for a custom overlay.
 - Text recognition, PDF import rasterization, and PDF password encryption in
   Expo Go (require the native `modules/scanflow-ocr` module in the IPA build).
-- Milestones M3–M7 of Phase V2 (30-day trash, favorites & tags, smart naming,
-  Files ZIP backup/restore, haptics & accessibility audit, StoreKit 2 Pro
+- Milestones M4–M7 of Phase V2 (haptics & accessibility audit, StoreKit 2 Pro
   unlock, store package & TestFlight submission prep – see `docs/ROADMAP.md`).

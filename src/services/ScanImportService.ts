@@ -26,6 +26,8 @@ export interface SaveScanOptions extends ScanTarget {
   detect: boolean;
   /** Title of a new document. */
   title: string;
+  /** True if the title is auto-generated (allows Smart Naming auto-rename after OCR). */
+  titleAuto?: boolean;
   /** Initial filter for newly imported pages (defaults to 'auto'; 'original' for imported PDFs). */
   defaultFilter?: FilterType;
   onProgress?: (current: number, total: number) => void;
@@ -117,7 +119,11 @@ export async function saveScan(options: SaveScanOptions): Promise<SavedScan> {
     const pageIds = await documentRepository.addPages(options.documentId, pages);
     result = { documentId: options.documentId, created: false, pageIds, undetectedPageIds: undetectedIds(pageIds, pages, detect) };
   } else {
-    const doc = await documentRepository.create({ title, pages });
+    const doc = await documentRepository.create({
+      title,
+      titleAuto: options.titleAuto ?? true,
+      pages,
+    });
     const data = await documentRepository.getById(doc.id);
     const pageIds = data ? data.pages.map((p) => p.id) : [];
     result = { documentId: doc.id, created: true, pageIds, undetectedPageIds: undetectedIds(pageIds, pages, detect) };

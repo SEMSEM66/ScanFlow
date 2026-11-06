@@ -15,3 +15,5 @@ export * from './DocumentTextModal';
 export * from './QrScannerModal';
 export * from './IdCardScannerModal';
 export * from './SignatureAnnotationModal';
+export * from './TrashModal';
+export * from './TagEditModal';

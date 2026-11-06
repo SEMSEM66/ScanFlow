@@ -471,6 +471,15 @@ export default function DocumentDetailScreen() {
         <Stack.Toolbar.Button icon="square.and.arrow.up" accessibilityLabel={t.export.title}
           onPress={() => router.push({ pathname: '/sheets/export', params: { documentId: document.id, pageIndex: String(currentPageIndex) } })} />
         <Stack.Toolbar.Menu icon="ellipsis.circle" accessibilityLabel={t.library.options}>
+          <Stack.Toolbar.MenuAction
+            icon={document.isFavorite ? 'star.fill' : 'star'}
+            onPress={async () => {
+              await documentRepository.toggleFavorite(document.id);
+              void loadDocumentData();
+            }}
+          >
+            {document.isFavorite ? t.favorites.removeFavorite : t.favorites.addFavorite}
+          </Stack.Toolbar.MenuAction>
           <Stack.Toolbar.MenuAction icon="pencil" onPress={() => {
             setPromptState({ visible: true, title: t.library.renameDocument, initialValue: document.title,
               onConfirm: async (newTitle) => { await documentRepository.update(document.id, { title: newTitle }); loadDocumentData(); },

@@ -19,11 +19,45 @@ import {
   serializeCorners,
 } from '../imaging/pageState';
 import { parseAnnotations, serializeAnnotations } from '../imaging/annotations';
+import { hasTag, parseTags, serializeTags, TRASH_RETENTION_MS } from '../utils/organization';
 import { documentSearchClauses } from '../db/textSearch';
 import { planPageExtraction, planPageSplit } from '../db/documentOperations';
 import { ocrKey } from '../ocr/text';
 import { storageService } from './StorageService';
 import { pageTextRepository } from './PageTextRepository';
+
+interface DocumentRow {
+  id: string;
+  title: string;
+  folder_id: string | null;
+  page_count: number;
+  thumbnail_uri: string | null;
+  deleted_at?: number | null;
+  is_favorite?: number;
+  tags?: string | null;
+  title_auto?: number;
+  created_at: number;
+  updated_at: number;
+}
+
+const DOCUMENT_COLUMNS =
+  'id, title, folder_id, page_count, thumbnail_uri, deleted_at, is_favorite, tags, title_auto, created_at, updated_at';
+
+function mapDocument(row: DocumentRow): Document {
+  return {
+    id: row.id,
+    title: row.title,
+    folderId: row.folder_id,
+    pageCount: row.page_count,
+    thumbnailUri: row.thumbnail_uri,
+    deletedAt: row.deleted_at ?? null,
+    isFavorite: Boolean(row.is_favorite),
+    tags: parseTags(row.tags),
+    titleAuto: Boolean(row.title_auto),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 interface PageRow {
   id: string;
@@ -78,7 +112,7 @@ function pageFiles(p: Pick<PageRow, 'original_uri' | 'preview_uri' | 'proxy_uri'
 export class DocumentRepository {
   async getAll(options?: DocumentFilterOptions): Promise<Document[]> {
     const db = await getDatabase();
-    const whereClauses: string[] = [];
+    const whereClauses: string[] = ['deleted_at IS NULL'];
     const params: (string | number)[] = [];
 
     if (options?.folderId) {
@@ -86,62 +120,51 @@ export class DocumentRepository {
       params.push(options.folderId);
     }
 
-    // Every word of the query must occur in the title or in the recognized text of a page.
+    if (options?.favoritesOnly) {
+      whereClauses.push('is_favorite = 1');
+    }
+
+    // Every word of the query must occur in the title, tags, or recognized text of a page.
     const search = documentSearchClauses(options?.searchQuery);
     whereClauses.push(...search.clauses);
     params.push(...search.params);
 
-    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
 
-    let orderBySql = 'ORDER BY created_at DESC';
+    let sortClause = 'created_at DESC';
     if (options?.sortBy === 'date_asc') {
-      orderBySql = 'ORDER BY created_at ASC';
+      sortClause = 'created_at ASC';
     } else if (options?.sortBy === 'title_asc') {
-      orderBySql = 'ORDER BY title COLLATE NOCASE ASC';
+      sortClause = 'title COLLATE NOCASE ASC';
     } else if (options?.sortBy === 'title_desc') {
-      orderBySql = 'ORDER BY title COLLATE NOCASE DESC';
+      sortClause = 'title COLLATE NOCASE DESC';
     }
 
     const sql = `
-      SELECT id, title, folder_id, page_count, thumbnail_uri, created_at, updated_at
+      SELECT ${DOCUMENT_COLUMNS}
       FROM documents
       ${whereSql}
-      ${orderBySql}
+      ORDER BY is_favorite DESC, ${sortClause}
     `;
 
-    const rows = await db.getAllAsync<{
-      id: string;
-      title: string;
-      folder_id: string | null;
-      page_count: number;
-      thumbnail_uri: string | null;
-      created_at: number;
-      updated_at: number;
-    }>(sql, params);
+    const rows = await db.getAllAsync<DocumentRow>(sql, params);
+    const docs = rows.map(mapDocument);
 
-    return rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      folderId: row.folder_id,
-      pageCount: row.page_count,
-      thumbnailUri: row.thumbnail_uri,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    if (options?.tag) {
+      const targetTag = options.tag;
+      return docs.filter((d) => hasTag(d.tags, targetTag));
+    }
+
+    return docs;
   }
 
   async getById(id: string): Promise<{ document: Document; pages: DocumentPage[] } | null> {
     const db = await getDatabase();
 
-    const docRow = await db.getFirstAsync<{
-      id: string;
-      title: string;
-      folder_id: string | null;
-      page_count: number;
-      thumbnail_uri: string | null;
-      created_at: number;
-      updated_at: number;
-    }>('SELECT id, title, folder_id, page_count, thumbnail_uri, created_at, updated_at FROM documents WHERE id = ?', [id]);
+    const docRow = await db.getFirstAsync<DocumentRow>(
+      `SELECT ${DOCUMENT_COLUMNS} FROM documents WHERE id = ?`,
+      [id]
+    );
 
     if (!docRow) return null;
 
@@ -150,16 +173,7 @@ export class DocumentRepository {
       [id]
     );
 
-    const document: Document = {
-      id: docRow.id,
-      title: docRow.title,
-      folderId: docRow.folder_id,
-      pageCount: docRow.page_count,
-      thumbnailUri: docRow.thumbnail_uri,
-      createdAt: docRow.created_at,
-      updatedAt: docRow.updated_at,
-    };
-
+    const document = mapDocument(docRow);
     const pages = pageRows.map(mapPage);
 
     return { document, pages };
@@ -170,8 +184,19 @@ export class DocumentRepository {
     const docId = newId('doc');
     const now = Date.now();
     await db.runAsync(
-      'INSERT INTO documents (id, title, folder_id, page_count, thumbnail_uri, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [docId, input.title.trim(), input.folderId || null, 0, null, now, now]
+      'INSERT INTO documents (id, title, folder_id, page_count, thumbnail_uri, is_favorite, tags, title_auto, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        docId,
+        input.title.trim(),
+        input.folderId || null,
+        0,
+        null,
+        input.isFavorite ? 1 : 0,
+        serializeTags(input.tags),
+        input.titleAuto ? 1 : 0,
+        now,
+        now,
+      ]
     );
     await this.addPages(docId, input.pages);
     const doc = await this.getById(docId);
@@ -255,6 +280,10 @@ export class DocumentRepository {
     if (input.title !== undefined) {
       updates.push('title = ?');
       params.push(input.title.trim());
+      if (input.titleAuto === undefined) {
+        // User-initiated rename clears the auto-generated title flag so Smart Naming never overwrites it
+        updates.push('title_auto = 0');
+      }
     }
 
     if (input.folderId !== undefined) {
@@ -262,8 +291,81 @@ export class DocumentRepository {
       params.push(input.folderId);
     }
 
+    if (input.isFavorite !== undefined) {
+      updates.push('is_favorite = ?');
+      params.push(input.isFavorite ? 1 : 0);
+    }
+
+    if (input.tags !== undefined) {
+      updates.push('tags = ?');
+      params.push(serializeTags(input.tags));
+    }
+
+    if (input.titleAuto !== undefined) {
+      updates.push('title_auto = ?');
+      params.push(input.titleAuto ? 1 : 0);
+    }
+
     params.push(id);
     await db.runAsync(`UPDATE documents SET ${updates.join(', ')} WHERE id = ?`, params);
+  }
+
+  /**
+   * Smart Naming hook: updates `title` and clears `title_auto` ONLY if the
+   * document still has `title_auto = 1` (never overwrites a user-edited title).
+   */
+  async applySmartTitleIfAuto(id: string, smartTitle: string): Promise<boolean> {
+    const clean = smartTitle.trim();
+    if (!clean) return false;
+    const db = await getDatabase();
+    const row = await db.getFirstAsync<{ title_auto: number }>('SELECT title_auto FROM documents WHERE id = ?', [id]);
+    if (!row || !row.title_auto) return false;
+    await db.runAsync('UPDATE documents SET title = ?, title_auto = 0, updated_at = ? WHERE id = ? AND title_auto = 1', [
+      clean,
+      Date.now(),
+      id,
+    ]);
+    return true;
+  }
+
+  async toggleFavorite(id: string): Promise<boolean> {
+    const db = await getDatabase();
+    const row = await db.getFirstAsync<{ is_favorite: number }>('SELECT is_favorite FROM documents WHERE id = ?', [id]);
+    const next = row?.is_favorite ? 0 : 1;
+    await db.runAsync('UPDATE documents SET is_favorite = ?, updated_at = ? WHERE id = ?', [next, Date.now(), id]);
+    return Boolean(next);
+  }
+
+  async setFavoriteMany(documentIds: string[], isFavorite: boolean): Promise<void> {
+    const db = await getDatabase();
+    const now = Date.now();
+    const flag = isFavorite ? 1 : 0;
+    for (const id of documentIds) {
+      await db.runAsync('UPDATE documents SET is_favorite = ?, updated_at = ? WHERE id = ?', [flag, now, id]);
+    }
+  }
+
+  async setTags(id: string, tags: string[]): Promise<string[]> {
+    const serialized = serializeTags(tags);
+    const db = await getDatabase();
+    await db.runAsync('UPDATE documents SET tags = ?, updated_at = ? WHERE id = ?', [serialized, Date.now(), id]);
+    return parseTags(serialized);
+  }
+
+  /** Returns all unique tags across active (non-trashed) documents, sorted alphabetically. */
+  async getAllTags(): Promise<string[]> {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<{ tags: string | null }>(
+      'SELECT tags FROM documents WHERE deleted_at IS NULL AND tags IS NOT NULL'
+    );
+    const seen = new Map<string, string>();
+    for (const r of rows) {
+      for (const tag of parseTags(r.tags)) {
+        const key = tag.toLocaleLowerCase('de-DE');
+        if (!seen.has(key)) seen.set(key, tag);
+      }
+    }
+    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b, 'de'));
   }
 
   async moveToFolder(documentId: string, folderId: string | null): Promise<void> {
@@ -281,23 +383,96 @@ export class DocumentRepository {
     }
   }
 
+  /** Soft-deletes a document by moving it to the 30-day Trash ("Zuletzt gelöscht"). */
   async delete(id: string): Promise<void> {
     const db = await getDatabase();
-    const pageRows = await db.getAllAsync<PageRow>(`SELECT ${PAGE_COLUMNS} FROM pages WHERE document_id = ?`, [id]);
-
-    // Delete image files from disk (original, proxy, rendered preview, legacy photo)
-    for (const page of pageRows) {
-      for (const f of pageFiles(page)) await storageService.deleteFile(f);
-    }
-
-    // Delete document row (foreign key CASCADE deletes pages rows)
-    await db.runAsync('DELETE FROM documents WHERE id = ?', [id]);
+    const now = Date.now();
+    await db.runAsync('UPDATE documents SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
   }
 
   async deleteMany(documentIds: string[]): Promise<void> {
     for (const id of documentIds) {
       await this.delete(id);
     }
+  }
+
+  /** Returns all documents currently in Trash, newest deletion first. */
+  async getTrashed(): Promise<Document[]> {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<DocumentRow>(
+      `SELECT ${DOCUMENT_COLUMNS} FROM documents WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC`
+    );
+    return rows.map(mapDocument);
+  }
+
+  async getTrashCount(): Promise<number> {
+    const db = await getDatabase();
+    const row = await db.getFirstAsync<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM documents WHERE deleted_at IS NOT NULL'
+    );
+    return row?.n ?? 0;
+  }
+
+  /** Restores a trashed document back to the Library (clears `folder_id` if the folder was deleted). */
+  async restoreFromTrash(id: string): Promise<void> {
+    const db = await getDatabase();
+    const now = Date.now();
+    const doc = await db.getFirstAsync<{ folder_id: string | null }>(
+      'SELECT folder_id FROM documents WHERE id = ?',
+      [id]
+    );
+    let validFolderId: string | null = doc?.folder_id ?? null;
+    if (validFolderId) {
+      const folderExists = await db.getFirstAsync<{ id: string }>('SELECT id FROM folders WHERE id = ?', [
+        validFolderId,
+      ]);
+      if (!folderExists) validFolderId = null;
+    }
+    await db.runAsync(
+      'UPDATE documents SET deleted_at = NULL, folder_id = ?, updated_at = ? WHERE id = ?',
+      [validFolderId, now, id]
+    );
+  }
+
+  async restoreManyFromTrash(documentIds: string[]): Promise<void> {
+    for (const id of documentIds) {
+      await this.restoreFromTrash(id);
+    }
+  }
+
+  /** Permanently deletes a document and all of its page image files from disk. */
+  async permanentlyDelete(id: string): Promise<void> {
+    const db = await getDatabase();
+    const pageRows = await db.getAllAsync<PageRow>(`SELECT ${PAGE_COLUMNS} FROM pages WHERE document_id = ?`, [id]);
+
+    for (const page of pageRows) {
+      for (const f of pageFiles(page)) await storageService.deleteFile(f);
+    }
+
+    await db.runAsync('DELETE FROM documents WHERE id = ?', [id]);
+  }
+
+  /** Permanently deletes all documents currently in Trash. */
+  async emptyTrash(): Promise<number> {
+    const trashed = await this.getTrashed();
+    for (const doc of trashed) {
+      await this.permanentlyDelete(doc.id);
+    }
+    return trashed.length;
+  }
+
+  /** Purges trashed documents older than 30 days (`TRASH_RETENTION_MS`). Called on app launch. */
+  async purgeExpiredTrash(nowMs = Date.now()): Promise<number> {
+    const db = await getDatabase();
+    const cutoff = nowMs - TRASH_RETENTION_MS;
+    const expired = await db.getAllAsync<{ id: string }>(
+      'SELECT id FROM documents WHERE deleted_at IS NOT NULL AND deleted_at <= ?',
+      [cutoff]
+    );
+    for (const row of expired) {
+      await this.permanentlyDelete(row.id);
+    }
+    return expired.length;
   }
 
   /** Helper that clones a list of existing DocumentPages (files + state) into NewPageInputs. */

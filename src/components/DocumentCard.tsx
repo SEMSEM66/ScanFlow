@@ -112,18 +112,37 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
 
         {/* Info Area */}
         <View style={[styles.infoContainer, { padding: spacing.md }]}>
-          <Text
-            numberOfLines={1}
-            style={[typography.headline, styles.title, { color: colors.textPrimary }]}
-          >
-            {document.title}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {document.isFavorite ? (
+              <Icon name="star.fill" size={13} color="#F5A623" style={{ marginRight: 5 }} />
+            ) : null}
+            <Text
+              numberOfLines={1}
+              style={[typography.headline, styles.title, { color: colors.textPrimary, flex: 1 }]}
+            >
+              {document.title}
+            </Text>
+          </View>
           <Text
             numberOfLines={1}
             style={[typography.footnote, styles.subtitle, { color: colors.textSecondary, marginTop: 4 }]}
           >
             {formattedDate} · {pageText}
           </Text>
+          {document.tags && document.tags.length > 0 ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5, gap: 4, flexWrap: 'wrap' }}>
+              <View style={[styles.tagPill, { backgroundColor: colors.surfaceSubdued }]}>
+                <Text numberOfLines={1} style={[typography.caption2, { color: colors.textSecondary }]}>
+                  #{document.tags[0]}
+                </Text>
+              </View>
+              {document.tags.length > 1 ? (
+                <Text style={[typography.caption2, { color: colors.textMuted }]}>
+                  +{document.tags.length - 1}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
           {snippet ? (
             <Text numberOfLines={3} style={[typography.caption1, styles.snippet, { color: colors.textSecondary }]}>
               {snippet.before}
@@ -207,5 +226,10 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 12,
     lineHeight: 16,
+  },
+  tagPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    ...capsule(16),
   },
 });

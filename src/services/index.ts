@@ -11,3 +11,5 @@ export * from './OcrService';
 export * from './PdfToolkitService';
 export * from './SignatureRepository';
 export * from './QrScannerService';
+export * from './SmartNamingService';
+export * from './BackupService';

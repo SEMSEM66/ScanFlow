@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { Icon } from '../../../src/components/ui/Icon';
+import { Button } from '../../../src/components/ui/Button';
 import { SegmentedControl } from '../../../src/components/ui/NativeSegmentedControl';
 import { useFocusEffect } from 'expo-router';
 import { capsule, concentric, corner, hairline, radius, useTheme } from '../../../src/theme';
@@ -23,11 +24,20 @@ import {
   type UnlockCapabilities,
 } from '../../../src/services/AuthService';
 import { privacyService } from '../../../src/services/PrivacyService';
-import { storageService, documentRepository, documentScanner, ocrService, type OcrStats } from '../../../src/services';
+import {
+  storageService,
+  documentRepository,
+  documentScanner,
+  ocrService,
+  smartNamingService,
+  backupService,
+  type OcrStats,
+} from '../../../src/services';
 import { ExportDpi, ExportQuality } from '../../../src/types';
 import { EXPORT_DPI_PRESETS } from '../../../src/imaging/pageFormat';
 import { PinSetupModal, type PinFlow } from '../../../src/components/PinSetupModal';
 import { useAppLock } from '../../../src/components/AppLockOverlay';
+import { SMART_NAMING_PRESETS, formatSmartDocumentTitle } from '../../../src/utils/organization';
 
 export default function SettingsScreen() {
   const { colors, typography, spacing, mode, setMode, isDark } = useTheme();
@@ -54,6 +64,13 @@ export default function SettingsScreen() {
   const [defaultDpi, setDefaultDpiState] = useState<ExportDpi>(200);
   const [storageBytes, setStorageBytes] = useState(0);
   const [docCount, setDocCount] = useState(0);
+
+  // Smart Naming state
+  const [smartNamingEnabled, setSmartNamingEnabled] = useState(true);
+  const [smartNamingTemplate, setSmartNamingTemplate] = useState('Scan {date} {time}');
+
+  // Full Backup & Restore state
+  const [backupBusy, setBackupBusy] = useState<string | null>(null);
 
   // Text recognition (Apple Vision, installed app only)
   const ocrAvailable = ocrService.available;
@@ -130,6 +147,12 @@ export default function SettingsScreen() {
       setDefaultQuality(qual);
       setDefaultDpiState(await authService.getDefaultDpi());
       setScannerModeState(await authService.getScannerMode());
+      const [snEnabled, snTemplate] = await Promise.all([
+        smartNamingService.isEnabled(),
+        smartNamingService.getTemplate(),
+      ]);
+      setSmartNamingEnabled(snEnabled);
+      setSmartNamingTemplate(snTemplate);
     }
     loadSettings();
   }, []);
@@ -358,6 +381,77 @@ export default function SettingsScreen() {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
+  };
+
+  const handleToggleSmartNaming = async (val: boolean) => {
+    setSmartNamingEnabled(val);
+    await smartNamingService.setEnabled(val);
+  };
+
+  const handleSelectTemplate = async (tmpl: string) => {
+    setSmartNamingTemplate(tmpl);
+    await smartNamingService.setTemplate(tmpl);
+  };
+
+  const handleCreateBackup = async () => {
+    if (backupBusy) return;
+    try {
+      const estimate = await backupService.estimateBackup();
+      if (estimate.documentCount === 0) {
+        Alert.alert(t.backup.title, t.common.noItems);
+        return;
+      }
+      if (estimate.exceedsWarning) {
+        const proceed = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            t.backup.sizeWarningTitle,
+            formatString(t.backup.sizeWarningMessage, { size: formatStorage(estimate.totalBytes) }),
+            [
+              { text: t.common.cancel, style: 'cancel', onPress: () => resolve(false) },
+              { text: t.common.confirm, onPress: () => resolve(true) },
+            ]
+          );
+        });
+        if (!proceed) return;
+      }
+
+      setBackupBusy(t.common.loading);
+      const result = await backupService.createBackupZip((current, total) => {
+        setBackupBusy(formatString(t.backup.creatingBackup, { current, total }));
+      });
+      setBackupBusy(null);
+      await backupService.shareBackup(result.zipUri);
+    } catch (err) {
+      console.error('[Settings] Backup creation failed:', err);
+      Alert.alert(t.common.error, t.common.error);
+    } finally {
+      setBackupBusy(null);
+    }
+  };
+
+  const handleRestoreBackup = async () => {
+    if (backupBusy) return;
+    try {
+      setBackupBusy(t.common.loading);
+      const { manifest } = await backupService.pickAndRestoreBackup((current, total) => {
+        setBackupBusy(formatString(t.backup.restoringBackup, { current, total }));
+      });
+      setBackupBusy(null);
+      await loadStorage();
+      Alert.alert(
+        t.backup.restoreSuccessTitle,
+        formatString(t.backup.restoreSuccessMessage, {
+          docs: manifest.documents.length,
+          pages: manifest.documents.reduce((acc, d) => acc + d.pages.length, 0),
+        })
+      );
+    } catch (err: any) {
+      setBackupBusy(null);
+      if (err?.message !== 'cancelled') {
+        console.error('[Settings] Backup restore failed:', err);
+        Alert.alert(t.common.error, t.backup.restoreFailed);
+      }
+    }
   };
 
   return (
@@ -624,6 +718,138 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Section 5b: Smart Naming */}
+        <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary, marginTop: spacing.lg }]}>
+          {t.smartNaming.title}
+        </Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleRowLeft}>
+              <View style={[styles.iconBox, { backgroundColor: colors.primarySubdued }]}>
+                <Icon name="pencil.and.ellipsis.rectangle" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.rowText}>
+                <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
+                  {t.smartNaming.autoNamingToggle}
+                </Text>
+                <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
+                  {t.smartNaming.autoNamingDescription}
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={smartNamingEnabled}
+              onValueChange={(val) => void handleToggleSmartNaming(val)}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+
+          {smartNamingEnabled ? (
+            <View style={styles.divided}>
+              <Text style={[typography.subhead, { color: colors.textPrimary, fontWeight: '600', marginBottom: 8 }]}>
+                {t.smartNaming.templateLabel}
+              </Text>
+              {SMART_NAMING_PRESETS.map((preset) => {
+                const isSelected = smartNamingTemplate === preset;
+                return (
+                  <TouchableOpacity
+                    key={preset}
+                    onPress={() => void handleSelectTemplate(preset)}
+                    style={[
+                      styles.templateRow,
+                      {
+                        backgroundColor: isSelected ? colors.primarySubdued : colors.surfaceSubdued,
+                        borderColor: isSelected ? colors.primary : colors.borderLight,
+                      },
+                    ]}
+                  >
+                    <Icon
+                      name={isSelected ? 'checkmark.circle.fill' : 'circle'}
+                      size={18}
+                      color={isSelected ? colors.primary : colors.textMuted}
+                    />
+                    <Text
+                      style={[
+                        typography.body,
+                        {
+                          color: isSelected ? colors.primary : colors.textPrimary,
+                          fontWeight: isSelected ? '600' : '400',
+                          marginLeft: 10,
+                          flex: 1,
+                        },
+                      ]}
+                    >
+                      {preset}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              <View style={[styles.previewBox, { backgroundColor: colors.surfaceSubdued, marginTop: 10 }]}>
+                <Text style={[typography.caption2, { color: colors.textSecondary }]}>
+                  {t.smartNaming.preview}:
+                </Text>
+                <Text style={[typography.footnote, { color: colors.textPrimary, fontWeight: '600', marginTop: 2 }]}>
+                  {formatSmartDocumentTitle(smartNamingTemplate, {
+                    folderName: 'Rechnungen',
+                    ocrText: 'Deutsche Telekom GmbH\nRechnung 14.03.2026',
+                    counter: 1,
+                  })}
+                </Text>
+              </View>
+
+              <Text style={[typography.caption2, { color: colors.textMuted, marginTop: 8 }]}>
+                {t.smartNaming.tokensHint}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Section 5c: Backup & Transfer */}
+        <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary, marginTop: spacing.lg }]}>
+          {t.backup.title}
+        </Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={[styles.iconBox, { backgroundColor: colors.primarySubdued }]}>
+              <Icon name="archivebox" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
+                {t.backup.sectionHeader}
+              </Text>
+              <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
+                {t.backup.description}
+              </Text>
+            </View>
+          </View>
+
+          {backupBusy ? (
+            <View style={[styles.busyBox, { backgroundColor: colors.primarySubdued, marginTop: 14 }]}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[typography.footnote, { color: colors.primary, fontWeight: '600', marginLeft: 8 }]}>
+                {backupBusy}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              <Button
+                title={t.backup.createBackup}
+                size="medium"
+                onPress={() => void handleCreateBackup()}
+                style={{ flex: 1 }}
+              />
+              <Button
+                variant="tinted"
+                title={t.backup.restoreBackup}
+                size="medium"
+                onPress={() => void handleRestoreBackup()}
+                style={{ flex: 1 }}
+              />
+            </View>
+          )}
+        </View>
+
         {/* Section 6: Privacy Guarantee */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: spacing.lg }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -764,5 +990,25 @@ const styles = StyleSheet.create({
   },
   clearCacheBtn: {
     alignItems: 'center',
+  },
+  templateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: hairline,
+    ...corner(radius.sm),
+    marginTop: 6,
+  },
+  previewBox: {
+    padding: 10,
+    ...corner(radius.sm),
+  },
+  busyBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    ...corner(radius.sm),
   },
 });

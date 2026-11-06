@@ -27,6 +27,14 @@ export interface Document {
   folderId: string | null;
   pageCount: number;
   thumbnailUri: string | null;
+  /** Epoch ms when moved to Trash (null = active document). */
+  deletedAt?: number | null;
+  /** True when pinned to the top of the Library. */
+  isFavorite?: boolean;
+  /** Normalized user tags attached to this document. */
+  tags?: string[];
+  /** True while the title is still auto-generated and eligible for Smart Naming after first OCR. */
+  titleAuto?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -69,6 +77,9 @@ export interface PageEditState {
 export interface CreateDocumentInput {
   title: string;
   folderId?: string | null;
+  isFavorite?: boolean;
+  tags?: string[];
+  titleAuto?: boolean;
   pages: NewPageInput[];
 }
 
@@ -88,10 +99,15 @@ export interface NewPageInput {
 export interface UpdateDocumentInput {
   title?: string;
   folderId?: string | null;
+  isFavorite?: boolean;
+  tags?: string[];
+  titleAuto?: boolean;
 }
 
 export interface DocumentFilterOptions {
   folderId?: string | null;
   searchQuery?: string;
+  tag?: string | null;
+  favoritesOnly?: boolean;
   sortBy?: 'date_desc' | 'date_asc' | 'title_asc' | 'title_desc';
 }

@@ -23,11 +23,20 @@ const FOLDED_TITLE_SQL = [
   ['á', 'a'], ['Á', 'a'], ['à', 'a'], ['â', 'a'],
 ].reduce((expr, [from, to]) => `REPLACE(${expr}, '${from}', '${to}')`, 'LOWER(title)');
 
+const FOLDED_TAGS_SQL = [
+  ['ä', 'a'], ['Ä', 'a'],
+  ['ö', 'o'], ['Ö', 'o'],
+  ['ü', 'u'], ['Ü', 'u'],
+  ['ß', 'ss'], ['ẞ', 'ss'],
+  ['é', 'e'], ['É', 'e'], ['è', 'e'], ['ê', 'e'],
+  ['á', 'a'], ['Á', 'a'], ['à', 'a'], ['â', 'a'],
+].reduce((expr, [from, to]) => `REPLACE(${expr}, '${from}', '${to}')`, "LOWER(COALESCE(tags, ''))");
+
 /**
  * WHERE clauses (AND-ed) for a library search on `documents`: every word of
- * the query must occur in the title (case- and umlaut-insensitive) or in
- * the recognized text of one of the document's pages (normalized: case and
- * diacritics ignored).
+ * the query must occur in the title (case- and umlaut-insensitive), in one of
+ * the document's tags, or in the recognized text of one of the document's pages
+ * (normalized: case and diacritics ignored).
  */
 export function documentSearchClauses(query: string | null | undefined): { clauses: string[]; params: string[] } {
   const clauses: string[] = [];
@@ -42,9 +51,9 @@ export function documentSearchClauses(query: string | null | undefined): { claus
     if (folded.length > 0) {
       const foldedPattern = `%${escapeLike(folded)}%`;
       clauses.push(
-        `(title LIKE ? ESCAPE '\\' OR ${FOLDED_TITLE_SQL} LIKE ? ESCAPE '\\' OR id IN (SELECT p.document_id FROM pages p JOIN page_text t ON t.page_id = p.id WHERE t.search_text LIKE ? ESCAPE '\\'))`
+        `(title LIKE ? ESCAPE '\\' OR ${FOLDED_TITLE_SQL} LIKE ? ESCAPE '\\' OR ${FOLDED_TAGS_SQL} LIKE ? ESCAPE '\\' OR id IN (SELECT p.document_id FROM pages p JOIN page_text t ON t.page_id = p.id WHERE t.search_text LIKE ? ESCAPE '\\'))`
       );
-      params.push(`%${escapeLike(word)}%`, foldedPattern, foldedPattern);
+      params.push(`%${escapeLike(word)}%`, foldedPattern, foldedPattern, foldedPattern);
     } else {
       clauses.push(`title LIKE ? ESCAPE '\\'`);
       params.push(`%${escapeLike(word)}%`);
@@ -77,7 +86,8 @@ export const PAGE_STATES_SQL = `SELECT p.id, p.document_id, p.page_number, p.ori
        d.created_at AS doc_created_at, t.ocr_key
   FROM pages p
   JOIN documents d ON d.id = p.document_id
-  LEFT JOIN page_text t ON t.page_id = p.id`;
+  LEFT JOIN page_text t ON t.page_id = p.id
+ WHERE d.deleted_at IS NULL`;
 
 /**
  * Text of the first matching page (page order) per document; param: LIKE

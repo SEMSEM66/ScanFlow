@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.11.0] - 2026-11-06
+
+Phase V2 Milestone **M3 (Organization & Automation)**: 30-day Trash (*Zuletzt gelöscht*), Favorites & Tags, deterministic Smart Naming templates with auto-rename after OCR, and Full-Library ZIP Backup & Restore via Files picker (SQLite schema v5).
+
+### Added
+- **M3 – 30-day Trash (*Zuletzt gelöscht*, `src/utils/organization.ts`, `TrashModal.tsx`):**
+  - Schema **v5** (`src/db/migrations.ts`, `SCHEMA_VERSION = 5`): adds `documents.deleted_at` timestamp and index.
+  - Soft-delete for documents: deleting moves documents into the 30-day Trash instead of immediate destruction.
+  - Automatic expiration & purge: `documentRepository.purgeExpiredTrash()` runs on every app launch in `app/_layout.tsx`, permanently removing documents older than 30 days.
+  - *Zuletzt gelöscht* modal (`TrashModal.tsx`): displays trashed documents with remaining retention days (*Noch X Tage*), individual *Wiederherstellen* and *Endgültig löschen* actions, and one-tap *Papierkorb leeren*.
+- **M3 – Favorites & Tags (`DocumentCard.tsx`, `TagEditModal.tsx`, `textSearch.ts`):**
+  - Schema v5 columns: `documents.is_favorite` (with index) and `documents.tags` (JSON array of normalized strings).
+  - Pinned favorites: favorite documents are pinned to the top of the Library; quick toggle via document menu, toolbar, and multi-select bar.
+  - Tag chips & filtering: tag row under folder pills in Library; case-insensitive search across titles, recognized OCR text, and tags.
+  - Tag editor modal (`TagEditModal.tsx`): add/remove tags on documents with existing tag suggestions.
+- **M3 – Deterministic Smart Naming (`src/utils/organization.ts`, `SmartNamingService.ts`, `app/(tabs)/(settings)/index.tsx`):**
+  - Template engine with tokens: `{date}`, `{time}`, `{folder}`, `{firstLine}`, `{counter}`.
+  - Deterministic date extraction from OCR text: recognizes German numeric dates (`DD.MM.YYYY`), ISO dates (`YYYY-MM-DD`), and written German dates (`14. März 2026`).
+  - Auto-rename hook after initial OCR: automatically renames newly scanned documents when page 1 is recognized, strictly protecting user-edited titles (`title_auto = 0`).
+  - Settings UI: toggle, template preset selector (`Scan {date} {time}`, `{date} {firstLine}`, `{folder} - {date} - {firstLine}`, `{date}_{counter}`), and real-time formatted title preview.
+- **M3 – Full-Library ZIP Backup & Restore (`src/utils/backupManifest.ts`, `BackupService.ts`, `src/docx/zip.ts`):**
+  - Manifest v1 format (`manifest.json`): serializes folders, documents with non-destructive page states and OCR text, and saved signatures.
+  - ZIP packaging & extraction: pure-TS Store-mode ZIP writer (`buildZip`) and reader (`readZip` with CRC-32 validation and path-traversal protection).
+  - Backup creation: serial, memory-safe packaging of all originals, OCR text, and metadata with > 150 MB warning, followed by system share sheet ("Save to Files" / iCloud Drive / AirDrop).
+  - Backup restoration: pick any `.zip` backup from Files, inspect manifest, and restore folders, signatures, and documents.
+
+---
+
 ## [1.10.0] - 2026-11-06
 
 Phase V2 Milestone **M2 (Capture Modes & Marking)**: ID-Card Mode (true 1:1 `85.6 × 54 mm` scale on A4 + optional purpose watermark), QR/Barcode & SEPA GiroCode (EPC) scanner in *Werkzeuge*, and non-destructive visual signatures & page annotations (SQLite schema v4, `RENDER_VERSION = 2`).

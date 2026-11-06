@@ -31,6 +31,8 @@ import {
   DocumentActionModal,
   PromptModal,
   FolderOptionsModal,
+  TrashModal,
+  TagEditModal,
   useScanner,
   Button,
   Chip,
@@ -56,10 +58,16 @@ export default function LibraryScreen() {
 
   // Modals State
   const [activeDocForAction, setActiveDocForAction] = useState<Document | null>(null);
+  const [activeDocForTags, setActiveDocForTags] = useState<Document | null>(null);
   const [activeFolderForOptions, setActiveFolderForOptions] = useState<Folder | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [toolkitBusyText, setToolkitBusyText] = useState<string | null>(null);
+  const [trashOpen, setTrashOpen] = useState(false);
+  const [trashCount, setTrashCount] = useState(0);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [promptState, setPromptState] = useState<{
     visible: boolean;
     title: string;
@@ -81,13 +89,17 @@ export default function LibraryScreen() {
     const seq = ++loadSeq.current;
     try {
       const query = searchQuery.trim();
-      const [fetchedFolders, fetchedDocs] = await Promise.all([
+      const [fetchedFolders, fetchedDocs, fetchedTrashCount, fetchedTags] = await Promise.all([
         folderRepository.getAll(),
         documentRepository.getAll({
           folderId: selectedFolderId,
           searchQuery: query.length > 0 ? query : undefined,
+          tag: selectedTag,
+          favoritesOnly: favoritesOnly ? true : undefined,
           sortBy,
         }),
+        documentRepository.getTrashCount(),
+        documentRepository.getAllTags(),
       ]);
       const term = snippetTerm(query);
       let found = new Map<string, Snippet>();
@@ -105,6 +117,8 @@ export default function LibraryScreen() {
       setFolders(fetchedFolders);
       setDocuments(fetchedDocs);
       setSnippets(found);
+      setTrashCount(fetchedTrashCount);
+      setAllTags(fetchedTags);
     } catch (err) {
       console.error('[LibraryScreen] Error loading data from SQLite:', err);
     } finally {
@@ -113,7 +127,7 @@ export default function LibraryScreen() {
         setRefreshing(false);
       }
     }
-  }, [selectedFolderId, searchQuery, sortBy]);
+  }, [selectedFolderId, searchQuery, sortBy, selectedTag, favoritesOnly]);
 
   // Reload on focus: new scans, renamed documents and re-rendered thumbnails;
   // pages without text are recognized in the background
@@ -227,26 +241,13 @@ export default function LibraryScreen() {
     }
   };
 
-  const handleDeleteDocument = (doc: Document) => {
-    Alert.alert(
-      t.library.deleteDocument,
-      t.library.deleteConfirm,
-      [
-        { text: t.common.cancel, style: 'cancel' },
-        {
-          text: t.common.delete,
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await documentRepository.delete(doc.id);
-              loadData();
-            } catch {
-              Alert.alert(t.common.error, t.library.deleteDocumentFailed);
-            }
-          },
-        },
-      ]
-    );
+  const handleDeleteDocument = async (doc: Document) => {
+    try {
+      await documentRepository.delete(doc.id);
+      await loadData();
+    } catch {
+      Alert.alert(t.common.error, t.library.deleteDocumentFailed);
+    }
   };
 
   // Multi-select & PDF/Files Import Handlers
@@ -384,29 +385,29 @@ export default function LibraryScreen() {
     }
   };
 
-  const handleBatchDelete = () => {
+  const handleBatchToggleFavorite = async () => {
     if (orderedSelectedIds.length === 0) return;
-    Alert.alert(
-      formatString(t.library.batchDeleteTitle, { count: orderedSelectedIds.length }),
-      formatString(t.library.batchDeleteConfirm, { count: orderedSelectedIds.length }),
-      [
-        { text: t.common.cancel, style: 'cancel' },
-        {
-          text: t.common.delete,
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const ids = [...orderedSelectedIds];
-              exitSelectMode();
-              await documentRepository.deleteMany(ids);
-              await loadData();
-            } catch {
-              Alert.alert(t.common.error, t.library.deleteDocumentFailed);
-            }
-          },
-        },
-      ]
-    );
+    try {
+      const ids = [...orderedSelectedIds];
+      const anyUnfavorited = documents.some((d) => ids.includes(d.id) && !d.isFavorite);
+      await documentRepository.setFavoriteMany(ids, anyUnfavorited);
+      exitSelectMode();
+      await loadData();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (orderedSelectedIds.length === 0) return;
+    try {
+      const ids = [...orderedSelectedIds];
+      exitSelectMode();
+      await documentRepository.deleteMany(ids);
+      await loadData();
+    } catch {
+      Alert.alert(t.common.error, t.library.deleteDocumentFailed);
+    }
   };
 
   const selectedFolder = folders.find((f) => f.id === selectedFolderId) ?? null;
@@ -482,7 +483,21 @@ export default function LibraryScreen() {
               </View>
             ) : null}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsContainer}>
-              <Chip label={t.common.all} selected={selectedFolderId === null} onPress={() => setSelectedFolderId(null)} />
+              <Chip
+                label={t.common.all}
+                selected={selectedFolderId === null && !favoritesOnly}
+                onPress={() => {
+                  setSelectedFolderId(null);
+                  setFavoritesOnly(false);
+                }}
+              />
+              <Chip
+                icon="star.fill"
+                label={t.favorites.title}
+                tint="#F5A623"
+                selected={favoritesOnly}
+                onPress={() => setFavoritesOnly((v) => !v)}
+              />
               {folders.map((folder) => {
                 const isSelected = selectedFolderId === folder.id;
                 return (
@@ -502,7 +517,30 @@ export default function LibraryScreen() {
                 );
               })}
               <Chip icon="plus" label={t.library.newFolder} tint={colors.primary} onPress={handleOpenCreateFolder} />
+              {trashCount > 0 ? (
+                <Chip
+                  icon="trash"
+                  label={`${t.trash.title} (${trashCount})`}
+                  tint={colors.danger}
+                  selected={false}
+                  onPress={() => setTrashOpen(true)}
+                />
+              ) : null}
             </ScrollView>
+
+            {allTags.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.pillsContainer, { paddingTop: 0 }]}>
+                <Chip label={t.tags.allTags} selected={selectedTag === null} onPress={() => setSelectedTag(null)} />
+                {allTags.map((tag) => (
+                  <Chip
+                    key={tag}
+                    label={`#${tag}`}
+                    selected={selectedTag === tag}
+                    onPress={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                  />
+                ))}
+              </ScrollView>
+            ) : null}
           </View>
         }
         ListEmptyComponent={loading && !refreshing ? (
@@ -596,6 +634,17 @@ export default function LibraryScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.7}
+            onPress={() => void handleBatchToggleFavorite()}
+            style={styles.batchActionBtn}
+            accessibilityRole="button"
+          >
+            <Icon name="star" size={20} color="#F5A623" />
+            <Text numberOfLines={1} style={[typography.caption2, { color: colors.textPrimary, marginTop: 4 }]}>
+              {t.favorites.title}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.7}
             onPress={() => void handleBatchExport()}
             disabled={toolkitBusyText !== null}
             style={styles.batchActionBtn}
@@ -608,13 +657,13 @@ export default function LibraryScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={handleBatchDelete}
+            onPress={() => void handleBatchDelete()}
             style={styles.batchActionBtn}
             accessibilityRole="button"
           >
             <Icon name="trash" size={20} color={colors.danger} />
             <Text numberOfLines={1} style={[typography.caption2, { color: colors.danger, marginTop: 4 }]}>
-              {t.common.delete}
+              {t.trash.title}
             </Text>
           </TouchableOpacity>
         </View>
@@ -628,8 +677,27 @@ export default function LibraryScreen() {
         onRename={(doc) => handleRenameDocument(doc)}
         onMove={(doc) => router.push({ pathname: '/sheets/move', params: { documentId: doc.id } })}
         onDuplicate={(doc) => handleDuplicateDocument(doc)}
-        onDelete={(doc) => handleDeleteDocument(doc)}
+        onDelete={(doc) => void handleDeleteDocument(doc)}
+        onToggleFavorite={async (doc) => {
+          await documentRepository.toggleFavorite(doc.id);
+          await loadData();
+        }}
+        onEditTags={(doc) => setActiveDocForTags(doc)}
         onShowText={ocrService.available ? (doc) => router.push({ pathname: '/sheets/text', params: { documentId: doc.id, title: doc.title } }) : undefined}
+      />
+
+      <TrashModal
+        visible={trashOpen}
+        onClose={() => setTrashOpen(false)}
+        onRestored={() => void loadData()}
+      />
+
+      <TagEditModal
+        visible={activeDocForTags !== null}
+        documentId={activeDocForTags?.id ?? ''}
+        initialTags={activeDocForTags?.tags ?? []}
+        onClose={() => setActiveDocForTags(null)}
+        onSaved={() => void loadData()}
       />
 
       {/* Folder Options Modal (Rename/Delete folder) */}

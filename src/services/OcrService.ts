@@ -11,6 +11,7 @@ import type { DocumentPage } from '../types';
 import { documentRepository } from './DocumentRepository';
 import { imagePipeline } from './ImagePipelineService';
 import { pageTextRepository, type OcrStats } from './PageTextRepository';
+import { smartNamingService } from './SmartNamingService';
 import { storageService } from './StorageService';
 
 /**
@@ -277,6 +278,9 @@ export class OcrService {
     const now = await documentRepository.getPage(pageId);
     if (!now || ocrKeyOf(now) !== key) return;
     await pageTextRepository.save(pageId, { key, engine: OCR_ENGINE, languages: OCR_LANGUAGES, lines });
+    if (now.pageNumber === 1 && lines.length > 0) {
+      void smartNamingService.onPageOcrCompleted(now.documentId, 1, pageText(lines));
+    }
   }
 
   private async recognize(page: PageState): Promise<OcrLine[]> {
