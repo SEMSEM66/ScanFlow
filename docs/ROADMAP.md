@@ -375,7 +375,10 @@ Requested by the user after STOP C: the dark background of *Anpassen* slid up to
 5. `README.md`, `docs/ROADMAP.md`, `CHANGELOG.md`, `docs/ARCHITECTURE.md`, and `AGENTS.md` are up to date.
 6. Every claim in the docs and store text is true and marked as `verified by tests`, `verified in CI log`, or `UNVERIFIED (needs iPhone)`.
 
-### Open Decisions (with active defaults)
+### Decisions (confirmed by the user on 2026-11-06: "use defaults")
+> **CI policy override (user, 2026-11-06):** do **not** merge milestones into `main` one by one. All milestones M0–M7 stay on feature branches (stacked) and are merged into `main` **once for v2.0.0-rc** → exactly one IPA build for the whole V2 program. The per-milestone STOP device checklists are collected and run together on the v2.0.0-rc IPA.
+
+
 1. **Free/Pro gating & App Lock:** Does App Lock stay free, and do you agree with the proposed Free vs. Pro split? **[Default: as proposed – App Lock stays free]**
 2. **Price hypotheses:** Yearly with 7-day trial + Lifetime one-time purchase (monthly optional)? **[Default: yearly with trial + lifetime, monthly optional]**
 3. **App Store name & Bundle ID:** Keep `ScanFlow` / `com.scanflow.app` or switch before the first TestFlight build? **[Default: decide before TestFlight; 5 name alternatives prepared in M6]**
