@@ -6,6 +6,7 @@ import { dpiForMaxLongSide, pagePixelSize, resolvePageSize, rotatedAspect } from
 import { BG_LONG_SIDE, backgroundSize, estimateBackground } from './background';
 import { needsBackground, shaderParams } from './filters';
 import { ENHANCE_SKSL, WARP_SKSL } from './shaders';
+import { drawPageAnnotations, type PageAnnotation } from './annotations';
 
 export type SkiaApi = typeof Skia;
 
@@ -36,6 +37,8 @@ export interface RenderOptions {
   filter: FilterType;
   adjustments?: Adjustments;
   pageFormat: PageFormat;
+  /** Optional non-destructive visual annotations drawn after the filter pass (excluded from OCR). */
+  annotations?: PageAnnotation[];
   /** Output resolution. */
   dpi: number;
   /** Optional clamp of the output long side in px (previews / thumbnails). */
@@ -244,7 +247,9 @@ export class PageRenderer {
     const out = this.surface(W, H);
     const paint = this.Skia.Paint();
     paint.setShader(shader);
-    out.getCanvas().drawRect(this.Skia.XYWHRect(0, 0, W, H), paint);
+    const outCanvas = out.getCanvas();
+    outCanvas.drawRect(this.Skia.XYWHRect(0, 0, W, H), paint);
+    drawPageAnnotations(this.Skia, outCanvas, opts.annotations, W, H);
     out.flush();
     const image = out.makeImageSnapshot();
     out.dispose?.();

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.0] - 2026-11-06
+
+Phase V2 Milestone **M2 (Capture Modes & Marking)**: ID-Card Mode (true 1:1 `85.6 × 54 mm` scale on A4 + optional purpose watermark), QR/Barcode & SEPA GiroCode (EPC) scanner in *Werkzeuge*, and non-destructive visual signatures & page annotations (SQLite schema v4, `RENDER_VERSION = 2`).
+
+### Added
+- **M2 – ID-Card Mode (`src/imaging/idCard.ts`, `IdCardScannerModal.tsx`):**
+  - Guided front & back capture (via iOS VisionKit document scanner or camera/photo library), de-warped to ISO/IEC 7810 ID-1 ratio (`85.6 × 54 mm`) and composed centered at true 1:1 physical scale on a single A4 page (`210 × 297 mm`).
+  - Optional diagonal purpose watermark (*"Kopie – nur für <Zweck>, <Datum>"*) stored as a non-destructive page annotation.
+- **M2 – QR, Barcode & SEPA GiroCode Scanner (`src/tools/epc.ts`, `src/tools/barcode.ts`, `QrScannerModal.tsx`, `QrScannerService.ts`):**
+  - Live barcode & QR scanner in *Werkzeuge* with safe link preview (shows full URL and credential-spoofing warning if `@` is present in authority; asks before opening).
+  - Full EPC069-12 **SEPA GiroCode** parser (versions `001` and `002`, ISO 13616 IBAN mod-97 verification, BIC validation, EUR amount formatting) with one-tap copy buttons for recipient, IBAN, BIC, amount, and reference/remittance text.
+  - Wi-Fi QR parser (`WIFI:`) with SSID and password copy buttons.
+  - Optional local scan history (OFF by default, stored in Keychain with a one-tap *Verlauf löschen* button).
+- **M2 – Visual Signatures & Non-Destructive Page Annotations (`src/imaging/annotations.ts`, `SignatureRepository.ts`, `SignatureAnnotationModal.tsx`):**
+  - SQLite schema **v4** (`src/db/migrations.ts`, `SCHEMA_VERSION = 4`, `RENDER_VERSION = 2`): adds `pages.annotations` JSON column and `signatures` table.
+  - Signature manager & pad: draw visual signatures with finger or Apple Pencil (Chaikin curve smoothing, color picker, undo/clear) or capture a paper signature from a photo with adaptive ink thresholding to transparent PNG (**P1**, `thresholdSignatureRgba`).
+  - Non-destructive page annotations (*Unterschrift einfügen*, *Datumsstempel*, *Text einfügen*, *Textmarker*) rendered by `PageRenderer` after filters so preview, thumbnails, and exported PDFs/JPGs match, while `renderForOcr` excludes annotations.
+
+---
+
 ## [1.9.0] - 2026-11-06
 
 Phase V2 Milestones **M0 (Foundations)** and **M1 (PDF Toolkit)**: PDF & image import from the Files app ("Open in ScanFlow"), Library multi-select with batch move / merge / ZIP export / delete, page split & extract in the page overview, and password-protected PDF export.

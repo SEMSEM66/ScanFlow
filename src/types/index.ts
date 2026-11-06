@@ -1,6 +1,8 @@
 import type { Adjustments, FilterType, PageFormat, Quad, Rotation } from '../imaging/types';
+import type { AnnotationType, PageAnnotation, SavedSignature, StrokePoint } from '../imaging/annotations';
 
 export type { Adjustments, ExportDpi, FilterType, PageFormat, Point, Quad, Rotation } from '../imaging/types';
+export type { AnnotationType, PageAnnotation, SavedSignature, StrokePoint };
 
 export type ExportQuality = 'low' | 'medium' | 'high';
 
@@ -42,6 +44,8 @@ export interface DocumentPage {
   corners: Quad | null;
   pageFormat: PageFormat;
   adjustments: Adjustments;
+  /** Non-destructive visual annotations (signatures, text, date stamps, pen, highlighter). */
+  annotations?: PageAnnotation[];
   /** ≤ 2000 px proxy of the original used for crop UI and previews. */
   proxyUri: string | null;
   /** Render cache key of previewUri (null = preview not rendered yet). */
@@ -59,6 +63,7 @@ export interface PageEditState {
   corners?: Quad | null;
   pageFormat?: PageFormat;
   adjustments?: Adjustments;
+  annotations?: PageAnnotation[];
 }
 
 export interface CreateDocumentInput {
@@ -77,6 +82,7 @@ export interface NewPageInput {
   corners?: Quad | null;
   pageFormat?: PageFormat;
   adjustments?: Adjustments;
+  annotations?: PageAnnotation[];
 }
 
 export interface UpdateDocumentInput {

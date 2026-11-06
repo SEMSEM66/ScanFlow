@@ -13,6 +13,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Icon } from '../../../src/components/ui/Icon';
+import {
+  IdCardScannerModal,
+  QrScannerModal,
+  SignatureAnnotationModal,
+} from '../../../src/components';
 import { concentric, corner, hairline, radius, useTheme } from '../../../src/theme';
 import { useTranslation } from '../../../src/i18n';
 import {
@@ -38,6 +43,9 @@ export default function ToolsScreen() {
   const [progressText, setProgressText] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [qrModalVisible, setQrModalVisible] = useState(false);
+  const [idCardModalVisible, setIdCardModalVisible] = useState(false);
+  const [sigModalVisible, setSigModalVisible] = useState(false);
   const pendingDocRef = useRef<Document | null>(null);
 
   const loadDocuments = useCallback(async () => {
@@ -218,6 +226,105 @@ export default function ToolsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[styles.scrollContent, { paddingHorizontal: spacing.base }]}
       >
+        {/* Section: Capture & Codes (M2) */}
+        <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary }]}>
+          {t.tools.captureModesSection}
+        </Text>
+
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder, marginBottom: spacing.lg }]}>
+          {/* ID Card Mode */}
+          <TouchableOpacity
+            activeOpacity={0.75}
+            disabled={busyMode !== null}
+            onPress={() => setIdCardModalVisible(true)}
+            style={[
+              styles.actionButton,
+              {
+                backgroundColor: colors.surfaceSubdued,
+                borderColor: colors.borderLight,
+                borderWidth: hairline,
+              },
+            ]}
+          >
+            <View style={styles.actionInner}>
+              <View style={styles.actionLeft}>
+                <Icon name="creditcard" size={20} color={colors.primary} style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
+                    {t.tools.idCardModeTitle}
+                  </Text>
+                  <Text style={[typography.caption2, { color: colors.textSecondary, marginTop: 2 }]}>
+                    {t.tools.idCardModeSubtitle}
+                  </Text>
+                </View>
+              </View>
+              <Icon name="chevron.right" size={16} color={colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+
+          {/* QR & GiroCode Scanner */}
+          <TouchableOpacity
+            activeOpacity={0.75}
+            disabled={busyMode !== null}
+            onPress={() => setQrModalVisible(true)}
+            style={[
+              styles.actionButton,
+              {
+                backgroundColor: colors.surfaceSubdued,
+                borderColor: colors.borderLight,
+                borderWidth: hairline,
+                marginTop: 10,
+              },
+            ]}
+          >
+            <View style={styles.actionInner}>
+              <View style={styles.actionLeft}>
+                <Icon name="qrcode.viewfinder" size={20} color={colors.primary} style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
+                    {t.tools.qrScannerTitle}
+                  </Text>
+                  <Text style={[typography.caption2, { color: colors.textSecondary, marginTop: 2 }]}>
+                    {t.tools.qrScannerSubtitle}
+                  </Text>
+                </View>
+              </View>
+              <Icon name="chevron.right" size={16} color={colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Manage Signatures */}
+          <TouchableOpacity
+            activeOpacity={0.75}
+            disabled={busyMode !== null}
+            onPress={() => setSigModalVisible(true)}
+            style={[
+              styles.actionButton,
+              {
+                backgroundColor: colors.surfaceSubdued,
+                borderColor: colors.borderLight,
+                borderWidth: hairline,
+                marginTop: 10,
+              },
+            ]}
+          >
+            <View style={styles.actionInner}>
+              <View style={styles.actionLeft}>
+                <Icon name="signature" size={20} color={colors.primary} style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
+                    {t.tools.signaturesTitle}
+                  </Text>
+                  <Text style={[typography.caption2, { color: colors.textSecondary, marginTop: 2 }]}>
+                    {t.tools.signaturesSubtitle}
+                  </Text>
+                </View>
+              </View>
+              <Icon name="chevron.right" size={16} color={colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Section: PDF Toolkit */}
         <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary }]}>
           {t.tools.pdfToolkitSection}
@@ -474,6 +581,26 @@ export default function ToolsScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      <QrScannerModal
+        visible={qrModalVisible}
+        onClose={() => setQrModalVisible(false)}
+      />
+
+      <IdCardScannerModal
+        visible={idCardModalVisible}
+        onClose={() => setIdCardModalVisible(false)}
+        onCreated={(docId) => {
+          setIdCardModalVisible(false);
+          void loadDocuments();
+          router.push(`/document/${docId}` as any);
+        }}
+      />
+
+      <SignatureAnnotationModal
+        visible={sigModalVisible}
+        onClose={() => setSigModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }

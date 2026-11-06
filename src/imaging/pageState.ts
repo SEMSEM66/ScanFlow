@@ -2,6 +2,7 @@ import type { Adjustments, FilterType, PageFormat, Quad, Rotation } from './type
 import { DEFAULT_ADJUSTMENTS } from './types';
 import { clampQuad, isQuadLike } from './geometry';
 import { isFilterType } from './filters';
+import { serializeAnnotations, type PageAnnotation } from './annotations';
 
 /**
  * (De)serialization of the per-page edit state stored in SQLite plus the
@@ -9,7 +10,7 @@ import { isFilterType } from './filters';
  */
 
 /** Bump when the rendering maths change so cached previews are re-rendered. */
-export const RENDER_VERSION = 1;
+export const RENDER_VERSION = 2;
 
 export function parseCorners(json: string | null | undefined): Quad | null {
   if (!json) return null;
@@ -86,6 +87,7 @@ export interface RenderState {
   filter: FilterType;
   pageFormat: PageFormat;
   adjustments: Adjustments;
+  annotations?: PageAnnotation[];
 }
 
 /** Deterministic cache key of a render (state + purpose, e.g. "preview"). */
@@ -99,6 +101,7 @@ export function renderKey(state: RenderState, purpose: string): string {
     state.filter,
     state.pageFormat,
     serializeAdjustments(state.adjustments),
+    serializeAnnotations(state.annotations),
   ]);
   return fnv1a(s);
 }

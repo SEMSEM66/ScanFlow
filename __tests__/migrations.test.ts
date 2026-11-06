@@ -63,11 +63,11 @@ describe('migrations', () => {
     expect(await runMigrations(db)).toEqual({ from: 0, to: SCHEMA_VERSION });
     const v = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
     expect(v?.user_version).toBe(SCHEMA_VERSION);
-    expect(SCHEMA_VERSION).toBe(3);
-    expect(await tableNames(db)).toEqual(['documents', 'folders', 'page_text', 'pages']);
+    expect(SCHEMA_VERSION).toBe(4);
+    expect(await tableNames(db)).toEqual(['documents', 'folders', 'page_text', 'pages', 'signatures']);
   });
 
-  it('v2 → v3 adds page_text and keeps all data', async () => {
+  it('v2 → v4 adds page_text, pages.annotations, and signatures and keeps all data', async () => {
     const db = openDb();
     for (const s of [CREATE_FOLDERS_TABLE, CREATE_DOCUMENTS_TABLE, CREATE_PAGES_TABLE, CREATE_INDEXES]) await db.execAsync(s);
     await db.execAsync('PRAGMA user_version = 2;');
@@ -77,15 +77,28 @@ describe('migrations', () => {
        VALUES ('p1','d1',1,'o.jpg','v.jpg','auto',90,'[{"x":0.1,"y":0.1},{"x":0.9,"y":0.1},{"x":0.9,"y":0.9},{"x":0.1,"y":0.9}]',1,1)`
     );
     const before = await db.getAllAsync<Record<string, unknown>>('SELECT * FROM pages');
-    expect(await runMigrations(db)).toEqual({ from: 2, to: 3 });
+    expect(await runMigrations(db)).toEqual({ from: 2, to: 4 });
     // v2 data untouched (no v1 → v2 rewrite of rotation / filter / uris)
     expect(await db.getAllAsync<Record<string, unknown>>('SELECT * FROM pages')).toEqual(before);
     expect(await tableNames(db)).toContain('page_text');
+    expect(await tableNames(db)).toContain('signatures');
     const cols = (await db.getAllAsync<{ name: string }>('PRAGMA table_info(page_text)')).map((c) => c.name);
     expect(cols).toEqual(['page_id', 'ocr_key', 'engine', 'languages', 'text', 'search_text', 'lines', 'created_at']);
     const fk = await db.getAllAsync<{ table: string; on_delete: string }>('PRAGMA foreign_key_list(page_text)');
     expect(fk).toEqual([expect.objectContaining({ table: 'pages', on_delete: 'CASCADE' })]);
-    expect(await runMigrations(db)).toEqual({ from: 3, to: 3 });
+    expect(await runMigrations(db)).toEqual({ from: 4, to: 4 });
+  });
+
+  it('v3 → v4 adds pages.annotations column and signatures table', async () => {
+    const db = openDb();
+    for (const s of [CREATE_FOLDERS_TABLE, CREATE_DOCUMENTS_TABLE, V1_PAGES, CREATE_INDEXES]) await db.execAsync(s);
+    // Migrate v0 → v2 manually by running up to v3
+    await db.execAsync('PRAGMA user_version = 3;');
+    expect(await runMigrations(db)).toEqual({ from: 3, to: 4 });
+    const pageCols = (await db.getAllAsync<{ name: string }>('PRAGMA table_info(pages)')).map((c) => c.name);
+    expect(pageCols).toContain('annotations');
+    const sigCols = (await db.getAllAsync<{ name: string }>('PRAGMA table_info(signatures)')).map((c) => c.name);
+    expect(sigCols).toEqual(['id', 'name', 'strokes', 'color', 'aspect_ratio', 'image_png_base64', 'created_at']);
   });
 
   it('rolls back on failure', async () => {

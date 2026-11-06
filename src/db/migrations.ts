@@ -5,7 +5,7 @@
  * (see __tests__/migrations.test.ts). The adapter interface is the subset of
  * expo-sqlite's SQLiteDatabase that we need.
  */
-import { CREATE_PAGE_TEXT_TABLE } from './schema';
+import { CREATE_PAGE_TEXT_TABLE, CREATE_SIGNATURES_TABLE } from './schema';
 
 export interface MigrationDb {
   execAsync(sql: string): Promise<void>;
@@ -14,7 +14,7 @@ export interface MigrationDb {
   getFirstAsync<T>(sql: string): Promise<T | null>;
 }
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 async function columnNames(db: MigrationDb, table: string): Promise<Set<string>> {
   const rows = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
@@ -69,9 +69,19 @@ async function migrateToV3(db: MigrationDb): Promise<void> {
   await db.execAsync(CREATE_PAGE_TEXT_TABLE);
 }
 
+/** v3 → v4: non-destructive page annotations (`pages.annotations`) and saved visual `signatures` table. */
+async function migrateToV4(db: MigrationDb): Promise<void> {
+  const cols = await columnNames(db, 'pages');
+  if (!cols.has('annotations')) {
+    await db.execAsync('ALTER TABLE pages ADD COLUMN annotations TEXT;');
+  }
+  await db.execAsync(CREATE_SIGNATURES_TABLE);
+}
+
 const STEPS: { version: number; up: (db: MigrationDb) => Promise<void> }[] = [
   { version: 2, up: migrateToV2 },
   { version: 3, up: migrateToV3 },
+  { version: 4, up: migrateToV4 },
 ];
 
 /**

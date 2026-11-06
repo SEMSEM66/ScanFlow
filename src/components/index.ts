@@ -12,3 +12,6 @@ export * from './PinSetupModal';
 export * from './AdjustmentsPanel';
 export * from './ScannerProvider';
 export * from './DocumentTextModal';
+export * from './QrScannerModal';
+export * from './IdCardScannerModal';
+export * from './SignatureAnnotationModal';

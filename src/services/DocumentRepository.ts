@@ -18,6 +18,7 @@ import {
   serializeAdjustments,
   serializeCorners,
 } from '../imaging/pageState';
+import { parseAnnotations, serializeAnnotations } from '../imaging/annotations';
 import { documentSearchClauses } from '../db/textSearch';
 import { planPageExtraction, planPageSplit } from '../db/documentOperations';
 import { ocrKey } from '../ocr/text';
@@ -35,6 +36,7 @@ interface PageRow {
   corners: string | null;
   page_format: string | null;
   adjustments: string | null;
+  annotations?: string | null;
   proxy_uri: string | null;
   render_key: string | null;
   legacy_original_uri: string | null;
@@ -43,7 +45,7 @@ interface PageRow {
 }
 
 const PAGE_COLUMNS =
-  'id, document_id, page_number, original_uri, preview_uri, filter, rotation, corners, page_format, adjustments, proxy_uri, render_key, legacy_original_uri, created_at, updated_at';
+  'id, document_id, page_number, original_uri, preview_uri, filter, rotation, corners, page_format, adjustments, annotations, proxy_uri, render_key, legacy_original_uri, created_at, updated_at';
 
 function mapPage(p: PageRow): DocumentPage {
   return {
@@ -57,6 +59,7 @@ function mapPage(p: PageRow): DocumentPage {
     corners: parseCorners(p.corners),
     pageFormat: normalizePageFormat(p.page_format),
     adjustments: parseAdjustments(p.adjustments),
+    annotations: parseAnnotations(p.annotations),
     proxyUri: p.proxy_uri,
     renderKey: p.render_key,
     legacyOriginalUri: p.legacy_original_uri,
@@ -201,8 +204,8 @@ export class DocumentRepository {
             : await storageService.saveImage(page.previewUri, `doc_${documentId}_p${pageNumber}_prev`)
           : originalUri;
       await db.runAsync(
-        `INSERT INTO pages (id, document_id, page_number, original_uri, preview_uri, filter, rotation, corners, page_format, adjustments, proxy_uri, render_key, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO pages (id, document_id, page_number, original_uri, preview_uri, filter, rotation, corners, page_format, adjustments, annotations, proxy_uri, render_key, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           pageId,
           documentId,
@@ -214,6 +217,7 @@ export class DocumentRepository {
           serializeCorners(page.corners ?? null),
           normalizePageFormat(page.pageFormat),
           serializeAdjustments(page.adjustments ? normalizeAdjustments(page.adjustments) : null),
+          serializeAnnotations(page.annotations),
           page.proxyUri ?? null,
           previewUri !== originalUri ? page.renderKey ?? null : null,
           now,
@@ -315,6 +319,7 @@ export class DocumentRepository {
         corners: p.corners,
         pageFormat: p.pageFormat,
         adjustments: p.adjustments,
+        annotations: p.annotations,
       });
     }
     return copied;
@@ -481,6 +486,10 @@ export class DocumentRepository {
     if (updates.adjustments !== undefined) {
       setClauses.push('adjustments = ?');
       params.push(serializeAdjustments(updates.adjustments));
+    }
+    if (updates.annotations !== undefined) {
+      setClauses.push('annotations = ?');
+      params.push(serializeAnnotations(updates.annotations));
     }
     params.push(pageId);
     await db.runAsync(`UPDATE pages SET ${setClauses.join(', ')} WHERE id = ?`, params);

@@ -37,16 +37,18 @@ import {
   DocumentBottomBar,
   PageEditorModal,
   PromptModal,
+  SignatureAnnotationModal,
   useScanner,
   type ScanOutcome,
   Card,
 } from '../../src/components';
+import type { PageAnnotation } from '../../src/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PAGINATION_PILL_HEIGHT = 34;
 
 const thumbKeyOf = (p: DocumentPage) =>
-  `${p.id}|${p.originalUri}|${JSON.stringify(p.corners)}|${p.rotation}|${p.pageFormat}|${JSON.stringify(p.adjustments)}`;
+  `${p.id}|${p.originalUri}|${JSON.stringify(p.corners)}|${p.rotation}|${p.pageFormat}|${JSON.stringify(p.adjustments)}|${JSON.stringify(p.annotations ?? [])}`;
 
 export default function DocumentDetailScreen() {
   const router = useRouter();
@@ -71,6 +73,7 @@ export default function DocumentDetailScreen() {
   // Modals
   const [isPageEditorVisible, setIsPageEditorVisible] = useState(false);
   const [pageEditorKey, setPageEditorKey] = useState(0);
+  const [isAnnotationModalVisible, setIsAnnotationModalVisible] = useState(false);
   const openPageEditor = () => {
     setPageEditorKey((k) => k + 1);
     setIsPageEditorVisible(true);
@@ -430,6 +433,15 @@ export default function DocumentDetailScreen() {
     await documentRepository.reorderPages(document.id, next.map((p) => p.id));
   };
 
+  const handleSaveAnnotations = async (nextAnnotations: PageAnnotation[]) => {
+    if (!currentPage) return;
+    const pageId = currentPage.id;
+    setPages((prev) =>
+      prev.map((p, idx) => (idx === currentPageIndex ? { ...p, annotations: nextAnnotations } : p))
+    );
+    await documentRepository.updatePage(pageId, { annotations: nextAnnotations });
+  };
+
   const onAreaLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
     setArea({ w: width, h: height });
@@ -464,6 +476,7 @@ export default function DocumentDetailScreen() {
               onConfirm: async (newTitle) => { await documentRepository.update(document.id, { title: newTitle }); loadDocumentData(); },
             });
           }}>{t.library.renameDocument}</Stack.Toolbar.MenuAction>
+          <Stack.Toolbar.MenuAction icon="signature" onPress={() => setIsAnnotationModalVisible(true)}>{t.annotations.insertSignature}</Stack.Toolbar.MenuAction>
           <Stack.Toolbar.MenuAction icon="folder" onPress={() => router.push({ pathname: '/sheets/move', params: { documentId: document.id } })}>{t.library.moveToFolder}</Stack.Toolbar.MenuAction>
           <Stack.Toolbar.MenuAction icon="doc.on.doc" onPress={async () => {
             const dup = await documentRepository.duplicate(document.id, t.common.copySuffix);
@@ -579,15 +592,25 @@ export default function DocumentDetailScreen() {
           </View>
         )}
 
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => scanPages()}
-          disabled={scanner.busy}
-          style={[styles.addMoreButton, { opacity: scanner.busy ? 0.5 : 1 }]}
-        >
-          <Icon name="plus.circle.fill" size={20} color={colors.primary} />
-          <Text style={[typography.subhead, styles.addMoreText, { color: colors.primary }]}>{t.scan.addMorePages}</Text>
-        </TouchableOpacity>
+        <View style={styles.quickActionRow}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => scanPages()}
+            disabled={scanner.busy}
+            style={[styles.addMoreButton, { opacity: scanner.busy ? 0.5 : 1 }]}
+          >
+            <Icon name="plus.circle.fill" size={20} color={colors.primary} />
+            <Text style={[typography.subhead, styles.addMoreText, { color: colors.primary }]}>{t.scan.addMorePages}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setIsAnnotationModalVisible(true)}
+            style={styles.addMoreButton}
+          >
+            <Icon name="signature" size={18} color={colors.primary} />
+            <Text style={[typography.subhead, styles.addMoreText, { color: colors.primary }]}>{t.annotations.insertSignature}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Filter strip with rendered thumbnails */}
@@ -624,6 +647,13 @@ export default function DocumentDetailScreen() {
         onExtractPages={handleExtractPages}
         onSplitAtPage={handleSplitAtPage}
         onDismiss={runEditorAction}
+      />
+
+      <SignatureAnnotationModal
+        visible={isAnnotationModalVisible}
+        page={currentPage}
+        onClose={() => setIsAnnotationModalVisible(false)}
+        onSaveAnnotations={handleSaveAnnotations}
       />
 
       <PromptModal
@@ -685,6 +715,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
     marginTop: 10,
+  },
+  quickActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
   },
   arrowButton: {
     width: PAGINATION_PILL_HEIGHT,

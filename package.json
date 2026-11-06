@@ -1,6 +1,6 @@
 {
   "name": "scanflow",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "main": "expo-router/entry",
   "scripts": {
     "postinstall": "node scripts/patch-expo-modules-jsi.js",
@@ -14,9 +14,9 @@
     "check:corners": "node scripts/check-corners.mjs",
     "test": "jest",
     "test:security": "jest __tests__/security.test.ts __tests__/authService.test.ts __tests__/exportCleanup.test.ts",
-    "test:imaging": "jest __tests__/geometry.test.ts __tests__/edgeDetection.test.ts __tests__/pageState.test.ts __tests__/pdf.test.ts __tests__/migrations.test.ts",
+    "test:imaging": "jest __tests__/geometry.test.ts __tests__/edgeDetection.test.ts __tests__/pageState.test.ts __tests__/pdf.test.ts __tests__/migrations.test.ts __tests__/annotationsAndIdCard.test.ts",
     "test:ocr": "jest __tests__/ocr.test.ts __tests__/ocrScheduler.test.ts __tests__/pdfTextLayer.test.ts __tests__/textSearch.test.ts __tests__/migrations.test.ts __tests__/docx.test.ts",
-    "test:toolkit": "jest __tests__/entitlements.test.ts __tests__/i18n.test.ts __tests__/documentOperations.test.ts __tests__/pdfToolkit.test.ts"
+    "test:toolkit": "jest __tests__/entitlements.test.ts __tests__/i18n.test.ts __tests__/documentOperations.test.ts __tests__/pdfToolkit.test.ts __tests__/barcode.test.ts __tests__/annotationsAndIdCard.test.ts"
   },
   "dependencies": {
     "@react-native-community/slider": "5.2.1",

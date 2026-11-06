@@ -580,14 +580,39 @@ All native functions live in the single local Expo module `modules/scanflow-ocr`
 
 ---
 
-## 12. Not yet implemented (see ROADMAP)
+## 12. Capture Modes & Non-Destructive Marking (v1.10.0, M2)
+
+### Non-Destructive Page Annotations & Visual Signatures (`src/imaging/annotations.ts`, Schema v4)
+- **Schema v4 (`src/db/migrations.ts`):** adds `annotations TEXT` (nullable JSON array of `PageAnnotation`) to `pages` and creates the `signatures` table (`id`, `label`, `strokes` JSON, `aspect_ratio`, `created_at`) for reusable vector signatures (`verified by tests` in `__tests__/migrations.test.ts`).
+- **Annotation types:**
+  - `signature`: normalized vector strokes (`points`, `widthRatio`) rendered in ink color (`#0A2463`, `#111111`, `#0050B3`, or `#9E1B1B`).
+  - `text` and `date_stamp`: positioned normalized box (`x`, `y`, `width`, `height`, `rotationDeg`) rendered via `Skia.Font` when a system typeface is available on iOS and falling back to a built-in vector stroke glyph table in headless CanvasKit tests.
+  - `pen` and `highlighter`: freehand smoothed strokes (`smoothStrokePoints` Chaikin refinement), with `highlighter` rendered using `BlendMode.Multiply` and semi-transparent alpha.
+- **Photo-to-signature extraction (`thresholdSignatureRgba`):** converts a photo of a signature on paper into normalized ink strokes by computing an adaptive luminance threshold (`mean - 24`, clamped to `70..195`) and scanning connected dark ink runs (`verified by tests` in `__tests__/annotationsAndIdCard.test.ts`).
+- **Renderer & OCR integration (`PageRenderer.render`, `RENDER_VERSION = 2`):**
+  - `renderKey(page)` hashes `annotations` alongside `corners`, `rotation`, `filter`, `adjustments`, and `page_format` (`verified by tests` in `__tests__/pageState.test.ts`).
+  - `PageRenderer.render()` draws `opts.annotations` on the GPU canvas immediately after the `ENHANCE_SKSL` shader pass, ensuring identical appearance across previews, thumbnails, and PDF/JPG exports.
+  - `ImagePipelineService.renderForOcr()` explicitly passes `annotations: undefined` so user markings never pollute Apple Vision OCR text recognition.
+- **Legal/honesty note:** Signatures in ScanFlow are **visual signatures** (*Unterschrift einfügen*), not cryptographically signed or qualified electronic signatures (QES).
+
+### ID-Card Mode on One A4 Page (`src/imaging/idCard.ts`)
+- **True 1:1 physical scale on A4:** ISO/IEC 7810 ID-1 cards measure `85.60 × 54.00 mm` (`aspect = 1.5852`). On an A4 sheet (`210 × 297 mm`), `computeIdCardA4Placement()` sizes each card to `widthRatio = 85.6 / 210 ≈ 0.4076` and `heightRatio = 54.0 / 297 ≈ 0.1818`, centered horizontally with a `16 mm` vertical gap between front and back (`verified by tests` in `__tests__/annotationsAndIdCard.test.ts`).
+- **Perspective de-warp & optional purpose watermark (`composeIdCardA4`):** de-warps both front and back images from their 4-corner quads via `WARP_SKSL`, draws subtle border hairlines on a white A4 canvas, and optionally overlays a diagonal purpose watermark (`formatIdCardWatermark(purpose, date)` → *"Kopie – nur für \<Zweck\>, DD.MM.YYYY"*).
+
+### QR, Barcode & EPC/GiroCode Scanner (`src/tools/epc.ts`, `src/tools/barcode.ts`, `QrScannerService.ts`)
+- **EPC069-12 GiroCode parser (`parseEpcQrPayload`):** validates service tag `BCD`, version `001`/`002`, character set `1..8`, identification `SCT`, BIC (8 or 11 chars), recipient name (≤ 70 chars), IBAN (ISO 13616 length + mod-97 check), `EUR` amount (`0.01..999999999.99`), and remittance reference/text (`verified by tests` in `__tests__/barcode.test.ts`).
+- **Safe URL handling (`classifyBarcodePayload`):** validates `http:` / `https:` URLs, rejects URLs containing `@` userinfo before the host (anti-spoofing), and requires explicit user confirmation showing the full URL before calling `Linking.openURL`.
+- **Privacy-first history (`QrScannerService`):** scan history is **disabled by default** and stored only in Keychain (`expo-secure-store`, max 30 entries) when explicitly enabled by the user, with a one-tap *Verlauf löschen* action.
+
+---
+
+## 13. Not yet implemented (see ROADMAP)
 
 - Live edge overlay / auto-capture in ScanFlow's *own* camera (`app/scan.tsx`).
   Live detection and auto-capture are provided by the iOS document scanner
   (default); Expo Go offers no camera frame processors for a custom overlay.
 - Text recognition, PDF import rasterization, and PDF password encryption in
   Expo Go (require the native `modules/scanflow-ocr` module in the IPA build).
-- Milestones M2–M7 of Phase V2 (ID-card mode, QR/GiroCode scanner, visual
-  signatures & annotations, 30-day trash, favorites & tags, smart naming,
+- Milestones M3–M7 of Phase V2 (30-day trash, favorites & tags, smart naming,
   Files ZIP backup/restore, haptics & accessibility audit, StoreKit 2 Pro
   unlock, store package & TestFlight submission prep – see `docs/ROADMAP.md`).

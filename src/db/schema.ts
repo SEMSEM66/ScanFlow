@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS pages (
   corners TEXT,
   page_format TEXT NOT NULL DEFAULT 'auto',
   adjustments TEXT,
+  annotations TEXT,
   proxy_uri TEXT,
   render_key TEXT,
   legacy_original_uri TEXT,
@@ -73,5 +74,21 @@ CREATE TABLE IF NOT EXISTS page_text (
   lines TEXT NOT NULL DEFAULT '[]',
   created_at INTEGER NOT NULL,
   FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
+);
+`;
+
+/**
+ * signatures (schema v4): reusable visual signatures drawn by the user (vector
+ * polylines) or extracted from a photo of a paper signature (P1).
+ */
+export const CREATE_SIGNATURES_TABLE = `
+CREATE TABLE IF NOT EXISTS signatures (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  strokes TEXT NOT NULL DEFAULT '[]',
+  color TEXT NOT NULL DEFAULT '#0B2E6B',
+  aspect_ratio REAL NOT NULL DEFAULT 2.4,
+  image_png_base64 TEXT,
+  created_at INTEGER NOT NULL
 );
 `;

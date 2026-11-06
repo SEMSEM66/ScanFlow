@@ -48,6 +48,28 @@ describe('page state', () => {
     expect(renderKey({ ...state, corners: null }, 'preview')).not.toBe(k);
     expect(renderKey({ ...state, pageFormat: 'a4' }, 'preview')).not.toBe(k);
     expect(renderKey({ ...state, adjustments: { ...DEFAULT_ADJUSTMENTS, contrast: 0.2 } }, 'preview')).not.toBe(k);
+    expect(
+      renderKey(
+        {
+          ...state,
+          annotations: [
+            {
+              id: 'a1',
+              type: 'date_stamp',
+              x: 0.1,
+              y: 0.1,
+              width: 0.25,
+              height: 0.06,
+              rotation: 0,
+              color: '#111111',
+              opacity: 1,
+              text: '06.11.2026',
+            },
+          ],
+        },
+        'preview'
+      )
+    ).not.toBe(k);
     expect(renderKey(state, 'thumb')).not.toBe(k);
     expect(k).toMatch(/^[0-9a-f]{8}$/);
   });

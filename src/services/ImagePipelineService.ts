@@ -3,13 +3,17 @@ import type { SkImage } from '@shopify/react-native-skia';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import {
   PageRenderer,
+  composeIdCardA4,
   detectDocument,
   renderKey,
+  thresholdSignatureRgba,
   DEFAULT_ADJUSTMENTS,
   JPEG_QUALITY,
+  SK,
   type DetectionResult,
   type ExportDpi,
   type FilterType,
+  type Quad,
   type RenderOptions,
   type RenderState,
 } from '../imaging';
@@ -61,7 +65,7 @@ export interface RenderedPage {
   dpi: number;
 }
 
-type PageLike = Pick<DocumentPage, 'originalUri' | 'proxyUri' | 'corners' | 'rotation' | 'filter' | 'pageFormat' | 'adjustments'>;
+type PageLike = Pick<DocumentPage, 'originalUri' | 'proxyUri' | 'corners' | 'rotation' | 'filter' | 'pageFormat' | 'adjustments' | 'annotations'>;
 
 const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -73,6 +77,7 @@ export function renderStateOf(p: PageLike): RenderState {
     filter: p.filter,
     pageFormat: p.pageFormat,
     adjustments: p.adjustments,
+    annotations: p.annotations,
   };
 }
 
@@ -305,6 +310,7 @@ class ImagePipelineService {
           ...this.options(page, OCR_DPI, OCR_MAX_LONG_SIDE),
           filter: 'original',
           adjustments: DEFAULT_ADJUSTMENTS,
+          annotations: undefined,
         });
         await yieldToUi();
         const base64 = this.r.encodeJpeg(res.image, OCR_JPEG_QUALITY);
@@ -317,12 +323,76 @@ class ImagePipelineService {
     });
   }
 
+  /**
+   * Composes front and back of an ID-1 card (`85.6 × 54 mm`) centered at true
+   * 1:1 scale on an A4 sheet (`210 × 297 mm`), returning a temporary JPEG URI
+   * ready to be saved via `saveScan({ detect: false })`.
+   */
+  composeIdCardSheet(
+    frontUri: string,
+    frontCorners: Quad | null,
+    backUri: string,
+    backCorners: Quad | null,
+    dpi = 300
+  ): Promise<string> {
+    return this.enqueue(async () => {
+      const frontImg = await this.decodeFile(frontUri, false);
+      let backImg: SkImage | null = null;
+      try {
+        await yieldToUi();
+        backImg = await this.decodeFile(backUri, false);
+        await yieldToUi();
+        const { image } = composeIdCardA4(
+          Skia,
+          this.r,
+          { image: frontImg, corners: frontCorners },
+          { image: backImg, corners: backCorners },
+          dpi
+        );
+        const base64 = this.r.encodeJpeg(image, 92);
+        image.dispose?.();
+        return await storageService.writeTempBase64(base64, 'idcard_a4', 'jpg');
+      } finally {
+        if (!this.decoded.has(frontUri)) frontImg.dispose?.();
+        if (backImg && !this.decoded.has(backUri)) backImg.dispose?.();
+      }
+    });
+  }
+
+  /**
+   * P1: Extracts a transparent PNG signature (base64) from a photo of a paper
+   * signature by thresholding ink pixels and making paper pixels transparent.
+   */
+  extractSignatureFromPhoto(
+    photoUri: string,
+    inkHex = '#0B2E6B'
+  ): Promise<{ imagePngBase64: string; aspectRatio: number }> {
+    return this.enqueue(async () => {
+      const src = await this.decodeFile(photoUri, false);
+      try {
+        await yieldToUi();
+        const scaled = this.r.downscale(src, 800);
+        const rgba = this.r.readRgba(scaled);
+        if (scaled !== src) scaled.dispose?.();
+        const thresholded = thresholdSignatureRgba(rgba, inkHex);
+        const outImg = this.r.imageFromRgba(thresholded.data, thresholded.width, thresholded.height);
+        const pngB64 = outImg.encodeToBase64(SK.ImageFormat.PNG as never, 100);
+        outImg.dispose?.();
+        const aspectRatio = Math.max(0.8, Math.min(5.0, thresholded.width / Math.max(1, thresholded.height)));
+        return { imagePngBase64: pngB64, aspectRatio };
+      } finally {
+        if (!this.decoded.has(photoUri)) src.dispose?.();
+      }
+    });
+  }
+
   private options(page: PageLike, dpi: number, maxLongSide?: number): RenderOptions {
     return {
       corners: page.corners,
       rotation: page.rotation,
       filter: page.filter,
       adjustments: page.adjustments,
+      annotations: page.annotations,
       pageFormat: page.pageFormat,
       dpi,
       maxLongSide,

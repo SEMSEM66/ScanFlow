@@ -9,3 +9,5 @@ export * from './DocumentScannerService';
 export * from './PageTextRepository';
 export * from './OcrService';
 export * from './PdfToolkitService';
+export * from './SignatureRepository';
+export * from './QrScannerService';
