@@ -535,4 +535,8 @@ export const en: typeof de = {
     restoreFailed: 'The backup file could not be restored.',
     inspectFailed: 'Invalid ScanFlow backup.',
   },
+  quickActions: {
+    scanDocument: 'Scan Document',
+    search: 'Search',
+  },
 };

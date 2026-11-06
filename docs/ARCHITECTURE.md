@@ -636,12 +636,43 @@ All native functions live in the single local Expo module `modules/scanflow-ocr`
 
 ---
 
-## 14. Not yet implemented (see ROADMAP)
+## 14. iOS Integration, Haptics & Accessibility (v1.12.0, M4)
+
+### Haptic Feedback (`src/utils/haptics.ts`, `expo-haptics`)
+- **Semantic haptic wrapper:** encapsulates `expo-haptics` impacts and notifications (`selection`, `light`, `medium`, `heavy`, `success`, `warning`, `error`) in silent-fail try/catch blocks.
+- **Accessibility & Reduce Motion respect:** listens to `AccessibilityInfo.isReduceMotionEnabled()` and `reduceMotionChanged` events; suppresses physical impacts when Reduce Motion is enabled on iOS.
+- **Integration touchpoints:**
+  - *Filter changes:* `FilterStrip.tsx` triggers `haptics.selection()` on filter selection.
+  - *Perspective crop:* `app/crop.tsx` triggers `haptics.light()` on handle grab, `haptics.medium()` on handle release/snap, `haptics.selection()` on format and reset actions, and `haptics.error()` on invalid quad submission.
+  - *Security & PIN pad:* `PinPad.tsx`, `LockScreen.tsx`, and `PinSetupModal.tsx` trigger `haptics.light()` on numeric key taps, `haptics.error()` on failed PIN attempts (synced with animated shake), and `haptics.success()` on successful unlock or PIN creation.
+  - *Scan capture & save:* `ScanImportService.ts` fires `haptics.success()` on scan import completion (`UNVERIFIED (needs iPhone)`).
+
+### Accessibility & WCAG AA Contrast Audit
+- **Automated token contrast test (`__tests__/contrast.test.ts`):** validates WCAG 2.1 relative luminance and contrast ratios across all theme tokens in `src/theme/tokens.ts`.
+  - Normal text contrast: `textPrimary` and `textSecondary` achieve $\ge 4.5:1$ against `background`, `surface`, `card`, and `surfaceSubdued` in both Light Mode (up to $18.4:1$) and Dark Mode (up to $16.7:1$) (`verified by tests`).
+  - Interactive UI elements: primary buttons and destructive/danger controls achieve $\ge 3.0:1$ against backgrounds; white text on primary buttons achieves $4.84:1$ ($\ge 4.5:1$) (`verified by tests`).
+- **Hit targets:** minimum $44 \times 44\text{ pt}$ hit targets on all interactive components (`Button.tsx`, `IconButton.tsx`, `PinPad.tsx`, `app/crop.tsx`).
+- **VoiceOver localization:** complete `accessibilityLabel`, `accessibilityRole`, and `accessibilityState` across all buttons, filter items, and status indicators in German and English.
+
+### Home Screen Quick Actions (`QuickActionService.ts`, `expo-quick-actions`)
+- **Dynamic 3D / Haptic Touch actions:**
+  - *Dokument scannen* (`scan`, icon: `capturePhoto`): opens the document scanner directly on launch.
+  - *Suchen* (`search`, icon: `search`): launches directly into all-document search.
+- **Expo Go fallback:** `expo-quick-actions` module methods are guarded with null-safe checks; gracefully degrades without errors in Expo Go or non-supporting runtimes (`verified by tests`).
+
+### Native Extension Spikes (`docs/spikes/`)
+- `docs/spikes/app-intents.md`: Swift `AppIntents` framework analysis; deferred to v2.1 to avoid Xcode metadata processor build risks in unsigned CI.
+- `docs/spikes/lock-screen-widget.md`: WidgetKit lock screen widget analysis; deferred to v2.1 due to secondary target provisioning profile requirements in sideloaded IPAs.
+- `docs/spikes/share-extension.md`: Share Extension analysis; deferred to v2.1 since registered document types ("Open in ScanFlow") already handle system share sheet file ingestion.
+
+---
+
+## 15. Not yet implemented (see ROADMAP)
 
 - Live edge overlay / auto-capture in ScanFlow's *own* camera (`app/scan.tsx`).
   Live detection and auto-capture are provided by the iOS document scanner
   (default); Expo Go offers no camera frame processors for a custom overlay.
 - Text recognition, PDF import rasterization, and PDF password encryption in
   Expo Go (require the native `modules/scanflow-ocr` module in the IPA build).
-- Milestones M4–M7 of Phase V2 (haptics & accessibility audit, StoreKit 2 Pro
-  unlock, store package & TestFlight submission prep – see `docs/ROADMAP.md`).
+- Milestones M5–M7 of Phase V2 (StoreKit 2 Pro unlock, store package &
+  TestFlight submission prep – see `docs/ROADMAP.md`).

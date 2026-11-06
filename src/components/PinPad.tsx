@@ -3,6 +3,7 @@ import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native
 import { Icon, type IconName } from './ui/Icon';
 import { capsule, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
+import { haptics } from '../utils/haptics';
 
 type IoniconName = IconName;
 
@@ -71,6 +72,7 @@ export const PinPad: React.FC<PinPadProps> = ({
 
   useEffect(() => {
     if (shakeKey === 0) return;
+    void haptics.error();
     shake.setValue(0);
     Animated.sequence(
       [12, -12, 9, -9, 5, -5, 0].map((toValue) =>
@@ -115,7 +117,10 @@ export const PinPad: React.FC<PinPadProps> = ({
                   <TouchableOpacity
                     key={item}
                     activeOpacity={0.7}
-                    onPress={leftAction.onPress}
+                    onPress={() => {
+                      void haptics.light();
+                      leftAction.onPress();
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel={leftAction.accessibilityLabel}
                     style={[styles.key, { width: key, height: key }, capsule(key)]}
@@ -130,7 +135,10 @@ export const PinPad: React.FC<PinPadProps> = ({
                     key={item}
                     activeOpacity={0.7}
                     disabled={value.length === 0}
-                    onPress={onDelete}
+                    onPress={() => {
+                      void haptics.light();
+                      onDelete();
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel={t.security.deleteDigit}
                     style={[styles.key, { width: key, height: key, opacity: value.length === 0 ? 0.3 : 1 }, capsule(key)]}
@@ -144,7 +152,10 @@ export const PinPad: React.FC<PinPadProps> = ({
                   key={item}
                   activeOpacity={0.7}
                   disabled={disabled}
-                  onPress={() => onDigit(item)}
+                  onPress={() => {
+                    void haptics.light();
+                    onDigit(item);
+                  }}
                   accessibilityRole="button"
                   accessibilityLabel={item}
                   style={[

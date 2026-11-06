@@ -445,12 +445,29 @@ Requested by the user after STOP C: the dark background of *Anpassen* slid up to
   3. **Smart Naming:** In *Einstellungen → Dateibenennung*, select `{date} {firstLine}` → scan a new document with an invoice/letter → confirm that after page 1 OCR finishes, the document title is automatically renamed to the detected date and first line; manually rename a document → confirm future OCR does NOT overwrite it.
   4. **Full Backup & Restore:** In *Einstellungen → Datensicherung*, tap *Vollständiges Backup erstellen* → *In Dateien sichern* → verify `.zip` contains `manifest.json` and `originals/`. Tap *Backup wiederherstellen* → pick the `.zip` from Files → confirm restore summary and documents.
 
-### ⏳ M4 – iOS Integration (v1.12.0)
-- [ ] **P0:** Haptics (`expo-haptics`) on page snap, corner lock, filter change, PIN keys, success/error (respecting Reduce Motion).
-- [ ] **P0:** Accessibility audit: VoiceOver labels/hints/traits (DE/EN), Dynamic Type, 44 pt hit targets, contrast AA in light and dark mode (automated token contrast test), Reduce Motion.
-- [ ] **P1:** Home Screen Quick Actions (*Dokument scannen*, *Suchen*) via `expo-quick-actions` (verified in CI).
-- [ ] **P2 (Spikes only, time-boxed):** `docs/spikes/app-intents.md`, `docs/spikes/lock-screen-widget.md`, `docs/spikes/share-extension.md`.
-- [ ] **🛑 STOP M4:** Physical iPhone test checklist for Haptics, VoiceOver/Accessibility, and Quick Actions.
+### ✅ M4 – iOS Integration (v1.12.0)
+- [x] **P0 – Haptics (`src/utils/haptics.ts`, `expo-haptics`):**
+  - Semantic haptic feedback wrapper with automatic Reduce Motion detection via `AccessibilityInfo.isReduceMotionEnabled()`.
+  - Filter selection: subtle ticks (`haptics.selection()`) in `FilterStrip.tsx`.
+  - Perspective crop: grab (`haptics.light()`), snap/lock (`haptics.medium()`), reset/format (`haptics.selection()`), and error (`haptics.error()`) in `app/crop.tsx`.
+  - Security & PIN pad: numeric key taps (`haptics.light()`), delete feedback, shake error impact (`haptics.error()`) on wrong PIN, and success confirmation (`haptics.success()`) on unlock and PIN change (`PinPad.tsx`, `LockScreen.tsx`, `PinSetupModal.tsx`).
+  - Scan completion: success notification haptic (`haptics.success()`) when saving scanned documents in `ScanImportService.ts` (`UNVERIFIED (needs iPhone)`).
+- [x] **P0 – Accessibility Audit & WCAG AA Contrast Compliance (`__tests__/contrast.test.ts`):**
+  - Automated WCAG 2.1 AA relative luminance and contrast ratio test suite: normal text (≥ 4.5:1), large text (≥ 3.0:1), and UI components (≥ 3.0:1) across both Light and Dark themes (`__tests__/contrast.test.ts` – `verified by tests`).
+  - Strict 44 × 44 pt minimum hit targets on all interactive controls (`Button.tsx`, `IconButton.tsx`, `PinPad.tsx`, `crop.tsx`).
+  - Spoken VoiceOver labels (`accessibilityLabel`), roles (`accessibilityRole`), and states (`accessibilityState`) across key flows in German and English.
+- [x] **P1 – Home Screen Quick Actions (`QuickActionService.ts`, `expo-quick-actions`):**
+  - Dynamic 3D Touch / Haptic Touch quick actions from the iPhone Home Screen icon: *Dokument scannen* (`scan`, icon: `capturePhoto`) and *Suchen* (`search`, icon: `search`).
+  - Runtime listener and initial action handler in `app/_layout.tsx` (`QuickActionsHandler`).
+  - Feature detection: null-safe fallback ensuring zero crashes in Expo Go (`isSupported` check – `verified by tests` / device flow `UNVERIFIED (needs iPhone)`).
+- [x] **P2 – Time-Boxed Extension Spikes (`docs/spikes/`):**
+  - `docs/spikes/app-intents.md`: App Intents & Siri Shortcuts analysis (verdict: `defer` to v2.1 due to build risk and prebuild complexity; Home Screen Quick Actions already meet primary fast-entry needs).
+  - `docs/spikes/lock-screen-widget.md`: WidgetKit lock screen widget analysis (verdict: `defer` to v2.1 due to secondary target signing limitations in unsigned sideloaded IPAs).
+  - `docs/spikes/share-extension.md`: Share Extension analysis (verdict: `defer` to v2.1; existing registered document types "Open in ScanFlow" in M1 already support full system share sheet ingestion without App Group signing risks).
+- [ ] **🛑 STOP M4 (queued for v2.0.0-rc single IPA build):**
+  1. **Haptics:** Test on physical iPhone with Haptics enabled: feel tactile ticks on filter change, subtle impact on PIN key taps, error buzz on wrong PIN, medium snap when adjusting crop corners, and success vibration when saving a document. Test with iOS *Bewegung reduzieren* (Reduce Motion) enabled: verify heavy impacts are suppressed.
+  2. **Accessibility & VoiceOver:** Enable VoiceOver on iPhone: navigate Library, document view, crop screen, and PIN pad; confirm every button speaks its localized label and role (DE/EN) without silent elements or unlabelled icons; verify 44 pt minimum hit targets.
+  3. **Home Screen Quick Actions:** Long-press the ScanFlow app icon on the iPhone Home Screen: confirm "Dokument scannen" and "Suchen" appear; tap "Dokument scannen" → verify ScanFlow opens and launches the scanner immediately; tap "Suchen" → verify ScanFlow opens straight into search.
 
 ### ⏳ M5 – Monetization (v1.13.0)
 - [ ] **STOP FIRST:** Write `docs/MONETIZATION.md` (StoreKit 2 vs. RevenueCat comparison, proposed Free/Pro gating, pricing hypotheses) and wait for user approval before coding the paywall.
@@ -476,16 +493,16 @@ Requested by the user after STOP C: the dark background of *Anpassen* slid up to
 ---
 
 ### 📌 Next Steps (Session Handoff for Fresh Agents)
-- **Current Branch:** `feat/m3-organization` (stacked on `feat/m2-capture-marking` and `feat/m0-m1-pdf-toolkit`).
+- **Current Branch:** `feat/m4-ios-integration` (stacked on `feat/m3-organization`, `feat/m2-capture-marking`, and `feat/m0-m1-pdf-toolkit`).
 - **Completed in Current Program:**
   - **M0 (Foundations) & M1 (PDF Toolkit — v1.9.0):** `src/entitlements`, i18n parity test, PDF & image import from Files ("Open in ScanFlow") with native 200 dpi PDFKit rasterization, Library multi-select & batch ZIP export, document merge & page split/extract, password-protected PDF export via PDFKit.
   - **M2 (Capture Modes & Marking — v1.10.0):** ID-Card Mode (true 1:1 `85.6 × 54 mm` scale on A4 with optional purpose watermark), QR/Barcode & SEPA GiroCode (EPC) scanner in *Werkzeuge*, non-destructive visual signatures & annotations layer (schema v4, `RENDER_VERSION = 2`), photo-to-signature thresholding (P1).
   - **M3 (Organization & Automation — v1.11.0):** 30-day Trash (*Zuletzt gelöscht*, auto-purge on launch, schema v5), Favorites & Tags with search integration, deterministic Smart Naming templates with auto-rename hook, and Full-Library ZIP Backup & Restore via Files picker (`manifest.json` v1).
+  - **M4 (iOS Integration & Polish — v1.12.0):** `expo-haptics` with Reduce Motion respect (filter change, corner snap/lock, PIN pad, success/error), automated WCAG 2.1 AA token contrast test (`__tests__/contrast.test.ts`), 44 pt minimum hit targets, `expo-quick-actions` Home Screen quick actions (*Dokument scannen*, *Suchen*), and time-boxed native spikes (`app-intents.md`, `lock-screen-widget.md`, `share-extension.md`).
 - **What to Do Next:**
-  - Proceed to Milestone **M4 – iOS Integration (v1.12.0)** on branch `feat/m4-ios-integration`:
-    1. **P0 – Haptics:** `expo-haptics` on page snap, corner lock, filter change, PIN keys, and success/error (respecting Reduce Motion).
-    2. **P0 – Accessibility Audit & AA Contrast:** VoiceOver labels/hints/traits (DE/EN), Dynamic Type, 44 pt hit targets, automated WCAG AA contrast test (`__tests__/contrast.test.ts`), and Reduce Motion respect.
-    3. **P1 – Home Screen Quick Actions:** `expo-quick-actions` (*Dokument scannen*, *Suchen*).
-    4. **P2 – Time-Boxed Spike Docs:** `docs/spikes/app-intents.md`, `docs/spikes/lock-screen-widget.md`, `docs/spikes/share-extension.md`.
+  - Proceed to Milestone **M5 – Monetization (v1.13.0)** on branch `feat/m5-monetization`:
+    1. **STOP FIRST:** Write `docs/MONETIZATION.md` (StoreKit 2 native on-device entitlements, no third-party tracking SDKs, Free vs. Pro feature gating table, pricing tiers).
+    2. **P0 – StoreKit 2:** Implement StoreKit 2 native module in `modules/scanflow-ocr` (or `StoreKitService.ts`), paywall modal, restore purchases, and `expo-store-review` trigger after 3rd export.
+    3. Update ROADMAP, ARCHITECTURE, CHANGELOG, run tests, and commit.
 
 

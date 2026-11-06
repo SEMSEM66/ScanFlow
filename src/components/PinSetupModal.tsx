@@ -8,6 +8,7 @@ import { authService } from '../services/AuthService';
 import { DEFAULT_PIN_LENGTH, isWeakPin, type PinLength } from '../security/pinHash';
 import { formatWait } from '../security/lockout';
 import { PinPad, useCountdown } from './PinPad';
+import { haptics } from '../utils/haptics';
 
 /**
  * - create: new PIN + confirmation
@@ -77,6 +78,7 @@ export const PinSetupModal: React.FC<PinSetupModalProps> = ({ visible, modalKey,
 
   const finish = () => {
     reset();
+    void haptics.success();
     onSuccess();
   };
 

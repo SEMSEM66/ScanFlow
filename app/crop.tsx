@@ -21,6 +21,7 @@ import { useTheme, corner, capsule, radius } from '../src/theme';
 import { useTranslation } from '../src/i18n';
 import { documentRepository, imagePipeline } from '../src/services';
 import { FULL_QUAD, isConvexQuad, polygonArea } from '../src/imaging/geometry';
+import { haptics } from '../src/utils/haptics';
 import type { PageFormat, Point, Quad } from '../src/types';
 
 const HANDLE_SIZE = 44;
@@ -124,6 +125,7 @@ export default function CropScreen() {
         onPanResponderGrant: () => {
           last = { dx: 0, dy: 0 };
           setActive(corner);
+          void haptics.light();
         },
         onPanResponderMove: (_, g) => {
           if (!display) return;
@@ -139,7 +141,10 @@ export default function CropScreen() {
             return next;
           });
         },
-        onPanResponderRelease: () => setActive(null),
+        onPanResponderRelease: () => {
+          setActive(null);
+          void haptics.medium();
+        },
         onPanResponderTerminate: () => setActive(null),
       });
     };
@@ -174,10 +179,16 @@ export default function CropScreen() {
     try {
       setDetecting(true);
       const res = await imagePipeline.detect(imageUri);
-      if (res.detected) setCorners(res.corners);
-      else Alert.alert(t.crop.title, t.crop.notDetected);
+      if (res.detected) {
+        void haptics.success();
+        setCorners(res.corners);
+      } else {
+        void haptics.warning();
+        Alert.alert(t.crop.title, t.crop.notDetected);
+      }
     } catch (err) {
       console.warn('[CropScreen] detect failed', err);
+      void haptics.warning();
       Alert.alert(t.crop.title, t.crop.notDetected);
     } finally {
       setDetecting(false);
@@ -187,6 +198,7 @@ export default function CropScreen() {
   const handleApply = async () => {
     if (!pageId || saving) return;
     if (!valid) {
+      void haptics.error();
       Alert.alert(t.crop.title, t.crop.invalidQuad);
       return;
     }
@@ -194,9 +206,11 @@ export default function CropScreen() {
       setSaving(true);
       const isFull = corners.every((c, i) => Math.abs(c.x - FULL_QUAD[i].x) < 1e-3 && Math.abs(c.y - FULL_QUAD[i].y) < 1e-3);
       await documentRepository.updatePage(pageId, { corners: isFull ? null : corners, pageFormat });
+      void haptics.success();
       router.back();
     } catch (err) {
       console.error('[CropScreen] save error', err);
+      void haptics.error();
       Alert.alert(t.common.error, t.crop.saveFailed);
       setSaving(false);
     }
@@ -277,9 +291,19 @@ export default function CropScreen() {
       {/* Page format */}
       <View style={styles.formatRow}>
         <Text style={styles.formatLabel}>{t.crop.pageFormat}</Text>
-        <SegmentedControl values={[t.crop.formatAuto, t.crop.formatA4, t.crop.formatLetter]}
-          selectedIndex={(['auto', 'a4', 'letter'] as PageFormat[]).indexOf(pageFormat)} appearance="dark" style={styles.nativeSegment}
-          onChange={(event) => { const value = (['auto', 'a4', 'letter'] as PageFormat[])[event.nativeEvent.selectedSegmentIndex]; if (value) setPageFormat(value); }} />
+        <SegmentedControl
+          values={[t.crop.formatAuto, t.crop.formatA4, t.crop.formatLetter]}
+          selectedIndex={(['auto', 'a4', 'letter'] as PageFormat[]).indexOf(pageFormat)}
+          appearance="dark"
+          style={styles.nativeSegment}
+          onChange={(event) => {
+            const value = (['auto', 'a4', 'letter'] as PageFormat[])[event.nativeEvent.selectedSegmentIndex];
+            if (value) {
+              void haptics.selection();
+              setPageFormat(value);
+            }
+          }}
+        />
       </View>
 
       <View style={styles.bottomBar}>
@@ -291,11 +315,25 @@ export default function CropScreen() {
           )}
           <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.pillText}>{t.crop.autoDetect}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.pillButton} onPress={() => setCorners(FULL_QUAD)} disabled={loading}>
+        <TouchableOpacity
+          style={styles.pillButton}
+          onPress={() => {
+            void haptics.selection();
+            setCorners(FULL_QUAD);
+          }}
+          disabled={loading}
+        >
           <Icon name="arrow.up.left.and.arrow.down.right" size={16} color="#FFFFFF" />
           <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.pillText}>{t.crop.fullImage}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.pillButton} onPress={() => setCorners(initialCorners)} disabled={loading}>
+        <TouchableOpacity
+          style={styles.pillButton}
+          onPress={() => {
+            void haptics.selection();
+            setCorners(initialCorners);
+          }}
+          disabled={loading}
+        >
           <Icon name="arrow.clockwise" size={16} color="#FFFFFF" />
           <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.pillText}>{t.crop.reset}</Text>
         </TouchableOpacity>

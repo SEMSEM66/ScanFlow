@@ -5,6 +5,7 @@ import { FILTER_ORDER } from '../imaging/filters';
 import { corner, radius, shadows, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { Thumbnail } from './ui';
+import { haptics } from '../utils/haptics';
 
 const THUMB_WIDTH = 62;
 const THUMB_HEIGHT = 80;
@@ -56,7 +57,10 @@ export const FilterStrip: React.FC<FilterStripProps> = ({
               key={id}
               activeOpacity={0.75}
               disabled={disabled}
-              onPress={() => onSelectFilter(id)}
+              onPress={() => {
+                void haptics.selection();
+                onSelectFilter(id);
+              }}
               style={styles.itemWrapper}
               accessibilityRole="button"
               accessibilityState={{ selected: isSelected }}

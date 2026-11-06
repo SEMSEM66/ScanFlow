@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.12.0] - 2026-11-06
+
+Phase V2 Milestone **M4 (iOS Integration & Polish)**: Haptic feedback, accessibility AA contrast verification, Home Screen Quick Actions, and time-boxed native spikes.
+
+### Added
+- **M4 – Haptic Feedback (`src/utils/haptics.ts`, `expo-haptics`):**
+  - Semantic haptic feedback wrapper with automatic Reduce Motion detection via `AccessibilityInfo.isReduceMotionEnabled()`.
+  - Filter selection: subtle selection ticks (`haptics.selection()`) when choosing filters in `FilterStrip`.
+  - Perspective crop & corner snapping: tactile grab (`haptics.light()`), snap/lock (`haptics.medium()`), and reset/format feedback in `app/crop.tsx`.
+  - Security & PIN pad: numeric key taps (`haptics.light()`), delete feedback, shake error impact (`haptics.error()`) on wrong PIN, and success confirmation (`haptics.success()`) on unlock and PIN change (`PinPad.tsx`, `LockScreen.tsx`, `PinSetupModal.tsx`).
+  - Scan completion: success notification haptic (`haptics.success()`) when saving scanned documents in `ScanImportService`.
+- **M4 – Accessibility Audit & WCAG AA Contrast Compliance (`__tests__/contrast.test.ts`):**
+  - Automated WCAG 2.1 AA relative luminance and contrast ratio test suite: validates normal text (≥ 4.5:1), large text (≥ 3.0:1), and interactive UI elements (≥ 3.0:1) across both Light and Dark themes (`verified by tests` in `__tests__/contrast.test.ts`).
+  - Strict 44 × 44 pt minimum hit targets on all interactive controls (`Button.tsx`, `IconButton.tsx`, `PinPad.tsx`, `crop.tsx`).
+  - Spoken VoiceOver labels (`accessibilityLabel`), roles (`accessibilityRole`), and states (`accessibilityState`) across key flows in German and English.
+- **M4 – Home Screen Quick Actions (`QuickActionService.ts`, `expo-quick-actions`):**
+  - Dynamic 3D Touch / Haptic Touch quick actions from the iPhone Home Screen icon:
+    - *Dokument scannen* (`scan`, icon: `capturePhoto`): opens the document scanner directly on launch.
+    - *Suchen* (`search`, icon: `search`): launches straight into library search.
+  - Runtime listener and initial action handler in `app/_layout.tsx` (`QuickActionsHandler`).
+  - Feature detection: null-safe fallback ensuring zero crashes in Expo Go (`isSupported` check).
+- **M4 – Time-Boxed Extension Spikes (`docs/spikes/`):**
+  - `docs/spikes/app-intents.md`: App Intents & Siri Shortcuts analysis (verdict: `defer` to v2.1 due to build risk and prebuild complexity; Home Screen Quick Actions already meet primary fast-entry needs).
+  - `docs/spikes/lock-screen-widget.md`: WidgetKit lock screen widget analysis (verdict: `defer` to v2.1 due to secondary target signing limitations in unsigned sideloaded IPAs).
+  - `docs/spikes/share-extension.md`: Share Extension analysis (verdict: `defer` to v2.1; existing registered document types "Open in ScanFlow" in M1 already support full system share sheet ingestion without App Group signing risks).
+
 ## [1.11.0] - 2026-11-06
 
 Phase V2 Milestone **M3 (Organization & Automation)**: 30-day Trash (*Zuletzt gelöscht*), Favorites & Tags, deterministic Smart Naming templates with auto-rename after OCR, and Full-Library ZIP Backup & Restore via Files picker (SQLite schema v5).

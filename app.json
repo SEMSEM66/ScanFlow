@@ -2,7 +2,7 @@
   "expo": {
     "name": "ScanFlow",
     "slug": "scanflow",
-    "version": "1.11.0",
+    "version": "1.12.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "scanflow",
@@ -14,18 +14,25 @@
         "NSCameraUsageDescription": "ScanFlow benötigt Zugriff auf Ihre Kamera, um Dokumente zu scannen.",
         "NSPhotoLibraryUsageDescription": "ScanFlow benötigt Zugriff auf Ihre Fotomediathek, um Dokumente zu importieren.",
         "NSFaceIDUsageDescription": "ScanFlow verwendet Face ID, um die App zu entsperren.",
-        "CFBundleLocalizations": ["de", "en"],
+        "CFBundleLocalizations": [
+          "de",
+          "en"
+        ],
         "LSSupportsOpeningDocumentsInPlace": false,
         "CFBundleDocumentTypes": [
           {
             "CFBundleTypeName": "PDF Document",
             "LSHandlerRank": "Alternate",
-            "LSItemContentTypes": ["com.adobe.pdf"]
+            "LSItemContentTypes": [
+              "com.adobe.pdf"
+            ]
           },
           {
             "CFBundleTypeName": "Image",
             "LSHandlerRank": "Alternate",
-            "LSItemContentTypes": ["public.image"]
+            "LSItemContentTypes": [
+              "public.image"
+            ]
           }
         ]
       }
@@ -56,7 +63,8 @@
       "expo-sqlite",
       "expo-localization",
       "expo-sharing",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-quick-actions"
     ],
     "experiments": {
       "typedRoutes": true

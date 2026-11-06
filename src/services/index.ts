@@ -13,3 +13,4 @@ export * from './SignatureRepository';
 export * from './QrScannerService';
 export * from './SmartNamingService';
 export * from './BackupService';
+export * from './QuickActionService';

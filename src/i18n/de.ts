@@ -533,4 +533,8 @@ export const de = {
     restoreFailed: 'Die Backup-Datei konnte nicht wiederhergestellt werden.',
     inspectFailed: 'Ungültiges ScanFlow-Backup.',
   },
+  quickActions: {
+    scanDocument: 'Dokument scannen',
+    search: 'Suchen',
+  },
 };

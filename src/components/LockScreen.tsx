@@ -7,6 +7,7 @@ import { useTranslation } from '../i18n';
 import { authService, type PinResult, type UnlockCapabilities } from '../services/AuthService';
 import { formatWait } from '../security/lockout';
 import { PinPad, useCountdown } from './PinPad';
+import { haptics } from '../utils/haptics';
 
 interface LockScreenProps {
   /** Security settings not read yet – neutral cover without controls. */
@@ -59,6 +60,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ checking, caps, authBusy
     switch (result.status) {
       case 'ok':
         setError(null);
+        void haptics.success();
         break;
       case 'wrong': {
         setShakeKey((k) => k + 1);

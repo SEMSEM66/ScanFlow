@@ -2,6 +2,7 @@ import type { FilterType, NewPageInput } from '../types';
 import { documentRepository } from './DocumentRepository';
 import { importPages } from './PageRenderService';
 import { storageService } from './StorageService';
+import { haptics } from '../utils/haptics';
 
 /**
  * Stores scanned / imported images as pages – shared by the system document
@@ -131,5 +132,6 @@ export async function saveScan(options: SaveScanOptions): Promise<SavedScan> {
 
   for (const uri of uris) await storageService.deleteTempFile(uri);
   scanNotices.push(result.documentId, { pageIds: result.pageIds, undetectedPageIds: result.undetectedPageIds });
+  void haptics.success();
   return result;
 }

@@ -74,6 +74,11 @@ Designed as a clean, ad-free alternative to apps like CamScanner, ScanFlow proce
 - **🏷️ Deterministic Smart Naming:** customizable template engine (`{date}`, `{time}`, `{folder}`, `{firstLine}`, `{counter}`) with deterministic regex parsing for German and ISO dates. Automatically updates auto-generated titles after page 1 OCR without ever overwriting user-edited titles (`verified by tests` in `__tests__/organization.test.ts`).
 - **💾 Full-Library ZIP Backup & Restore:** export your entire library (documents, folders, pages with non-destructive crop/filter/annotation states, and vector signatures) as an open standard ZIP archive via the iOS Files picker (`manifest.json` + images). Restore anywhere on device with duplicate resolution and zero network dependency (`verified by tests` in `__tests__/backupManifest.test.ts`; share sheet & document picker `UNVERIFIED (needs iPhone)`).
 
+### Phase V2 – iOS Integration & Polish (v1.12.0, M4)
+- **📳 Haptic Feedback:** tactile physical feedback on filter selection, crop corner snapping/locking, PIN key entry, shake error on wrong PIN, and scan save confirmation, with automatic suppression when iOS *Bewegung reduzieren* (Reduce Motion) is active (`src/utils/haptics.ts`, `expo-haptics`).
+- **♿ Accessibility & WCAG AA Contrast:** all UI colors verified for WCAG 2.1 AA compliance (up to 18.4:1 contrast ratio) in light and dark mode, 44 × 44 pt minimum hit targets across all buttons and controls, and full VoiceOver accessibility labels/hints (`verified by tests` in `__tests__/contrast.test.ts`).
+- **⚡ Home Screen Quick Actions:** 3D Touch / Haptic Touch quick actions on the ScanFlow home screen icon to instantly trigger *Dokument scannen* or *Suchen* (`expo-quick-actions`, safe fallback in Expo Go).
+
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow, the pipeline, the app lock, the text recognition, the PDF toolkit and the native sheets, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phases.
 
 ### Known limitations

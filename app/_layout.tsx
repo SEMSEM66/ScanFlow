@@ -8,12 +8,60 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ThemeProvider, useTheme } from '../src/theme';
 import { I18nProvider, useTranslation } from '../src/i18n';
 import { AppLockOverlay } from '../src/components/AppLockOverlay';
-import { ScannerProvider } from '../src/components/ScannerProvider';
+import { ScannerProvider, useScanner } from '../src/components/ScannerProvider';
 import { getDatabase } from '../src/db/database';
 import { storageService } from '../src/services/StorageService';
 import { documentRepository } from '../src/services/DocumentRepository';
 import { ocrService } from '../src/services/OcrService';
 import { pdfToolkitService } from '../src/services/PdfToolkitService';
+import { quickActionService, type QuickActionItem } from '../src/services/QuickActionService';
+
+function QuickActionsHandler() {
+  const { scan } = useScanner();
+  const router = useRouter();
+  const { t } = useTranslation();
+  const handledActionRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    void quickActionService.setActions([
+      {
+        id: 'scan',
+        title: t.quickActions.scanDocument,
+        icon: 'capturePhoto',
+      },
+      {
+        id: 'search',
+        title: t.quickActions.search,
+        icon: 'search',
+      },
+    ]);
+
+    const handleAction = (action: QuickActionItem) => {
+      if (!action) return;
+      const key = `${action.id}-${Date.now()}`;
+      if (handledActionRef.current === key) return;
+      handledActionRef.current = key;
+
+      if (action.id === 'scan') {
+        void scan();
+      } else if (action.id === 'search') {
+        router.push('/search' as never);
+      }
+    };
+
+    const initial = quickActionService.getInitial();
+    if (initial) {
+      handleAction(initial);
+    }
+
+    const sub = quickActionService.addListener(handleAction);
+    return () => {
+      sub.remove();
+    };
+  }, [scan, router, t]);
+
+  return null;
+}
 
 function RootNavigation() {
   const { colors, isDark } = useTheme();
@@ -98,6 +146,7 @@ function RootNavigation() {
   // navigation and a running scan import survive locking.
   return (
     <ScannerProvider>
+      <QuickActionsHandler />
       <AppLockOverlay>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <NavigationThemeProvider value={{
