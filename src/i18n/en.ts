@@ -35,6 +35,7 @@ export const en: typeof de = {
     deleteDocument: 'Delete Document',
     deleteConfirm: 'Are you sure you want to permanently delete this document?',
     moveToFolder: 'Move to Folder',
+    moveFailed: 'The document could not be moved.',
     removeFromFolder: 'No Folder',
     documentNamePlaceholder: 'Enter document name',
     folderNamePlaceholder: 'Enter folder name',

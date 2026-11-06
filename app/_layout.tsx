@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -59,6 +59,26 @@ function RootNavigation() {
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="sheets/move"
+            options={{
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.5, 1],
+              sheetGrabberVisible: true,
+              sheetExpandsWhenScrolledToEdge: true,
+              contentStyle: { backgroundColor: Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 ? 'transparent' : colors.surface },
+            }}
+          />
+          <Stack.Screen
+            name="sheets/text"
+            options={{
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.5, 1],
+              sheetGrabberVisible: true,
+              sheetExpandsWhenScrolledToEdge: true,
+              contentStyle: { backgroundColor: Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 ? 'transparent' : colors.surface },
+            }}
+          />
           <Stack.Screen
             name="scan"
             options={{

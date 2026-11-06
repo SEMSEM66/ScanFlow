@@ -17,7 +17,6 @@ import { useTheme, capsule } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import {
   documentRepository,
-  folderRepository,
   exportService,
   imagePipeline,
   ensurePagePreview,
@@ -30,7 +29,6 @@ import {
   DocumentPage,
   ExportDpi,
   FilterType,
-  Folder,
   ExportFormat,
   ExportQuality,
 } from '../../src/types';
@@ -42,8 +40,6 @@ import {
   ExportModal,
   PageEditorModal,
   DocumentActionModal,
-  DocumentTextModal,
-  MoveFolderModal,
   PromptModal,
   AdjustmentsPanel,
   ModalHandoff,
@@ -88,10 +84,7 @@ export default function DocumentDetailScreen() {
   const [exportSheet] = useState(() => new ModalHandoff());
   const [isPageEditorVisible, setIsPageEditorVisible] = useState(false);
   const [isActionModalVisible, setIsActionModalVisible] = useState(false);
-  const [isMoveModalVisible, setIsMoveModalVisible] = useState(false);
-  const [isTextVisible, setIsTextVisible] = useState(false);
   const [isAdjustVisible, setIsAdjustVisible] = useState(false);
-  const [folders, setFolders] = useState<Folder[]>([]);
   const [promptState, setPromptState] = useState<{
     visible: boolean;
     title: string;
@@ -150,7 +143,6 @@ export default function DocumentDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       loadDocumentData();
-      folderRepository.getAll().then(setFolders);
       if (!id) return undefined;
       ocrService.prioritize(id);
       ocrService.kick();
@@ -627,7 +619,7 @@ export default function DocumentDetailScreen() {
             },
           });
         }}
-        onMove={() => setIsMoveModalVisible(true)}
+        onMove={() => router.push({ pathname: '/sheets/move', params: { documentId: document.id } })}
         onDuplicate={async () => {
           const dup = await documentRepository.duplicate(document.id, t.common.copySuffix);
           if (dup) router.replace(`/document/${dup.id}` as never);
@@ -636,20 +628,7 @@ export default function DocumentDetailScreen() {
           await documentRepository.delete(document.id);
           router.replace('/(tabs)');
         }}
-        onShowText={ocrService.available ? () => setIsTextVisible(true) : undefined}
-      />
-
-      <DocumentTextModal visible={isTextVisible} document={document} onClose={() => setIsTextVisible(false)} />
-
-      <MoveFolderModal
-        visible={isMoveModalVisible}
-        document={document}
-        folders={folders}
-        onClose={() => setIsMoveModalVisible(false)}
-        onSelectFolder={async (fId) => {
-          await documentRepository.moveToFolder(document.id, fId);
-          loadDocumentData();
-        }}
+        onShowText={ocrService.available ? () => router.push({ pathname: '/sheets/text', params: { documentId: document.id, title: document.title } }) : undefined}
       />
 
       <PromptModal

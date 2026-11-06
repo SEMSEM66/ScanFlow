@@ -23,8 +23,6 @@ import { Folder, Document } from '../../src/types';
 import {
   DocumentCard,
   DocumentActionModal,
-  DocumentTextModal,
-  MoveFolderModal,
   PromptModal,
   SortModal,
   SortOption,
@@ -54,8 +52,6 @@ export default function LibraryScreen() {
 
   // Modals State
   const [activeDocForAction, setActiveDocForAction] = useState<Document | null>(null);
-  const [docToMove, setDocToMove] = useState<Document | null>(null);
-  const [textDoc, setTextDoc] = useState<Document | null>(null);
   const [activeFolderForOptions, setActiveFolderForOptions] = useState<Folder | null>(null);
   const [isSortModalVisible, setIsSortModalVisible] = useState(false);
   const [promptState, setPromptState] = useState<{
@@ -247,16 +243,6 @@ export default function LibraryScreen() {
     );
   };
 
-  const handleMoveFolder = async (folderId: string | null) => {
-    if (!docToMove) return;
-    try {
-      await documentRepository.moveToFolder(docToMove.id, folderId);
-      loadData();
-    } catch (err) {
-      Alert.alert(t.common.error, 'Dokument konnte nicht verschoben werden.');
-    }
-  };
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       {/* Header */}
@@ -410,23 +396,11 @@ export default function LibraryScreen() {
         document={activeDocForAction}
         onClose={() => setActiveDocForAction(null)}
         onRename={(doc) => handleRenameDocument(doc)}
-        onMove={(doc) => setDocToMove(doc)}
+        onMove={(doc) => router.push({ pathname: '/sheets/move', params: { documentId: doc.id } })}
         onDuplicate={(doc) => handleDuplicateDocument(doc)}
         onDelete={(doc) => handleDeleteDocument(doc)}
-        onShowText={ocrService.available ? (doc) => setTextDoc(doc) : undefined}
+        onShowText={ocrService.available ? (doc) => router.push({ pathname: '/sheets/text', params: { documentId: doc.id, title: doc.title } }) : undefined}
       />
-
-      {/* Move Folder Modal */}
-      <MoveFolderModal
-        visible={docToMove !== null}
-        document={docToMove}
-        folders={folders}
-        onClose={() => setDocToMove(null)}
-        onSelectFolder={handleMoveFolder}
-      />
-
-      {/* Recognized text (copy / share) */}
-      <DocumentTextModal visible={textDoc !== null} document={textDoc} onClose={() => setTextDoc(null)} />
 
       {/* Folder Options Modal (Rename/Delete folder) */}
       <FolderOptionsModal

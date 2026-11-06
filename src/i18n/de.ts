@@ -33,6 +33,7 @@ export const de = {
     deleteDocument: 'Dokument löschen',
     deleteConfirm: 'Möchten Sie dieses Dokument wirklich unwiderruflich löschen?',
     moveToFolder: 'In Ordner verschieben',
+    moveFailed: 'Dokument konnte nicht verschoben werden.',
     removeFromFolder: 'Ohne Ordner',
     documentNamePlaceholder: 'Dokumentname eingeben',
     folderNamePlaceholder: 'Ordnername eingeben',

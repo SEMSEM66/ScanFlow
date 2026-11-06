@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { corner, hairline, radius, useTheme } from '../theme';
-import { Button, Card, Chip } from './ui';
+import { Button, Card, Chip, Icon } from './ui';
 import { useTranslation } from '../i18n';
 import { documentRepository } from '../services/DocumentRepository';
 import { ocrService } from '../services/OcrService';
@@ -13,13 +12,12 @@ import type { PageTextRecord } from '../ocr/types';
 import type { Document, DocumentPage } from '../types';
 
 interface DocumentTextModalProps {
-  visible: boolean;
   document: Pick<Document, 'id' | 'title'> | null;
   onClose: () => void;
 }
 
 /** Recognized text of a document, page by page – selectable, copy per page or all, share. */
-export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ visible, document, onClose }) => {
+export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ document, onClose }) => {
   const { colors, typography } = useTheme();
   const { t, formatString } = useTranslation();
   const [pages, setPages] = useState<DocumentPage[]>([]);
@@ -33,9 +31,9 @@ export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ visible, d
   const docId = document?.id ?? null;
   const loaded = docId !== null && loadedFor === docId;
 
-  // Load while visible; reload whenever a page of this document was recognized
+  // Load on mount; reload whenever a page of this document was recognized
   useEffect(() => {
-    if (!visible || !docId) return;
+    if (!docId) return;
     let active = true;
     const load = async () => {
       try {
@@ -62,7 +60,7 @@ export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ visible, d
       active = false;
       unsubscribe();
     };
-  }, [visible, docId]);
+  }, [docId]);
 
   useEffect(
     () => () => {
@@ -146,11 +144,15 @@ export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ visible, d
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
         <View style={[styles.header, { borderBottomColor: colors.borderLight }]}>
-          <TouchableOpacity onPress={onClose} style={styles.headerButton}>
-            <Text style={[typography.bodyBold, { color: colors.primary }]}>{t.common.done}</Text>
+          <TouchableOpacity
+            onPress={share}
+            disabled={!allText}
+            style={[styles.headerButton, { opacity: allText ? 1 : 0.3 }]}
+            accessibilityLabel={t.ocr.shareText}
+          >
+            <Icon name="square.and.arrow.up" size={22} color={colors.primary} />
           </TouchableOpacity>
           <View style={styles.headerTitle}>
             <Text style={[typography.headline, { color: colors.textPrimary }]}>{t.ocr.textTitle}</Text>
@@ -160,19 +162,14 @@ export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ visible, d
               </Text>
             ) : null}
           </View>
-          <TouchableOpacity
-            onPress={share}
-            disabled={!allText}
-            style={[styles.headerButton, { opacity: allText ? 1 : 0.3 }]}
-            accessibilityLabel={t.ocr.shareText}
-          >
-            <Ionicons name="share-outline" size={22} color={colors.primary} />
+          <TouchableOpacity onPress={onClose} style={[styles.headerButton, { alignItems: 'flex-end' }]}>
+            <Text maxFontSizeMultiplier={1.3} style={[typography.bodyBold, { color: colors.primary }]}>{t.common.done}</Text>
           </TouchableOpacity>
         </View>
 
         {notice ? (
           <View style={[styles.notice, corner(radius.md), { backgroundColor: colors.primarySubdued, borderColor: colors.primaryBorder }]}>
-            <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
+            <Icon name="info.circle" size={18} color={colors.primary} />
             <Text style={[typography.footnote, { color: colors.textPrimary, flex: 1, marginLeft: 8 }]}>{notice}</Text>
             {available && !enabled ? (
               <TouchableOpacity
@@ -199,6 +196,7 @@ export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ visible, d
             renderItem={renderPage}
             contentContainerStyle={styles.list}
             extraData={[texts, copied, enabled]}
+            contentInsetAdjustmentBehavior="automatic"
           />
         )}
 
@@ -210,8 +208,7 @@ export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ visible, d
             title={copied === 'all' ? t.ocr.copied : t.ocr.copyAll}
           />
         </View>
-      </SafeAreaView>
-    </Modal>
+    </SafeAreaView>
   );
 };
 
@@ -224,7 +221,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 20,
+    paddingBottom: 12,
     borderBottomWidth: hairline,
   },
   headerTitle: {
@@ -233,8 +231,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   headerButton: {
-    padding: 6,
-    minWidth: 44,
+    width: 72,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   notice: {
     flexDirection: 'row',
