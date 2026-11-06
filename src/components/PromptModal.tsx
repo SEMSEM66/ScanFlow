@@ -1,186 +1,36 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  TouchableWithoutFeedback,
-} from 'react-native';
-import { corner, hairline, radius, shadows, useTheme } from '../theme';
+import React, { useEffect, useRef } from 'react';
+import { Alert } from 'react-native';
+import { useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 
 interface PromptModalProps {
-  visible: boolean;
-  title: string;
-  initialValue?: string;
-  placeholder?: string;
-  confirmText?: string;
-  onConfirm: (value: string) => void;
-  onClose: () => void;
+  visible: boolean; title: string; initialValue?: string; placeholder?: string; confirmText?: string;
+  onConfirm: (value: string) => void; onClose: () => void;
 }
-
-export const PromptModal: React.FC<PromptModalProps> = ({
-  visible,
-  title,
-  initialValue = '',
-  placeholder = '',
-  confirmText,
-  onConfirm,
-  onClose,
-}) => {
-  const { colors, typography, spacing } = useTheme();
+export const PromptModal: React.FC<PromptModalProps> = (props) => {
+  const { isDark } = useTheme();
   const { t } = useTranslation();
-  const [value, setValue] = useState(initialValue);
-  // Reset the text whenever the prompt opens / gets a new initial value
-  const [synced, setSynced] = useState({ initialValue, visible });
-  if (synced.initialValue !== initialValue || synced.visible !== visible) {
-    setSynced({ initialValue, visible });
-    setValue(initialValue);
-  }
-
-  const handleConfirm = () => {
-    if (value.trim().length > 0) {
-      onConfirm(value.trim());
-      onClose();
-    }
-  };
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.keyboardAvoid}
-          >
-            <TouchableWithoutFeedback>
-              <View
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: colors.surface,
-                    ...corner(radius.xl),
-                    shadowColor: colors.shadowColor,
-                  },
-                ]}
-              >
-                <Text style={[typography.title3, styles.title, { color: colors.textPrimary }]}>
-                  {title}
-                </Text>
-
-                <TextInput
-                  value={value}
-                  onChangeText={setValue}
-                  placeholder={placeholder}
-                  placeholderTextColor={colors.textMuted}
-                  autoFocus
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: colors.surfaceSubdued,
-                      borderColor: colors.border,
-                      ...corner(radius.md),
-                      color: colors.textPrimary,
-                    },
-                  ]}
-                  returnKeyType="done"
-                  onSubmitEditing={handleConfirm}
-                />
-
-                <View style={[styles.buttonsRow, { marginTop: spacing.md }]}>
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={onClose}
-                    style={[styles.button, styles.cancelButton, { borderColor: colors.border }]}
-                  >
-                    <Text style={[typography.body, { color: colors.textSecondary }]}>
-                      {t.common.cancel}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={handleConfirm}
-                    disabled={value.trim().length === 0}
-                    style={[
-                      styles.button,
-                      styles.confirmButton,
-                      {
-                        backgroundColor:
-                          value.trim().length > 0 ? colors.primary : colors.surfaceSubdued,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        typography.bodyBold,
-                        {
-                          color: value.trim().length > 0 ? '#FFFFFF' : colors.textMuted,
-                        },
-                      ]}
-                    >
-                      {confirmText || t.common.save}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </TouchableWithoutFeedback>
-          </KeyboardAvoidingView>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
-  );
+  const latest = useRef({ props, isDark, t });
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { latest.current = { props, isDark, t }; });
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  useEffect(() => {
+    if (!props.visible) return;
+    const { props: options, isDark: dark, t: translations } = latest.current;
+    const show = (initial: string) => Alert.prompt(options.title, options.placeholder || undefined, [
+      { text: translations.common.cancel, style: 'cancel', onPress: options.onClose },
+      { text: options.confirmText || translations.common.save, onPress: (input?: string) => {
+        const value = (input ?? '').trim();
+        if (!value) {
+          // Native prompts dismiss on every button; reopen for an empty name, as the old disabled Save did.
+          timer.current = setTimeout(() => { timer.current = null; show(input ?? ''); }, 500);
+          return;
+        }
+        options.onClose();
+        options.onConfirm(value);
+      } },
+    ], 'plain-text', initial, 'default', { userInterfaceStyle: dark ? 'dark' : 'light' });
+    show(options.initialValue ?? '');
+  }, [props.visible]);
+  return null;
 };
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  keyboardAvoid: {
-    width: '100%',
-    maxWidth: 340,
-  },
-  card: {
-    width: '100%',
-    padding: 20,
-    ...shadows.raised,
-  },
-  title: {
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  input: {
-    height: 44,
-    borderWidth: hairline,
-    paddingHorizontal: 12,
-    fontSize: 16,
-  },
-  buttonsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  button: {
-    flex: 1,
-    height: 44,
-    ...corner(radius.md),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButton: {
-    borderWidth: 1,
-  },
-  confirmButton: {},
-});
