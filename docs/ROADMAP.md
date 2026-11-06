@@ -349,7 +349,7 @@ Requested by the user after STOP C: the dark background of *Anpassen* slid up to
   5. Tab bar: the camera button is exactly in the middle, no label is cut off (*Einstellungen*); the camera button starts the scanner; all four tabs open.
   6. *Suchen*: type a word → hits from all folders, with folder name and excerpt (word in bold); tap a hit → the document opens; back → the results are still there. Rename or delete a document → the results are updated when you come back. Clear the search → the hint is shown again.
 
-## ⏳ Phase D: Docs, repo & release hygiene
+## ✅ Phase D: Docs, repo & release hygiene
 - [x] README, ROADMAP, CHANGELOG, AGENTS.md updated; `docs/ARCHITECTURE.md` added; doc-vs-code discrepancies corrected (v1.2.0).
 - [x] `docs/COMMITS.md` with Conventional Commit grouping for the v1.2.0, v1.3.0 and v1.4.0 change sets.
 - [x] ESLint flat config (`eslint.config.js`) + `npm test` / `npm run test:imaging` / `npm run test:security` scripts.
@@ -360,4 +360,109 @@ Requested by the user after STOP C: the dark background of *Anpassen* slid up to
 - [x] Document screen: *…* → *Dokument löschen* deletes at once, without the confirmation the library shows – add the same confirmation (v1.8.0).
 - [x] Release per version instead of the hard-coded `v1.1.0` in `.github/workflows/build-ipa.yml` (v1.4.0: tag `v<package.json version>`, notes from `CHANGELOG.md`).
 - [ ] Optional: GitHub Action running `npx tsc --noEmit`, `npm run lint`, `npm run test:imaging` on pull requests.
+
+---
+
+## 🚀 Phase V2: Commercial App Store Release Candidate (v1.9.0 → v2.0.0-rc)
+
+**Positioning:** *"The uncompromising offline document scanner and PDF toolkit for iPhone. 100% on-device, no account, no ads, no watermarks, no tracking."* (DACH market first: German default, English second).
+
+### Definition of Done (v2.0.0-rc)
+1. All P0 features below are implemented, tested and documented; P1 items done or explicitly deferred with a reason in this ROADMAP.
+2. Quality gates are green: `npx tsc --noEmit`, `npm run lint`, `npm run check:corners`, `npm test` (plus new tests and `npm run check:network` from M6).
+3. The free tier has unlimited scanning, filters, folders and basic PDF/JPG export. No watermark, no ads, no account, no analytics, no telemetry, no network calls for user data.
+4. The store package in `docs/store/` is complete (M6) and a signed TestFlight/App Store build path is prepared (`docs/RELEASING.md`, M7).
+5. `README.md`, `docs/ROADMAP.md`, `CHANGELOG.md`, `docs/ARCHITECTURE.md`, and `AGENTS.md` are up to date.
+6. Every claim in the docs and store text is true and marked as `verified by tests`, `verified in CI log`, or `UNVERIFIED (needs iPhone)`.
+
+### Open Decisions (with active defaults)
+1. **Free/Pro gating & App Lock:** Does App Lock stay free, and do you agree with the proposed Free vs. Pro split? **[Default: as proposed – App Lock stays free]**
+2. **Price hypotheses:** Yearly with 7-day trial + Lifetime one-time purchase (monthly optional)? **[Default: yearly with trial + lifetime, monthly optional]**
+3. **App Store name & Bundle ID:** Keep `ScanFlow` / `com.scanflow.app` or switch before the first TestFlight build? **[Default: decide before TestFlight; 5 name alternatives prepared in M6]**
+4. **Attempt P2 spikes in M4** (App Intents/Shortcuts, Lock Screen/Control Center Widget, Share Extension)? **[Default: defer unless requested]**
+5. **CI trigger:** Keep building on every push to `main` (with `concurrency`, `paths-ignore` for docs, and npm cache), or switch to tag-only (`v*`)? **[Default: every push to `main` with concurrency + paths-ignore]**
+
+---
+
+### ✅ M0 – Foundations (with v1.9.0)
+- [x] **P0:** `src/entitlements` with `FeatureKey` and `isUnlocked(feature)`. Everything unlocked by default until M5; all gated features call `isUnlocked()` so gating can be changed in one place (`__tests__/entitlements.test.ts` – `verified by tests`).
+- [x] **P0:** i18n parity test (`__tests__/i18n.test.ts`): asserts `de.ts` and `en.ts` have identical nested keys, non-empty strings, and matching `{placeholder}` variables (`verified by tests`).
+- [x] **P0:** Native-spike template (`docs/spikes/_template.md`) + M1 PDFKit spike (`docs/spikes/m1-pdf-toolkit-native.md`).
+
+### ✅ M1 – PDF Toolkit (v1.9.0)
+- [x] **P0 – Import PDFs & images from Files and "Open in ScanFlow":**
+  - Register PDF (`com.adobe.pdf`) and image (`public.image`) document types in `Info.plist` (`app.json`), handle incoming `file://` URLs in `app/_layout.tsx`, and offer *PDF oder Bilder importieren* in the Library and *Werkzeuge* tab.
+  - Native PDFKit functions in `modules/scanflow-ocr/ios/ScanFlowOcrModule.swift` (`getPdfInfoAsync`, `renderPdfPageAsync` at 200 dpi, serial page-by-page inside `autoreleasepool`, memory-safe for 50+ page PDFs), followed by background OCR (`UNVERIFIED (needs iPhone)` / Swift compilation verified in CI).
+  - Expo Go fallback: clear localized explanation when importing a PDF in Expo Go (`verified by tests`).
+- [x] **P0 – Library multi-select:**
+  - Select mode in the Library (*Auswählen*): select/deselect cards, *Alle auswählen*, move selected to folder, merge 2+ selected documents, batch export (single PDF or multi-document `.zip` via `src/docx/zip.ts` into one share sheet, auto-cleaned after sharing), and batch delete with confirmation (`verified by tests` + `UNVERIFIED (needs iPhone)` for UI/share sheet).
+- [x] **P0 – Merge documents & split/extract pages:**
+  - Pure DB & file operations (`DocumentRepository.mergeDocuments`, `extractPagesToDocument`, `splitDocumentAtPage`) preserving non-destructive page state, previews, and `page_text` OCR rows (`__tests__/documentOperations.test.ts` – `verified by tests`).
+  - Page overview (`PageEditorModal`): select pages → *In neues Dokument extrahieren* (*Extract to new document*), and *Ab hier teilen* (*Split at page N*) on any page ≥ 2 (`UNVERIFIED (needs iPhone)`).
+- [x] **P0 – Password-protected PDF export:**
+  - Native encryption via `PDFDocument.write(to:withOptions:)` (`userPasswordOption` / `ownerPasswordOption`) in `ScanFlowOcrModule.swift` (`encryptPdfAsync`). Re-opens the written PDF in Swift and asserts `isEncrypted && isLocked && unlock(withPassword:)`, deletes the unencrypted temp file in `defer` (`UNVERIFIED (needs iPhone)` / Swift compilation verified in CI).
+  - Export sheet (`ExportModal.tsx`): password toggle, password + confirmation inputs, show/hide toggle, minimum length check (≥ 4 chars), clear warning that a lost password cannot be recovered, and honest statement of standard PDFKit encryption (`verified by tests` for validation + `UNVERIFIED (needs iPhone)`).
+- [ ] **🛑 STOP M1:** Test on physical iPhone (**IPA** v1.9.0 + short check in Expo Go):
+  1. **Import PDF from Files:** In *Dokumente* (or *Werkzeuge*), tap *PDF oder Bilder importieren* → pick a multi-page PDF → pages are imported at 200 dpi with progress, opened as a new document, and recognized by OCR in the background.
+  2. **"Open in ScanFlow" from Files / Mail:** In the iOS Files app, long-press a PDF or image → *Teilen* → choose **ScanFlow** → ScanFlow opens and imports the file into the library.
+  3. **Library Multi-Select & Batch ZIP Export:** In *Dokumente*, open the `…` menu → *Auswählen* → select 2–3 documents → test *Ordner* (move), *Teilen* (creates one `.zip` with all PDFs and opens the share sheet), and *Zusammenfügen* (merges the selected documents into a new combined document).
+  4. **Page Extract & Split:** Open a multi-page document → tap the `1 / N` pill to open the page overview → select 1–2 pages and tap *Extrahieren* (creates a new document with those pages). Open the page overview again and tap *Ab Seite N teilen* on page 2 → splits the document at page 2.
+  5. **Password-Protected PDF Export:** Open a document → *Teilen* → enable *Passwortschutz* → enter a password + confirmation (test show/hide and mismatch validation) → tap *Teilen* → *In Dateien sichern* → open the saved PDF in Files and confirm iOS prompts for the password before showing the pages.
+  6. **Expo Go Check:** Open in Expo Go → attempting PDF import or PDF password encryption shows a clear message that the installed ScanFlow app is required; image import, multi-select, merge, extract, and split work in Expo Go.
+
+---
+
+### ⏳ M2 – Capture Modes & Marking (v1.10.0)
+- [ ] **P0:** ID-card mode: guided front/back capture, crop each side to ID-1 ratio (85.6 × 54 mm), compose both on ONE A4 page at true scale, centered; optional diagonal purpose watermark (*"Kopie – nur für <Zweck>, <Datum>"*); non-destructive schema v4 + `RENDER_VERSION` bump + tests.
+- [ ] **P0:** QR/barcode scanner in *Werkzeuge* (`expo-camera` barcode scanning): result sheet with raw value, type, copy; never auto-open URLs (show full URL and ask first); EPC/GiroCode (BCD) parser into recipient, IBAN, BIC, amount, reference with copy buttons; optional local history (OFF by default) with clear button; parser unit tests.
+- [ ] **P0:** Visual signatures & annotations: signature manager (Skia canvas with finger/Apple Pencil, smoothing, undo/clear, vector stroke storage, delete), non-destructive page annotation layer (schema v4: signature, text, date stamp, pen, highlighter; move/resize/rotate via Gesture Handler), rendered by `PageRenderer` after filters and excluded from OCR render. Wording: *"Unterschrift einfügen"* (never *"digital signieren"*).
+- [ ] **P1:** Create a signature from a photo of a paper signature (threshold to transparent PNG).
+- [ ] **🛑 STOP M2:** Physical iPhone test checklist for ID-card mode, QR/GiroCode scanner, and signatures/annotations.
+
+### ⏳ M3 – Organization & Automation (v1.11.0)
+- [ ] **P0:** Trash (*Zuletzt gelöscht*, 30-day retention, restore, empty trash, auto-purge on launch; schema migration + tests; all delete actions move to trash first).
+- [ ] **P0:** Favorites (pin to top) and tags (chips, filter, search integration).
+- [ ] **P1:** Smart naming templates (`{date}`, `{time}`, `{folder}`, `{firstLine}`, `{counter}`) in Settings; auto-rename after first OCR only while title is still auto-generated; deterministic rules only.
+- [ ] **P1:** Backup to Files: export all documents as one `.zip` (PDFs + `manifest.json` with versioned page state + originals) via Files picker + Import/Restore with version check and manifest round-trip tests.
+- [ ] **🛑 STOP M3:** Physical iPhone test checklist for Trash, Favorites/Tags, Smart Naming, and Full Backup/Restore.
+
+### ⏳ M4 – iOS Integration (v1.12.0)
+- [ ] **P0:** Haptics (`expo-haptics`) on page snap, corner lock, filter change, PIN keys, success/error (respecting Reduce Motion).
+- [ ] **P0:** Accessibility audit: VoiceOver labels/hints/traits (DE/EN), Dynamic Type, 44 pt hit targets, contrast AA in light and dark mode (automated token contrast test), Reduce Motion.
+- [ ] **P1:** Home Screen Quick Actions (*Dokument scannen*, *Suchen*) via `expo-quick-actions` (verified in CI).
+- [ ] **P2 (Spikes only, time-boxed):** `docs/spikes/app-intents.md`, `docs/spikes/lock-screen-widget.md`, `docs/spikes/share-extension.md`.
+- [ ] **🛑 STOP M4:** Physical iPhone test checklist for Haptics, VoiceOver/Accessibility, and Quick Actions.
+
+### ⏳ M5 – Monetization (v1.13.0)
+- [ ] **STOP FIRST:** Write `docs/MONETIZATION.md` (StoreKit 2 vs. RevenueCat comparison, proposed Free/Pro gating, pricing hypotheses) and wait for user approval before coding the paywall.
+- [ ] **P0:** StoreKit 2 integration (local JWS verification, `Transaction.currentEntitlements`, `Transaction.updates`, `AppStore.sync` restore), fair paywall UI, Settings Pro status & manage/restore, offline cached entitlement state, and `expo-store-review` after 3rd successful export.
+- [ ] **🛑 STOP M5:** TestFlight / sandbox purchase & restore checklist.
+
+### ⏳ M6 – Compliance, Legal & Store Package (v2.0.0-rc)
+- [ ] **P0 (Code):** `ios.privacyManifests` in `app.json`, `ITSAppUsesNonExemptEncryption` decision + documentation, localized `Info.plist` permission strings (`de`/`en`), icon/splash verification, `scripts/check-network.mjs` (`npm run check:network`), and in-app *Einstellungen → Über* legal & open-source license views (generated from `package-lock.json`).
+- [ ] **P0 (`docs/store/` DE & EN):** `privacy-policy` (MD + HTML), `terms`, `impressum` template, `app-store-metadata` (no competitor names/trademarks), `review-notes`, `privacy-nutrition-label`, `age-rating`, `export-compliance`, App Review Guidelines checklist, and `tools/store-screenshots/` composer script.
+- [ ] **🛑 STOP M6:** Final release candidate verification checklist on physical iPhone.
+
+### ⏳ M7 – Release Pipeline (`docs/RELEASING.md`)
+- [ ] **P0:** Complete comparison of (A) EAS Build + EAS Submit vs. (B) GitHub Actions macOS signed build + upload, prepared profiles/workflows (disabled until secrets exist), and exact step-by-step App Store Connect / TestFlight instructions.
+
+---
+
+### 💡 Ideas Backlog (Out of V2.0 Scope – No Scope Creep)
+- Additional OCR recognition languages selector in Settings (beyond `de-DE` and `en-US`).
+- Embedded Unicode font subsetting in `pdfTextLayer.ts` for non-WinAnsi characters.
+- SQLCipher database encryption + per-file encryption key in Keychain.
+- iPad Split View / multi-column layout optimization (`supportsTablet: true`).
+
+---
+
+### 📌 Next Steps (Session Handoff for Fresh Agents)
+- **Current Branch:** `feat/m0-m1-pdf-toolkit` (branched from `main` after v1.8.0 + Phase D cleanup).
+- **Completed in Current Session:**
+  - Updated `AGENTS.md`, `.github/workflows/build-ipa.yml` (concurrency, `paths-ignore`, npm cache), `docs/RELEASING.md`, and `docs/ROADMAP.md` (Phase V2 plan).
+  - Implemented **M0 (Foundations)** and **M1 (PDF Toolkit — v1.9.0)** on `feat/m0-m1-pdf-toolkit`.
+- **What to Do Next:**
+  1. Wait for the user's answers to the 5 **Open Decisions** above and their feedback on **STOP M1** (after merging `feat/m0-m1-pdf-toolkit` into `main` to build the `v1.9.0` IPA when the user approves).
+  2. Once **STOP M1** is confirmed, start branch `feat/m2-capture-marking` for **M2 (v1.10.0)**: ID-card mode, QR/GiroCode scanner, and visual signatures & annotations (schema v4).
+
 

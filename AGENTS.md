@@ -20,12 +20,14 @@ This document contains persistent rules, operational constraints, and workflow g
 - **Host OS:** Windows with PowerShell.
 - **Hardware:** NO Mac and NO iOS simulator available.
 - **Testing Target:** Real physical iPhone via **Expo Go** (`npx expo start`; fallback with `--tunnel` when LAN fails).
-- **Expo Go Constraint (Crucial):**
-  - Phase 1 must use **ONLY** libraries that run inside the standard **Expo Go** app.
-  - **NO** custom native modules, **NO** native code requiring development builds (`expo run:ios` or `eas build`) for Phase 1.
-  - If a feature is not supported in Expo Go, do not guess or silently switch; explicitly inform the user and implement a verified Expo Go fallback.
+- **Expo Go & Native Code Policy (Updated for V2 Program):**
   - `@shopify/react-native-skia` is part of Expo Go and is used for the perspective warp and scan shaders (v1.2.0). Install native packages only via `npx expo install <pkg>` so versions match the SDK.
-  - **One exception (since v1.5.0):** the local Expo module `modules/scanflow-ocr` (Swift, Apple Vision text recognition). It exists only in the IPA build (GitHub Actions, sideloaded); the app must keep working in **Expo Go** without it – access it only through `ocrService` and check `ocrService.available`. Do not add further native code or modules without asking the user. Swift can only be compiled in CI (no Mac): keep native changes small and verify them in the CI log.
+  - **Native code is allowed** (Swift in `modules/scanflow-ocr` or a second local module, config plugins, native Expo packages) under these strict conditions:
+    1. Each addition starts with a documented spike (`docs/spikes/<name>.md`) on a feature branch with CI proof before UI is built on it.
+    2. Keep Swift small, memory-safe (`autoreleasepool`), and off the main/JS thread.
+    3. **The app must never crash in Expo Go:** use feature detection (like `ocrService.available` via `requireOptionalNativeModule`) and hide or clearly explain unavailable features in Expo Go.
+    4. List every native addition in `docs/ARCHITECTURE.md`.
+  - **Strictly Forbidden (Without Explicit User Approval):** analytics, crash-reporting or ad SDKs, user accounts, third-party servers, uploading user documents, tracking, anything that sends user data off the device, or anything that costs money.
 - **Shell & Tooling:**
   - Use **PowerShell-compatible** commands only.
   - Never use bash-only syntax (e.g., `&&`, `export FOO=bar`, `/dev/null`) in scripts or terminal commands.
@@ -87,30 +89,36 @@ Development proceeds in small, verifiable steps with real persisted storage from
 ---
 
 ## 6. Verification & Quality Gates
-- **After every step:**
+- **After every step / milestone:**
   1. Run TypeScript check: `npx tsc --noEmit`. Fix any typing errors immediately.
-  2. Run linter (`npm run lint`): fix any errors you introduce (0 errors since v1.4.0; the remaining unused-variable warnings are tracked in ROADMAP Phase D).
-  2a. Run tests: `npm run test:imaging` (fast) and `npm test` (full, incl. headless Skia renderer, ~5–7 min) when touching `src/imaging`, `src/db` or export; `npm run test:security` when touching `src/security`, `AuthService`, `AppLockOverlay`, `LockScreen`, `PinSetupModal`, `PrivacyService` or sharing; `npm run test:ocr` when touching `src/ocr`, `src/db/textSearch.ts`, `PageTextRepository`, `OcrService`, the PDF text layer or the search.
-  3. Update `docs/ROADMAP.md` (check off completed items).
-  4. Update `CHANGELOG.md`.
-  5. Commit and push to `main`.
-- **iPhone Test STOP Gates (STOP and wait for user feedback):**
-  - **STOP 1 (after Phase 0):** App successfully launches in Expo Go, loads DB, displays base layout.
-  - **STOP 2 (after Step 2 - Scan):** Test camera permissions, burst capture, page counter, and gallery import on physical iPhone.
-  - **STOP 3 (after Step 3 - Crop):** Test 4 draggable corner handles and crop on physical iPhone.
-  - **STOP 4 (after Step 4 - Filters):** Test filter switching and rotation on physical iPhone.
-  - **STOP 5 (after Step 6 - Export):** Test PDF/JPG generation and iOS share sheet on physical iPhone.
+  2. Run linter (`npm run lint`): 0 errors, 0 warnings required.
+  3. Run corner token check: `npm run check:corners` (and `npm run check:network` once added in M6).
+  4. Run tests: `npm run test:imaging`, `npm run test:security`, `npm run test:ocr`, and `npm test` (full suite incl. headless Skia renderer before merging a milestone). New tests are required for all new pure logic and DB migrations.
+  5. Update `docs/ROADMAP.md` (check off completed items and update the "Next steps" handoff section at the end of every session).
+  6. Update `CHANGELOG.md`, `README.md`, and `docs/ARCHITECTURE.md`.
+  7. Work on a feature branch per milestone (`feat/<name>`), push there (builds nothing), and fast-forward merge to `main` only after the user's STOP confirmation → exactly one IPA build per milestone.
+- **Verification Honesty:**
+  - Every claim in docs and store text must be true and marked as `verified by tests`, `verified in CI log`, or `UNVERIFIED (needs iPhone)`. Never claim device behavior was verified unless the user tested it on their iPhone.
 
 ---
 
-## 7. Out of Scope for Phase 1 (Keep Architecture Ready)
-- ~~OCR (text recognition)~~ – implemented in v1.5.0 (ROADMAP Phase C, IPA build only)
-- Digital signatures (e-signature)
-- ID-card scanning mode
-- QR code scanner
-- Live edge overlay / auto-capture in ScanFlow's *own* camera (`app/scan.tsx`). Live detection and auto-capture are provided by the iOS document scanner since v1.3.0 (ROADMAP Phase B).
-- Cloud sync & user accounts
-- Subscriptions / In-App Purchases
+## 7. V2 Program Scope (v1.9.0 → v2.0.0-rc) & Strict Prohibitions
+The V2 program takes ScanFlow from v1.8.0 to a v2.0.0 release candidate ready for TestFlight and App Store submission (`docs/ROADMAP.md` → Phase V2):
+- **Positioning:** *"The uncompromising offline document scanner and PDF toolkit for iPhone. 100% on-device, no account, no ads, no watermarks, no tracking."* (DACH market first: German default, English second).
+- **Milestones:**
+  - **M0 – Foundations (v1.9.0):** `src/entitlements` (`FeatureKey`, `isUnlocked`), i18n DE/EN parity test, native-spike template (`docs/spikes/_template.md`).
+  - **M1 – PDF Toolkit (v1.9.0):** Import PDFs & images from Files / "Open in ScanFlow" (200 dpi serial PDF rasterization via PDFKit + OCR), Library multi-select (move, delete, merge, batch ZIP/PDF export), document merge & page split/extract, password-protected PDF export via PDFKit with verification.
+  - **M2 – Capture Modes & Marking (v1.10.0):** ID-card front/back mode on one A4 page at true scale (85.6 × 54 mm) with optional purpose watermark, QR/barcode + EPC/GiroCode scanner in *Werkzeuge*, non-destructive visual signatures & page annotations (schema v4).
+  - **M3 – Organization & Automation (v1.11.0):** 30-day Trash (*Zuletzt gelöscht*), Favorites & Tags, deterministic smart naming templates, full-library ZIP Backup & Restore via Files picker. (No WebDAV/SMB clients.)
+  - **M4 – iOS Integration (v1.12.0):** Haptics (`expo-haptics`), Accessibility & AA contrast audit + test, Home Screen Quick Actions (`expo-quick-actions`), and time-boxed P2 spikes (App Intents/Shortcuts, Lock Screen Widget, Share Extension).
+  - **M5 – Monetization (v1.13.0):** `docs/MONETIZATION.md` STOP gate first; StoreKit 2 on-device entitlements (no third-party tracking SDKs), fair paywall, cached offline entitlement state, `expo-store-review` after 3rd export.
+  - **M6 – Compliance, Legal & Store Package (v2.0.0-rc):** `ios.privacyManifests`, `ITSAppUsesNonExemptEncryption`, localized permission strings, `npm run check:network`, in-app legal/license screens, and complete `docs/store/` + `tools/store-screenshots/` package.
+  - **M7 – Release Pipeline (`docs/RELEASING.md`):** EAS Build/Submit vs. GitHub Actions signing comparison, configuration, and step-by-step App Store Connect / TestFlight guide.
+- **Still Strictly Out of Scope / Forbidden:**
+  - Analytics, crash-reporting or ad SDKs
+  - User accounts or cloud servers operated by us/third parties
+  - WebDAV / SMB network clients
+  - Live edge overlay in ScanFlow's *own* fallback camera (`app/scan.tsx`) – live edge detection is provided by the iOS VisionKit scanner.
 
 ---
 

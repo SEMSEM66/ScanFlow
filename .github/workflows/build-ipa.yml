@@ -6,7 +6,15 @@ on:
       - main
     tags:
       - 'v*'
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'design/**'
   workflow_dispatch:
+
+concurrency:
+  group: build-ipa-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -47,6 +55,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: 'npm'
 
       # Every app version gets its own GitHub release: tag v<version> from
       # package.json (or the pushed v* tag). Pushing again without a version
