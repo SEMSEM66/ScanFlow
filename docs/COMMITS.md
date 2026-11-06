@@ -1,5 +1,15 @@
 # Commit groups per release
 
+## iOS polish – work in progress
+
+The `feat/ios-polish` branch contains the corner-token, shared UI and test
+commits, followed by native page-sheet and form-sheet migrations. The menu,
+adjustment and navigation migrations are still outstanding. Do not release or
+push to `main` until the complete task is checked; a main push triggers an IPA
+build. Native share presentation must be verified on an iPhone.
+
+---
+
 ## v1.6.0 – iOS-style panels & symmetric tab bar
 
 Committed on `main` and pushed once → one IPA build and the release

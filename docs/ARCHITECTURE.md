@@ -180,12 +180,11 @@ Photo import (Documents tab: header button / empty state; add page → "Aus Foto
   page editor start the scanner only after they are fully dismissed (alert:
   300 ms delay, editor: `Modal.onDismiss` + 900 ms fallback). If a scan is
   "running" for > 1.5 s while the app UI is usable, the next tap offers the
-  ScanFlow camera instead. The share sheet follows the same rule (v1.5.1):
-  the document screen creates the file while the export sheet shows the
-  progress, closes the sheet with `ModalHandoff` (`Modal.onDismiss`, 1.5 s
-  fallback) and only then calls `exportService.shareDocument()`. Since
-  v1.6.0 all bottom panels are `BottomSheet`s; their `onDismiss` fires once
-  the sheet has glided out and its modal is gone (§10).
+  ScanFlow camera instead. The export route creates the file with progress
+  visible in a native form sheet, then presents the system share sheet above
+  the still-open route. No presentation is started during its dismissal; the
+  route closes only after sharing completes. This interaction needs iPhone
+  verification. Remaining custom menus still hand off via `onDismiss` (§10).
 - **Why VisionKit pages skip detection:** they are already cropped and
   de-warped; a second detection pass could only crop them wrongly. The crop
   screen still allows manual corners on them.
@@ -536,7 +535,23 @@ compiled in CI (macOS) and tested on the iPhone (ROADMAP STOP C).
 
 ---
 
-## 10. Bottom sheets & navigation (v1.6.0)
+## 10. Bottom sheets & navigation
+
+### UI conventions (migration in progress)
+
+- Prefer native iOS navigation, form sheets and menus. Export, recognized text
+  and the folder picker are route-based `formSheet`s; page editor, PIN setup
+  and scan review use native page sheets. Remaining panels are documented below.
+- Leave native sheet corners at the system default; do not add a backdrop or
+  shadow over native presentation. iOS 26 material and older iOS backgrounds
+  require device testing. Disable interactive dismissal while saving/exporting.
+- `src/theme/shape.ts` provides continuous radius tokens and `corner`,
+  `corners`, `capsule`, and `concentric`; `squirclePath` handles Skia paths.
+  Use shared UI components and `Icon` (SF Symbols), and run `npm run check:corners`.
+- Never put a shadow on a view that clips; use a separate wrapper. Use
+  `StyleSheet.hairlineWidth` for borders and separators.
+
+### Legacy custom sheets (remaining during migration)
 
 ### `BottomSheet` (`src/components/BottomSheet.tsx`, `sheetMotion.ts`)
 
@@ -565,15 +580,15 @@ compiled in CI (macOS) and tested on the iPhone (ROADMAP STOP C).
   `Modal.onDismiss`, or 1 s after hiding if that event never arrives.
   Reopening while closing turns the sheet around; if the screen ignores
   `onClose`, the sheet comes back.
-- `dismissible={false}` (export sheet while the file is created) disables the
-  backdrop, the pull and the escape gesture; the screen can still close it.
+- `dismissible={false}` disables backdrop, pull and escape for custom sheets.
 
 ### Hand-over rule
 
 - Anything presented after a sheet (prompt, alert, next sheet, share sheet,
   scanner) starts from the sheet's `onDismiss` (AGENTS.md rule 9). The
-  document and folder menus store the chosen entry and run it there; the
-  export flow keeps `ModalHandoff` (`ExportModal.onDismiss`).
+  document and folder menus store the chosen entry and run it there. Export
+  instead presents the iOS share UI above an open native form sheet; never
+  present it while that sheet is dismissing.
 - Menus keep showing the last document / folder while they glide out (the
   screens clear it on close).
 

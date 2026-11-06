@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased] – iOS polish (in progress)
+
+- Added continuous corner helpers, shared UI primitives, and a corner-checking gate.
+- Migrated export, recognized text, and the folder picker to native form sheets; the page editor, PIN setup, and scan review use native page sheets. Remaining sheets and navigation are not yet migrated.
+- Native presentation and export sharing need physical-iPhone verification.
+
+---
+
 ## [1.6.0] - 2026-11-05
 
 Smoother bottom panels and a symmetric tab bar with a new *Suchen* tab.
