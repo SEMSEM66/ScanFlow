@@ -13,6 +13,7 @@ const mockDelete = jest.fn<AsyncFn>();
 const EXPORT_DIR = 'file:///var/mobile/Containers/Data/Application/ABC/Library/Caches/scanflow-export/';
 
 jest.mock('expo-print', () => ({ printToFileAsync: jest.fn() }));
+jest.mock('../modules/scanflow-ocr', () => ({ ScanFlowOcr: null }));
 jest.mock('expo-sharing', () => ({
   isAvailableAsync: (...args: unknown[]) => mockIsAvailable(...args),
   shareAsync: (...args: unknown[]) => mockShare(...args),

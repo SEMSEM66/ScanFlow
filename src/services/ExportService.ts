@@ -2,7 +2,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ScanFlowOcr } from '../../modules/scanflow-ocr';
-import { deduplicateFileNames } from '../db/documentOperations';
+import { deduplicateFileNames, sanitizeFileName } from '../db/documentOperations';
 import { base64ToUint8, buildDocxBase64, buildZip, uint8ToBase64, type DocxPageInput, type ZipEntryInput } from '../docx';
 import { isUnlocked } from '../entitlements';
 import { buildPdf, estimatePdfKb, ESTIMATED_PAGE_KB } from '../imaging/pdf';
@@ -10,6 +10,8 @@ import type { OcrLine } from '../ocr/types';
 import type { DocumentPage, ExportDpi, ExportFormat, ExportQuality } from '../types';
 import { imagePipeline } from './ImagePipelineService';
 import { storageService } from './StorageService';
+
+export { sanitizeFileName };
 
 export interface ExportOptions {
   dpi: ExportDpi;
@@ -24,16 +26,6 @@ export interface ExportOptions {
    */
   textForPage?: (page: DocumentPage, index: number) => Promise<OcrLine[] | null>;
   onProgress?: (done: number, total: number) => void;
-}
-
-/** File name without characters that iOS / receiving apps dislike. */
-export function sanitizeFileName(title: string): string {
-  const clean = title
-    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80);
-  return clean.length > 0 ? clean : 'Scan';
 }
 
 /**

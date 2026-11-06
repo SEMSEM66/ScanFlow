@@ -8,13 +8,21 @@ import {
   FlatList,
   RefreshControl,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '../../../src/components/ui/Icon';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
-import { capsule, useTheme } from '../../../src/theme';
+import { capsule, corner, hairline, radius, useTheme } from '../../../src/theme';
 import { useTranslation } from '../../../src/i18n';
-import { folderRepository, documentRepository, ocrService, pageTextRepository } from '../../../src/services';
+import {
+  folderRepository,
+  documentRepository,
+  ocrService,
+  pageTextRepository,
+  pdfToolkitService,
+  exportService,
+} from '../../../src/services';
 import { snippetTerm } from '../../../src/db/textSearch';
 import type { Snippet } from '../../../src/ocr/text';
 import { Folder, Document, SortOption } from '../../../src/types';
@@ -49,6 +57,9 @@ export default function LibraryScreen() {
   // Modals State
   const [activeDocForAction, setActiveDocForAction] = useState<Document | null>(null);
   const [activeFolderForOptions, setActiveFolderForOptions] = useState<Folder | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [toolkitBusyText, setToolkitBusyText] = useState<string | null>(null);
   const [promptState, setPromptState] = useState<{
     visible: boolean;
     title: string;
@@ -238,6 +249,166 @@ export default function LibraryScreen() {
     );
   };
 
+  // Multi-select & PDF/Files Import Handlers
+  const toggleSelectDocument = (docId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(docId)) {
+        next.delete(docId);
+      } else {
+        next.add(docId);
+      }
+      return next;
+    });
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedIds.size === documents.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(documents.map((d) => d.id)));
+    }
+  };
+
+  const handleImportFiles = async () => {
+    if (toolkitBusyText !== null || scanner.busy) return;
+    const now = new Date();
+    const defaultTitle = formatString(t.scan.documentTitle, {
+      date: now.toLocaleDateString(),
+      time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+    const outcome = await pdfToolkitService.pickAndImportFiles({
+      defaultTitle,
+      onProgress: (current: number, total: number) => {
+        setToolkitBusyText(formatString(t.scan.processing, { current, total }));
+      },
+    });
+    setToolkitBusyText(null);
+    if (outcome.status === 'saved') {
+      if (selectedFolderId !== null) {
+        await documentRepository.moveToFolder(outcome.documentId, selectedFolderId);
+      }
+      await loadData();
+      router.push(`/document/${outcome.documentId}` as any);
+    } else if (outcome.status === 'unavailable') {
+      Alert.alert(t.library.importPdfUnavailableTitle, t.library.importPdfUnavailableMessage);
+    } else if (outcome.status === 'locked') {
+      Alert.alert(t.library.importPdfLockedTitle, t.library.importPdfLockedMessage);
+    } else if (outcome.status === 'failed') {
+      Alert.alert(t.common.error, t.library.importPdfFailed);
+    }
+  };
+
+  const orderedSelectedIds = documents.filter((d) => selectedIds.has(d.id)).map((d) => d.id);
+
+  const handleBatchMove = () => {
+    if (orderedSelectedIds.length === 0) return;
+    const idsParam = orderedSelectedIds.join(',');
+    exitSelectMode();
+    router.push({ pathname: '/sheets/move', params: { documentIds: idsParam } });
+  };
+
+  const handleBatchMerge = () => {
+    if (orderedSelectedIds.length < 2) {
+      Alert.alert(t.library.mergeConfirmTitle, t.library.mergeNeedTwo);
+      return;
+    }
+    Alert.alert(
+      t.library.mergeConfirmTitle,
+      formatString(t.library.mergeConfirmMessage, { count: orderedSelectedIds.length }),
+      [
+        { text: t.common.cancel, style: 'cancel' },
+        {
+          text: t.library.mergeSelected,
+          onPress: async () => {
+            try {
+              const ids = [...orderedSelectedIds];
+              const mergedTitle = formatString(t.library.mergeDefaultTitle, {
+                date: new Date().toLocaleDateString(),
+              });
+              exitSelectMode();
+              await documentRepository.mergeDocuments(ids, mergedTitle, selectedFolderId);
+              await loadData();
+            } catch {
+              Alert.alert(t.common.error, t.library.mergeFailed);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleBatchExport = async () => {
+    if (orderedSelectedIds.length === 0 || toolkitBusyText !== null) return;
+    if (orderedSelectedIds.length === 1) {
+      const singleId = orderedSelectedIds[0];
+      exitSelectMode();
+      router.push({ pathname: '/sheets/export', params: { documentId: singleId } });
+      return;
+    }
+    const ids = [...orderedSelectedIds];
+    setToolkitBusyText(formatString(t.library.batchExporting, { current: 1, total: ids.length }));
+    const resumeOcr = ocrService.hold();
+    try {
+      const loadedItems: { title: string; pages: import('../../../src/types').DocumentPage[] }[] = [];
+      for (const id of ids) {
+        const docWithPages = await documentRepository.getById(id);
+        if (docWithPages && docWithPages.pages.length > 0) {
+          loadedItems.push({ title: docWithPages.document.title, pages: docWithPages.pages });
+        }
+      }
+      if (loadedItems.length === 0) {
+        Alert.alert(t.common.error, t.library.batchExportFailed);
+        return;
+      }
+      const zipUri = await exportService.generateBatchZip(loadedItems, {
+        dpi: 200,
+        quality: 'medium',
+        textForPage: ocrService.available ? (p) => ocrService.linesForExport(p) : undefined,
+        onProgress: (current: number, total: number) => {
+          setToolkitBusyText(formatString(t.library.batchExporting, { current, total }));
+        },
+      });
+      await exportService.shareDocument(zipUri, 'zip', t.export.shareTitle);
+      exitSelectMode();
+    } catch {
+      Alert.alert(t.common.error, t.library.batchExportFailed);
+    } finally {
+      resumeOcr();
+      setToolkitBusyText(null);
+    }
+  };
+
+  const handleBatchDelete = () => {
+    if (orderedSelectedIds.length === 0) return;
+    Alert.alert(
+      formatString(t.library.batchDeleteTitle, { count: orderedSelectedIds.length }),
+      formatString(t.library.batchDeleteConfirm, { count: orderedSelectedIds.length }),
+      [
+        { text: t.common.cancel, style: 'cancel' },
+        {
+          text: t.common.delete,
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const ids = [...orderedSelectedIds];
+              exitSelectMode();
+              await documentRepository.deleteMany(ids);
+              await loadData();
+            } catch {
+              Alert.alert(t.common.error, t.library.deleteDocumentFailed);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const selectedFolder = folders.find((f) => f.id === selectedFolderId) ?? null;
 
   return (
@@ -252,8 +423,12 @@ export default function LibraryScreen() {
         },
       }} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="photo.on.rectangle" accessibilityLabel={t.scan.importPhotos} disabled={scanner.busy} onPress={() => void scanner.importFromLibrary()} />
+        <Stack.Toolbar.Button icon="photo.on.rectangle" accessibilityLabel={t.scan.importPhotos} disabled={scanner.busy || toolkitBusyText !== null} onPress={() => void scanner.importFromLibrary()} />
         <Stack.Toolbar.Menu icon="ellipsis.circle" accessibilityLabel={t.library.options}>
+          <Stack.Toolbar.MenuAction icon="doc.badge.plus" onPress={() => void handleImportFiles()}>{t.library.importFiles}</Stack.Toolbar.MenuAction>
+          <Stack.Toolbar.MenuAction icon="checkmark.circle" onPress={() => { if (selectMode) exitSelectMode(); else setSelectMode(true); }}>
+            {selectMode ? t.common.done : t.library.select}
+          </Stack.Toolbar.MenuAction>
           <Stack.Toolbar.MenuAction icon="magnifyingglass" onPress={() => router.push('/search')}>{t.search.title}</Stack.Toolbar.MenuAction>
           <Stack.Toolbar.Menu title={t.library.sort} icon="arrow.up.arrow.down">
             {([
@@ -265,6 +440,14 @@ export default function LibraryScreen() {
           </Stack.Toolbar.Menu>
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
+      {toolkitBusyText ? (
+        <View style={[styles.busyBanner, { backgroundColor: colors.primarySubdued, borderBottomColor: colors.borderLight }]}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[typography.footnote, { color: colors.textPrimary, fontWeight: '600', marginLeft: 10 }]}>
+            {toolkitBusyText}
+          </Text>
+        </View>
+      ) : null}
       <FlatList
         data={loading && !refreshing ? [] : documents}
         keyExtractor={(item) => item.id}
@@ -272,31 +455,55 @@ export default function LibraryScreen() {
         columnWrapperStyle={styles.columnWrapper}
         contentInsetAdjustmentBehavior="automatic"
         keyboardDismissMode="on-drag"
-        contentContainerStyle={[styles.listContainer, { paddingHorizontal: spacing.base, paddingBottom: spacing.hero, flexGrow: 1 }]}
+        contentContainerStyle={[
+          styles.listContainer,
+          { paddingHorizontal: spacing.base, paddingBottom: selectMode ? 140 : spacing.hero, flexGrow: 1 },
+        ]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         ListHeaderComponent={
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsContainer}>
-            <Chip label={t.common.all} selected={selectedFolderId === null} onPress={() => setSelectedFolderId(null)} />
-            {folders.map((folder) => {
-              const isSelected = selectedFolderId === folder.id;
-              return (
-                <Chip
-                  key={folder.id}
-                  label={folder.name}
-                  selected={isSelected}
-                  onPress={() => {
-                    if (isSelected) {
-                      setActiveFolderForOptions(folder);
-                    } else {
-                      setSelectedFolderId(folder.id);
-                    }
-                  }}
-                  onLongPress={() => setActiveFolderForOptions(folder)}
-                />
-              );
-            })}
-            <Chip icon="plus" label={t.library.newFolder} tint={colors.primary} onPress={handleOpenCreateFolder} />
-          </ScrollView>
+          <View>
+            {selectMode ? (
+              <View style={[styles.selectionHeader, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                <Text style={[typography.subhead, { color: colors.textPrimary, fontWeight: '600', flex: 1 }]}>
+                  {formatString(t.library.selectedCount, { count: selectedIds.size })}
+                </Text>
+                {documents.length > 0 ? (
+                  <TouchableOpacity onPress={handleToggleSelectAll} style={styles.selectionHeaderBtn}>
+                    <Text style={[typography.subhead, { color: colors.primary }]}>
+                      {selectedIds.size === documents.length ? t.library.deselectAll : t.library.selectAll}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity onPress={exitSelectMode} style={[styles.selectionHeaderBtn, { marginLeft: 12 }]}>
+                  <Text style={[typography.subhead, { color: colors.primary, fontWeight: '600' }]}>
+                    {t.common.done}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsContainer}>
+              <Chip label={t.common.all} selected={selectedFolderId === null} onPress={() => setSelectedFolderId(null)} />
+              {folders.map((folder) => {
+                const isSelected = selectedFolderId === folder.id;
+                return (
+                  <Chip
+                    key={folder.id}
+                    label={folder.name}
+                    selected={isSelected}
+                    onPress={() => {
+                      if (isSelected) {
+                        setActiveFolderForOptions(folder);
+                      } else {
+                        setSelectedFolderId(folder.id);
+                      }
+                    }}
+                    onLongPress={() => setActiveFolderForOptions(folder)}
+                  />
+                );
+              })}
+              <Chip icon="plus" label={t.library.newFolder} tint={colors.primary} onPress={handleOpenCreateFolder} />
+            </ScrollView>
+          </View>
         }
         ListEmptyComponent={loading && !refreshing ? (
           <View style={styles.centerContainer}><ActivityIndicator size="small" color={colors.primary} /></View>
@@ -317,6 +524,7 @@ export default function LibraryScreen() {
             </Text>
             {!isSearching && <Button icon="camera" title={t.library.startScan} onPress={() => scanner.scan()} disabled={scanner.busy} style={{ marginTop: spacing.xl }} />}
             {!isSearching && <Button variant="plain" size="medium" icon="photo.on.rectangle" title={t.scan.importPhotos} onPress={() => scanner.importFromLibrary()} disabled={scanner.busy} style={{ marginTop: spacing.md }} />}
+            {!isSearching && <Button variant="plain" size="medium" icon="doc.badge.plus" title={t.library.importFiles} onPress={() => void handleImportFiles()} disabled={scanner.busy || toolkitBusyText !== null} style={{ marginTop: spacing.xs }} />}
             {!isSearching && selectedFolder ? (
               <View style={styles.emptyFolderActions}>
                 <Button
@@ -337,10 +545,80 @@ export default function LibraryScreen() {
           </View>
         )}
         renderItem={({ item }) => (
-          <DocumentCard document={item} snippet={isSearching ? snippets.get(item.id) ?? null : null}
-            onPress={() => router.push(`/document/${item.id}` as any)} onMenuPress={() => setActiveDocForAction(item)} />
+          <DocumentCard
+            document={item}
+            snippet={isSearching ? snippets.get(item.id) ?? null : null}
+            selectMode={selectMode}
+            selected={selectedIds.has(item.id)}
+            onPress={() => {
+              if (selectMode) {
+                toggleSelectDocument(item.id);
+              } else {
+                router.push(`/document/${item.id}` as any);
+              }
+            }}
+            onMenuPress={() => {
+              if (selectMode) {
+                toggleSelectDocument(item.id);
+              } else {
+                setActiveDocForAction(item);
+              }
+            }}
+          />
         )}
       />
+
+      {/* Multi-select bottom action bar */}
+      {selectMode && selectedIds.size > 0 ? (
+        <View style={[styles.batchBar, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleBatchMove}
+            style={styles.batchActionBtn}
+            accessibilityRole="button"
+          >
+            <Icon name="folder" size={20} color={colors.primary} />
+            <Text numberOfLines={1} style={[typography.caption2, { color: colors.textPrimary, marginTop: 4 }]}>
+              {t.library.moveToFolder}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleBatchMerge}
+            disabled={selectedIds.size < 2}
+            style={[styles.batchActionBtn, selectedIds.size < 2 && { opacity: 0.4 }]}
+            accessibilityRole="button"
+          >
+            <Icon name="doc.on.doc" size={20} color={colors.primary} />
+            <Text numberOfLines={1} style={[typography.caption2, { color: colors.textPrimary, marginTop: 4 }]}>
+              {t.library.mergeSelected}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => void handleBatchExport()}
+            disabled={toolkitBusyText !== null}
+            style={styles.batchActionBtn}
+            accessibilityRole="button"
+          >
+            <Icon name="square.and.arrow.up" size={20} color={colors.primary} />
+            <Text numberOfLines={1} style={[typography.caption2, { color: colors.textPrimary, marginTop: 4 }]}>
+              {t.common.share}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleBatchDelete}
+            style={styles.batchActionBtn}
+            accessibilityRole="button"
+          >
+            <Icon name="trash" size={20} color={colors.danger} />
+            <Text numberOfLines={1} style={[typography.caption2, { color: colors.danger, marginTop: 4 }]}>
+              {t.common.delete}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* Document Action Modal – runs the chosen action once the menu is gone */}
       <DocumentActionModal
@@ -419,5 +697,47 @@ const styles = StyleSheet.create({
     marginTop: 16,
     alignItems: 'center',
     gap: 8,
+  },
+  busyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: hairline,
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 6,
+    borderWidth: hairline,
+    ...corner(radius.md),
+  },
+  selectionHeaderBtn: {
+    minHeight: 32,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  batchBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 92,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderWidth: hairline,
+    ...corner(radius.lg),
+  },
+  batchActionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 4,
   },
 });

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Icon } from '../../../src/components/ui/Icon';
 import { concentric, corner, hairline, radius, useTheme } from '../../../src/theme';
 import { useTranslation } from '../../../src/i18n';
@@ -19,6 +19,7 @@ import {
   documentRepository,
   exportService,
   ocrService,
+  pdfToolkitService,
   storageService,
 } from '../../../src/services';
 import type { Document } from '../../../src/types';
@@ -31,8 +32,9 @@ function stripPdfExtension(name: string): string {
 export default function ToolsScreen() {
   const { colors, typography, spacing } = useTheme();
   const { t, formatString } = useTranslation();
+  const router = useRouter();
 
-  const [busyMode, setBusyMode] = useState<'pdf' | 'scan' | null>(null);
+  const [busyMode, setBusyMode] = useState<'import' | 'pdf' | 'scan' | null>(null);
   const [progressText, setProgressText] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -52,6 +54,38 @@ export default function ToolsScreen() {
       loadDocuments();
     }, [loadDocuments])
   );
+
+  const handleImportToLibrary = async () => {
+    if (busyMode !== null) return;
+    setBusyMode('import');
+    setProgressText(t.library.importFiles);
+    try {
+      const now = new Date();
+      const defaultTitle = formatString(t.scan.documentTitle, {
+        date: now.toLocaleDateString(),
+        time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+      const outcome = await pdfToolkitService.pickAndImportFiles({
+        defaultTitle,
+        onProgress: (current: number, total: number) => {
+          setProgressText(formatString(t.scan.processing, { current, total }));
+        },
+      });
+      if (outcome.status === 'saved') {
+        await loadDocuments();
+        router.push(`/document/${outcome.documentId}` as any);
+      } else if (outcome.status === 'unavailable') {
+        Alert.alert(t.library.importPdfUnavailableTitle, t.library.importPdfUnavailableMessage);
+      } else if (outcome.status === 'locked') {
+        Alert.alert(t.library.importPdfLockedTitle, t.library.importPdfLockedMessage);
+      } else if (outcome.status === 'failed') {
+        Alert.alert(t.common.error, t.library.importPdfFailed);
+      }
+    } finally {
+      setBusyMode(null);
+      setProgressText(null);
+    }
+  };
 
   const handleConvertPdfFile = async () => {
     if (busyMode !== null) return;
@@ -184,6 +218,52 @@ export default function ToolsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[styles.scrollContent, { paddingHorizontal: spacing.base }]}
       >
+        {/* Section: PDF Toolkit */}
+        <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary }]}>
+          {t.tools.pdfToolkitSection}
+        </Text>
+
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder, marginBottom: spacing.lg }]}>
+          <TouchableOpacity
+            activeOpacity={0.75}
+            disabled={busyMode !== null}
+            onPress={() => void handleImportToLibrary()}
+            style={[
+              styles.actionButton,
+              {
+                backgroundColor: colors.surfaceSubdued,
+                borderColor: colors.borderLight,
+                borderWidth: hairline,
+                opacity: busyMode !== null && busyMode !== 'import' ? 0.5 : 1,
+              },
+            ]}
+          >
+            {busyMode === 'import' ? (
+              <View style={styles.busyRow}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[typography.bodyBold, { color: colors.textPrimary, marginLeft: 10 }]}>
+                  {progressText ?? t.library.importFiles}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.actionInner}>
+                <View style={styles.actionLeft}>
+                  <Icon name="doc.badge.plus" size={20} color={colors.primary} style={{ marginRight: 12 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[typography.bodyBold, { color: colors.textPrimary }]}>
+                      {t.tools.importPdfTitle}
+                    </Text>
+                    <Text style={[typography.caption2, { color: colors.textSecondary, marginTop: 2 }]}>
+                      {t.tools.importPdfSubtitle}
+                    </Text>
+                  </View>
+                </View>
+                <Icon name="chevron.right" size={16} color={colors.textMuted} />
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
         {/* Section: Convert to Word */}
         <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary }]}>
           {t.tools.convertToWordSection}

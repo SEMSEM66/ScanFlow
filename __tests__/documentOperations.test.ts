@@ -6,48 +6,26 @@ import {
   deduplicateFileNames,
   planPageExtraction,
   planPageSplit,
+  sanitizeFileName,
   validatePdfPassword,
 } from '../src/db/documentOperations';
-import { MIGRATIONS } from '../src/db/migrations';
-import { sanitizeFileName } from '../src/services/ExportService';
+import { runMigrations, type MigrationDb } from '../src/db/migrations';
+import { CREATE_DOCUMENTS_TABLE, CREATE_FOLDERS_TABLE, CREATE_INDEXES, CREATE_PAGES_TABLE } from '../src/db/schema';
 
-function openMigratedDb(): DatabaseSync {
+async function openMigratedDb(): Promise<DatabaseSync> {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON;');
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS folders (
-      id TEXT PRIMARY KEY NOT NULL,
-      name TEXT NOT NULL,
-      created_at INTEGER NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS documents (
-      id TEXT PRIMARY KEY NOT NULL,
-      title TEXT NOT NULL,
-      folder_id TEXT,
-      page_count INTEGER NOT NULL DEFAULT 0,
-      thumbnail_uri TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      FOREIGN KEY (folder_id) REFERENCES folders (id) ON DELETE SET NULL
-    );
-    CREATE TABLE IF NOT EXISTS pages (
-      id TEXT PRIMARY KEY NOT NULL,
-      document_id TEXT NOT NULL,
-      page_number INTEGER NOT NULL,
-      original_uri TEXT NOT NULL,
-      preview_uri TEXT NOT NULL,
-      filter TEXT NOT NULL DEFAULT 'original',
-      rotation INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE
-    );
-  `);
-  for (const m of MIGRATIONS) {
-    for (const stmt of m.statements) {
-      db.exec(stmt);
-    }
-  }
+  db.exec(CREATE_FOLDERS_TABLE);
+  db.exec(CREATE_DOCUMENTS_TABLE);
+  db.exec(CREATE_PAGES_TABLE);
+  db.exec(CREATE_INDEXES);
+  const adapter: MigrationDb = {
+    execAsync: async (sql) => void db.exec(sql),
+    runAsync: async (sql) => db.prepare(sql).run(),
+    getAllAsync: async <T,>(sql: string) => db.prepare(sql).all() as T[],
+    getFirstAsync: async <T,>(sql: string) => (db.prepare(sql).get() as T) ?? null,
+  };
+  await runMigrations(adapter);
   return db;
 }
 
@@ -76,8 +54,8 @@ describe('documentOperations (M1 PDF Toolkit)', () => {
       });
     });
 
-    it('preserves foreign-key page_text rows when moving split pages in SQLite', () => {
-      const db = openMigratedDb();
+    it('preserves foreign-key page_text rows when moving split pages in SQLite', async () => {
+      const db = await openMigratedDb();
       const now = 1700000000000;
       db.prepare(
         'INSERT INTO documents (id, title, folder_id, page_count, thumbnail_uri, created_at, updated_at) VALUES (?, ?, NULL, 3, ?, ?, ?)'

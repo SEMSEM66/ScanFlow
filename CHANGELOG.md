@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.0] - 2026-11-06
+
+Phase V2 Milestones **M0 (Foundations)** and **M1 (PDF Toolkit)**: PDF & image import from the Files app ("Open in ScanFlow"), Library multi-select with batch move / merge / ZIP export / delete, page split & extract in the page overview, and password-protected PDF export.
+
+### Added
+- **M0 – Entitlements foundation (`src/entitlements/`):** typed `FeatureKey` catalog (`FREE_FEATURES`, `PRO_FEATURES`) and `isUnlocked(feature)` gate (default `'all_unlocked'` until M5, tested in `__tests__/entitlements.test.ts`).
+- **M0 – i18n parity test (`__tests__/i18n.test.ts`):** automated test asserting identical nested keys, non-empty strings, and matching `{{placeholder}}` variables across German (`de.ts`) and English (`en.ts`).
+- **M0 – Native spike template & CI budget savers:** `docs/spikes/_template.md`, `docs/spikes/m1-pdf-toolkit-native.md`, `docs/RELEASING.md`, and `concurrency` + `paths-ignore` + `npm` caching in `.github/workflows/build-ipa.yml`.
+- **M1 – Import PDFs & images from Files and "Open in ScanFlow":**
+  - Registered PDF (`com.adobe.pdf`) and image (`public.image`) document types in `Info.plist` (`app.json`) and handled incoming `file://` URLs in `app/_layout.tsx`.
+  - Added *PDF oder Bilder importieren* to the Library menu, empty state, document *Seite hinzufügen* menu, and *Werkzeuge* tab (`PdfToolkitService`).
+  - Added `getPdfInfoAsync` and `renderPdfPageAsync` (200 dpi page-by-page rasterization inside `autoreleasepool`, capped at 2400 px long side, memory-safe for 50+ page PDFs) to `modules/scanflow-ocr/ios/ScanFlowOcrModule.swift`, followed by automatic background OCR. Shows a clear explanation when PDF import is attempted in Expo Go.
+- **M1 – Library multi-select & batch ZIP export:**
+  - *Auswählen* mode in the Library (`app/(tabs)/(library)/index.tsx`, `DocumentCard.tsx`): select/deselect cards, *Alle auswählen*, batch move (`app/sheets/move.tsx`), batch merge (*Zusammenfügen*), batch export (single PDF or multi-document `.zip` archive via `ExportService.generateBatchZip` and `src/docx/zip.ts`), and batch delete with confirmation.
+- **M1 – Merge documents & split/extract pages:**
+  - `DocumentRepository.mergeDocuments`, `extractPagesToDocument`, and `splitDocumentAtPage` (pure planning helpers in `src/db/documentOperations.ts`, preserving non-destructive page state, previews, and `page_text` OCR rows; tested in `__tests__/documentOperations.test.ts`).
+  - Page overview (`PageEditorModal.tsx`): select pages to extract into a new document (*Extrahieren*), or split the document at any page ≥ 2 (*Ab Seite N teilen*).
+- **M1 – Password-protected PDF export:**
+  - Native PDFKit encryption (`encryptPdfAsync` in `ScanFlowOcrModule.swift` using `PDFDocumentWriteOption.userPasswordOption` / `.ownerPasswordOption`), post-write verification (`isEncrypted && isLocked && unlock(withPassword:)`), and guaranteed deletion of the unencrypted temporary PDF in `defer`.
+  - Export sheet (`ExportModal.tsx`): *Passwortschutz* toggle for PDF exports, password + confirmation fields, show/hide toggle, minimum length validation (≥ 4 chars), and warning that lost passwords cannot be recovered.
+
+---
+
 ## [1.8.0] - 2026-11-06
 
 Convert to Word (`.docx`), Settings *Über* section, and fixes from the v1.7.0 physical iPhone test.

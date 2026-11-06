@@ -46,6 +46,16 @@ export function planPageExtraction(
   return orderedPageIds.filter((id) => selected.has(id));
 }
 
+/** File name without characters that iOS / receiving apps dislike. */
+export function sanitizeFileName(title: string): string {
+  const clean = title
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+  return clean.length > 0 ? clean : 'Scan';
+}
+
 /**
  * Generates unique file names for a batch ZIP archive (e.g. `["Scan.pdf", "Scan (2).pdf"]`)
  * so two documents with the same title never overwrite each other in the archive.
@@ -53,7 +63,7 @@ export function planPageExtraction(
 export function deduplicateFileNames(
   titles: readonly string[],
   extension: string,
-  sanitize: (title: string) => string
+  sanitize: (title: string) => string = sanitizeFileName
 ): string[] {
   const ext = extension.startsWith('.') ? extension : `.${extension}`;
   const used = new Map<string, number>();

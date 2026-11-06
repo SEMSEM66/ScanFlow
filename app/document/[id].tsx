@@ -21,6 +21,7 @@ import {
   ensurePagePreview,
   scanNotices,
   ocrService,
+  pdfToolkitService,
 } from '../../src/services';
 import {
   Adjustments,
@@ -307,13 +308,93 @@ export default function DocumentDetailScreen() {
     await afterScan(await scanner.importFromLibrary({ documentId: document.id }));
   };
 
+  const importPagesFromFiles = async () => {
+    if (!document) return;
+    const outcome = await pdfToolkitService.pickAndImportFiles({
+      defaultTitle: document.title,
+      documentId: document.id,
+    });
+    if (outcome.status === 'saved' && mounted.current) {
+      await loadDocumentData();
+    } else if (outcome.status === 'unavailable') {
+      Alert.alert(t.library.importPdfUnavailableTitle, t.library.importPdfUnavailableMessage);
+    } else if (outcome.status === 'locked') {
+      Alert.alert(t.library.importPdfLockedTitle, t.library.importPdfLockedMessage);
+    } else if (outcome.status === 'failed') {
+      Alert.alert(t.common.error, t.library.importPdfFailed);
+    }
+  };
+
   const handleAddPage = () => {
     Alert.alert(t.filters.addPage, t.filters.addPageSource, [
       { text: t.common.cancel, style: 'cancel' },
       // short delay: let the alert finish closing before a native picker / scanner is presented
       { text: t.filters.fromLibrary, onPress: () => setTimeout(importPagesFromLibrary, 300) },
+      { text: t.library.importFiles, onPress: () => setTimeout(importPagesFromFiles, 300) },
       { text: t.filters.fromCamera, onPress: () => setTimeout(() => scanPages(), 300) },
     ]);
+  };
+
+  const handleExtractPages = (selectedPageIds: string[]) => {
+    if (!document || selectedPageIds.length === 0) return;
+    closeEditorThen(async () => {
+      try {
+        const defaultTitle = formatString(t.filters.extractDefaultTitle, { title: document.title });
+        const created = await documentRepository.extractPagesToDocument(
+          document.id,
+          selectedPageIds,
+          defaultTitle
+        );
+        if (!created || !mounted.current) return;
+        Alert.alert(t.filters.extractSuccessTitle, t.filters.extractSuccessMessage, [
+          { text: t.filters.stayHere, style: 'cancel' },
+          {
+            text: t.filters.openNewDocument,
+            onPress: () => router.push(`/document/${created.id}` as never),
+          },
+        ]);
+      } catch (err) {
+        console.error('[DocumentDetailScreen] Extract pages failed:', err);
+        Alert.alert(t.common.error, t.filters.extractFailed);
+      }
+    });
+  };
+
+  const handleSplitAtPage = (splitPageNumber: number) => {
+    if (!document || splitPageNumber < 2 || splitPageNumber > pages.length) return;
+    Alert.alert(
+      formatString(t.filters.splitConfirmTitle, { page: splitPageNumber }),
+      formatString(t.filters.splitConfirmMessage, { prev: splitPageNumber - 1, page: splitPageNumber }),
+      [
+        { text: t.common.cancel, style: 'cancel' },
+        {
+          text: t.filters.splitAction,
+          onPress: () =>
+            closeEditorThen(async () => {
+              try {
+                const defaultTitle = formatString(t.filters.splitDefaultTitle, { title: document.title });
+                const created = await documentRepository.splitDocumentAtPage(
+                  document.id,
+                  splitPageNumber,
+                  defaultTitle
+                );
+                await loadDocumentData();
+                if (!created || !mounted.current) return;
+                Alert.alert(t.filters.extractSuccessTitle, t.filters.extractSuccessMessage, [
+                  { text: t.filters.stayHere, style: 'cancel' },
+                  {
+                    text: t.filters.openNewDocument,
+                    onPress: () => router.push(`/document/${created.id}` as never),
+                  },
+                ]);
+              } catch (err) {
+                console.error('[DocumentDetailScreen] Split document failed:', err);
+                Alert.alert(t.common.error, t.filters.splitFailed);
+              }
+            }),
+        },
+      ]
+    );
   };
 
   // The page editor is a modal: native pickers / the scanner can only be presented once it is gone.
@@ -540,6 +621,8 @@ export default function DocumentDetailScreen() {
           if (page) closeEditorThen(() => scanPages(page.id));
         }}
         onAddPage={() => closeEditorThen(handleAddPage)}
+        onExtractPages={handleExtractPages}
+        onSplitAtPage={handleSplitAtPage}
         onDismiss={runEditorAction}
       />
 

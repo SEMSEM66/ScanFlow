@@ -10,12 +10,13 @@ import type { Document, Folder } from '../../src/types';
 
 /** Choose a destination using the system sheet; return to the source screen after the move. */
 export default function MoveSheet() {
-  const { documentId } = useLocalSearchParams<{ documentId: string }>();
+  const { documentId, documentIds } = useLocalSearchParams<{ documentId?: string; documentIds?: string }>();
   const router = useRouter();
   const navigation = useNavigation();
   const { colors, typography } = useTheme();
   const { t } = useTranslation();
   const [document, setDocument] = useState<Document | null>(null);
+  const [batchIds, setBatchIds] = useState<string[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -27,6 +28,22 @@ export default function MoveSheet() {
     mounted.current = true;
     (async () => {
       try {
+        const parsedBatch = (documentIds ?? '')
+          .split(',')
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0);
+        if (parsedBatch.length > 0) {
+          const list = await folderRepository.getAll();
+          if (!mounted.current) return;
+          setBatchIds(parsedBatch);
+          setFolders(list);
+          return;
+        }
+        if (!documentId) {
+          Alert.alert(t.common.error, t.common.notFound);
+          router.back();
+          return;
+        }
         const [data, list] = await Promise.all([
           documentRepository.getById(documentId), folderRepository.getAll(),
         ]);
@@ -40,14 +57,18 @@ export default function MoveSheet() {
       } finally { if (mounted.current) setLoading(false); }
     })();
     return () => { mounted.current = false; };
-  }, [documentId, router, t]);
+  }, [documentId, documentIds, router, t]);
 
   const move = async (folderId: string | null) => {
-    if (!document || moving.current) return;
+    if ((!document && batchIds.length === 0) || moving.current) return;
     moving.current = true;
     setBusy(true);
     try {
-      await documentRepository.moveToFolder(document.id, folderId);
+      if (batchIds.length > 0) {
+        await documentRepository.moveManyToFolder(batchIds, folderId);
+      } else if (document) {
+        await documentRepository.moveToFolder(document.id, folderId);
+      }
       if (mounted.current) router.back();
     } catch (error) {
       console.error('[MoveSheet] move failed:', error);
@@ -58,7 +79,7 @@ export default function MoveSheet() {
     }
   };
   const row = (id: string | null, label: string) => {
-    const selected = document?.folderId === id;
+    const selected = batchIds.length === 0 && document?.folderId === id;
     return (
       <TouchableOpacity key={id ?? 'none'} onPress={() => void move(id)} disabled={busy} accessibilityRole="button"
         style={[styles.row, { borderBottomColor: colors.borderLight }, selected && { backgroundColor: colors.surfaceSubdued }]}>

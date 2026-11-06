@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
-import { Stack, ThemeProvider as NavigationThemeProvider, DefaultTheme, DarkTheme } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, ActivityIndicator, StyleSheet, Platform, Alert } from 'react-native';
+import * as Linking from 'expo-linking';
+import { Stack, ThemeProvider as NavigationThemeProvider, DefaultTheme, DarkTheme, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -11,11 +12,14 @@ import { ScannerProvider } from '../src/components/ScannerProvider';
 import { getDatabase } from '../src/db/database';
 import { storageService } from '../src/services/StorageService';
 import { ocrService } from '../src/services/OcrService';
+import { pdfToolkitService } from '../src/services/PdfToolkitService';
 
 function RootNavigation() {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
+  const router = useRouter();
   const [isReady, setIsReady] = useState(false);
+  const lastHandledUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     async function initApp() {
@@ -36,6 +40,36 @@ function RootNavigation() {
     }
     initApp();
   }, []);
+
+  // Handle "Open in ScanFlow" incoming file:// URLs (PDFs and images from Files / Share Sheet)
+  useEffect(() => {
+    if (!isReady) return;
+    const processIncomingUrl = async (url: string | null) => {
+      if (!url || !url.startsWith('file://') || lastHandledUrlRef.current === url) return;
+      lastHandledUrlRef.current = url;
+      const outcome = await pdfToolkitService.handleIncomingUrl(url, {
+        defaultTitle: t.library.title,
+      });
+      if (!outcome) return;
+      if (outcome.status === 'saved') {
+        router.push(`/document/${outcome.documentId}` as any);
+      } else if (outcome.status === 'unavailable') {
+        Alert.alert(t.library.importPdfUnavailableTitle, t.library.importPdfUnavailableMessage);
+      } else if (outcome.status === 'locked') {
+        Alert.alert(t.library.importPdfLockedTitle, t.library.importPdfLockedMessage);
+      } else if (outcome.status === 'failed') {
+        Alert.alert(t.common.error, t.library.importPdfFailed);
+      }
+    };
+
+    void Linking.getInitialURL().then(processIncomingUrl);
+    const sub = Linking.addEventListener('url', (event) => {
+      void processIncomingUrl(event.url);
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [isReady, router, t]);
 
   if (!isReady) {
     return (

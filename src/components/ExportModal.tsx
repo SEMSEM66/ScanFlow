@@ -5,12 +5,16 @@ import {
   StyleSheet,
   ActivityIndicator,
   Switch,
+  TextInput,
+  TouchableOpacity,
 } from 'react-native';
 import { Icon } from './ui/Icon';
 import { SegmentedControl } from './ui/NativeSegmentedControl';
-import { hairline, useTheme } from '../theme';
+import { corner, hairline, radius, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { ExportDpi, ExportFormat, ExportQuality } from '../types';
+import { validatePdfPassword } from '../db/documentOperations';
+import { isUnlocked } from '../entitlements';
 import { exportService } from '../services/ExportService';
 import { authService } from '../services/AuthService';
 import { ocrService } from '../services/OcrService';
@@ -22,7 +26,13 @@ const FORMAT_OPTIONS: ExportFormat[] = ['pdf', 'docx', 'jpg'];
 interface ExportModalProps {
   documentTitle: string;
   pageCount: number;
-  onShare: (format: ExportFormat, quality: ExportQuality, dpi: ExportDpi, watermark?: string) => Promise<void>;
+  onShare: (
+    format: ExportFormat,
+    quality: ExportQuality,
+    dpi: ExportDpi,
+    watermark?: string,
+    password?: string
+  ) => Promise<void>;
   /** True while the file is created and handed to the share sheet – the sheet cannot be closed then. */
   isGenerating?: boolean;
   /** Export progress (pages rendered). */
@@ -43,6 +53,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [quality, setQuality] = useState<ExportQuality>('medium');
   const [dpi, setDpi] = useState<ExportDpi>(200);
   const [includeWatermark, setIncludeWatermark] = useState(false);
+  const [includePassword, setIncludePassword] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const canEncryptPdf = exportService.canEncryptPdf;
+  const availableFormats: ExportFormat[] = isUnlocked('word_export') ? FORMAT_OPTIONS : ['pdf', 'jpg'];
 
   // Defaults from settings when the sheet opens.
   useEffect(() => {
@@ -55,9 +72,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     language
   );
 
+  const passwordValidation = validatePdfPassword(password, confirmPassword);
+  const passwordActive = format === 'pdf' && includePassword && canEncryptPdf;
+  const passwordInvalid = passwordActive && !passwordValidation.valid;
+
   const handleSharePress = async () => {
+    if (passwordInvalid) return;
     const watermarkText = format === 'pdf' && includeWatermark ? t.export.watermarkText : undefined;
-    await onShare(format, quality, dpi, watermarkText);
+    const pdfPassword = passwordActive ? password : undefined;
+    await onShare(format, quality, dpi, watermarkText, pdfPassword);
   };
 
   return (
@@ -76,13 +99,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         </Text>
 
         <SegmentedControl
-          values={[t.export.pdf, t.export.docx, t.export.jpg]}
-          selectedIndex={FORMAT_OPTIONS.indexOf(format)}
+          values={availableFormats.map((f) => (f === 'pdf' ? t.export.pdf : f === 'docx' ? t.export.docx : t.export.jpg))}
+          selectedIndex={Math.max(0, availableFormats.indexOf(format))}
           appearance={isDark ? 'dark' : 'light'}
           enabled={!isGenerating}
           style={styles.segment}
           onChange={(event) => {
-            const next = FORMAT_OPTIONS[event.nativeEvent.selectedSegmentIndex];
+            const next = availableFormats[event.nativeEvent.selectedSegmentIndex];
             if (next) setFormat(next);
           }}
         />
@@ -151,8 +174,90 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             <Switch
               value={includeWatermark}
               onValueChange={setIncludeWatermark}
+              disabled={isGenerating}
               trackColor={{ false: colors.border, true: colors.primary }}
             />
+          </View>
+        )}
+
+        {/* Security Feature: Password-Protected PDF Toggle (PDF only) */}
+        {format === 'pdf' && isUnlocked('pdf_password') && (
+          <View style={[styles.passwordSection, { borderColor: colors.borderLight }]}>
+            <View style={styles.passwordToggleRow}>
+              <View style={styles.watermarkTextWrap}>
+                <Icon name="lock.fill" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+                <Text style={[typography.body, { color: colors.textPrimary }]}>
+                  {t.export.passwordProtection}
+                </Text>
+              </View>
+              <Switch
+                value={canEncryptPdf && includePassword}
+                onValueChange={setIncludePassword}
+                disabled={!canEncryptPdf || isGenerating}
+                trackColor={{ false: colors.border, true: colors.primary }}
+              />
+            </View>
+
+            {!canEncryptPdf && (
+              <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 4 }]}>
+                {t.export.passwordExpoGoHint}
+              </Text>
+            )}
+
+            {canEncryptPdf && includePassword && (
+              <View style={styles.passwordFields}>
+                <View style={[styles.passwordInputRow, { backgroundColor: colors.surfaceSubdued, borderColor: colors.borderLight }]}>
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder={t.export.passwordPlaceholder}
+                    placeholderTextColor={colors.textMuted}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isGenerating}
+                    style={[typography.body, styles.passwordInput, { color: colors.textPrimary }]}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword((prev) => !prev)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? t.export.passwordHide : t.export.passwordShow}
+                  >
+                    <Icon name={showPassword ? 'eye.slash' : 'eye'} size={18} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={[styles.passwordInputRow, { backgroundColor: colors.surfaceSubdued, borderColor: colors.borderLight }]}>
+                  <TextInput
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder={t.export.passwordConfirmPlaceholder}
+                    placeholderTextColor={colors.textMuted}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isGenerating}
+                    style={[typography.body, styles.passwordInput, { color: colors.textPrimary }]}
+                  />
+                </View>
+
+                {!passwordValidation.valid && (password.length > 0 || confirmPassword.length > 0) && (
+                  <Text style={[typography.caption1, { color: colors.danger }]}>
+                    {passwordValidation.reason === 'too_short'
+                      ? t.export.passwordTooShort
+                      : t.export.passwordMismatch}
+                  </Text>
+                )}
+
+                <View style={[styles.passwordWarningBox, { backgroundColor: colors.surfaceSubdued }]}>
+                  <Icon name="exclamationmark.triangle" size={16} color={colors.warning} style={{ marginRight: 8 }} />
+                  <Text style={[typography.caption2, { color: colors.textSecondary, flex: 1 }]}>
+                    {t.export.passwordWarning}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
         )}
 
@@ -168,6 +273,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         <Button
           onPress={handleSharePress}
           loading={isGenerating}
+          disabled={passwordInvalid}
           title={t.export.share}
           icon="square.and.arrow.up"
           style={{ marginTop: spacing.lg, marginBottom: spacing.xxl }}
@@ -209,6 +315,40 @@ const styles = StyleSheet.create({
   watermarkTextWrap: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  passwordSection: {
+    marginTop: 8,
+    paddingTop: 10,
+    borderTopWidth: hairline,
+  },
+  passwordToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  passwordFields: {
+    marginTop: 10,
+    gap: 8,
+  },
+  passwordInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    height: 44,
+    borderWidth: hairline,
+    ...corner(radius.sm),
+  },
+  passwordInput: {
+    flex: 1,
+    height: '100%',
+    paddingRight: 8,
+  },
+  passwordWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    ...corner(radius.xs),
   },
   sizeInfoRow: {
     flexDirection: 'row',

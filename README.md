@@ -53,14 +53,24 @@ Designed as a clean, ad-free alternative to apps like CamScanner, ScanFlow proce
 - **Native navigation:** *Dokumente*, *Scannen*, *Werkzeuge*, *Einstellungen*. Scannen opens the scanner without switching tabs. Search across all folders is available from the library menu.
 - Continuous corners, SF Symbols and native segmented controls keep the interface consistent in light and dark mode. Test the native UI and share flow on an iPhone.
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow, the pipeline, the app lock, the text recognition and the bottom panels, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phases.
+### Word Conversion & Polish (v1.8.0)
+- **📄 Convert to Word (`.docx`):** convert any external PDF or ScanFlow document into an editable `.docx` file with reconstructed headings, paragraphs, multi-column tab stops and page breaks, 100 % offline on your iPhone (`verified by tests` in `__tests__/docx.test.ts`; device flow `UNVERIFIED (needs iPhone)`).
+- **🔎 Normalized title search:** case- and umlaut/ß-insensitive search across both document titles and recognized OCR text (`verified by tests` in `__tests__/textSearch.test.ts`).
+
+### Phase V2 – PDF Toolkit & Foundations (v1.9.0, M0 + M1)
+- **📥 PDF & Image Import ("Open in ScanFlow"):** import PDFs and images from the Files app (*Dokumente → … → PDF oder Bilder importieren*, *Werkzeuge*, or *Teilen → ScanFlow* in Files/Mail). PDF pages are rasterized serially at 200 dpi via Apple PDFKit (`getPdfInfoAsync`, `renderPdfPageAsync` in `modules/scanflow-ocr`) and queued for background OCR (`verified by tests` in `__tests__/pdfToolkit.test.ts`; native PDFKit execution `UNVERIFIED (needs iPhone)`).
+- **☑️ Library Multi-Select & Batch ZIP Export:** select multiple documents to move to a folder, merge into one document, delete, or export together as a single `.zip` archive (`verified by tests` in `__tests__/documentOperations.test.ts`; share sheet `UNVERIFIED (needs iPhone)`).
+- **✂️ Merge, Split & Extract Pages:** merge multiple documents from the Library, or open the page overview (`1 / N`) to select pages and extract them into a new document (*Extrahieren*) or split a document at page *N* (*Ab Seite N teilen*), preserving non-destructive edits and OCR text (`verified by tests` in `__tests__/documentOperations.test.ts`).
+- **🔐 Password-Protected PDF Export:** encrypt exported PDFs with a user/owner password via Apple PDFKit (`encryptPdfAsync`), verified after writing (`isEncrypted && isLocked`) with automatic deletion of the unencrypted temporary file (`verified by tests` for validation; native PDFKit encryption `UNVERIFIED (needs iPhone)`).
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow, the pipeline, the app lock, the text recognition, the PDF toolkit and the native sheets, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phases.
 
 ### Known limitations
 - ScanFlow's *own* camera has no live edge overlay / auto-capture (Expo Go offers no camera frame processing); live detection comes from the iOS scanner.
 - The language of the iOS scanner's buttons follows the app's localizations: German/English in the IPA build; in Expo Go it depends on Expo Go (may be English).
 - Photo import / own camera detection: if the sheet lies in a clear sleeve or the page is cut off by the image frame, the detected outline can be wrong (e.g. include the sleeve) – check the corners in *Zuschneiden*. In the iOS scanner the outline is visible live before capture and the corners can be adjusted before saving.
-- Text recognition / searchable PDF only in the installed app (IPA), not in Expo Go. It runs only while ScanFlow is open; an existing library is recognized gradually. Letters outside Western European languages are replaced in the invisible PDF text (the page image is unchanged); handwriting is recognized poorly.
-- The title search distinguishes upper/lower case for umlauts (`MÜLLER` does not find the title *Müller*); the text search does not.
+- Text recognition, searchable PDF, PDF file import, and password-protected PDF export require the installed app (IPA, `modules/scanflow-ocr`), not Expo Go. In Expo Go the app runs without crashing and shows a clear hint when those features are invoked.
+- Text recognition runs only while ScanFlow is open; an existing library is recognized gradually. Letters outside Western European languages are replaced in the invisible PDF text (the page image is unchanged); handwriting is recognized poorly.
 - JPG export exports the current page only.
 - **The app lock protects the app's screens, not the files.** ScanFlow does not encrypt its database and page images itself (not possible in Expo Go); iOS Data Protection encrypts them when a **device passcode** is set. Deleted files are removed immediately, but flash storage cannot be wiped securely by an app.
 - iPhone / iCloud backups include your documents like any other app data (the PIN and lock settings are not restored to another device).

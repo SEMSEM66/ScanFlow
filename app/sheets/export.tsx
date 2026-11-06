@@ -35,7 +35,13 @@ export default function ExportSheet() {
     })();
     return () => { mounted.current = false; };
   }, [documentId, router, t]);
-  const share = async (format: ExportFormat, quality: ExportQuality, dpi: ExportDpi, watermark?: string) => {
+  const share = async (
+    format: ExportFormat,
+    quality: ExportQuality,
+    dpi: ExportDpi,
+    watermark?: string,
+    password?: string
+  ) => {
     if (!data || running.current) return;
     running.current = true;
     setBusy(true);
@@ -50,6 +56,7 @@ export default function ExportSheet() {
           dpi,
           quality,
           watermark,
+          password,
           onProgress,
           textForPage: (page) => ocrService.linesForExport(page),
         });

@@ -550,11 +550,44 @@ compiled in CI (macOS) and tested on the iPhone (ROADMAP STOP C).
 
 ---
 
-## 11. Not yet implemented (see ROADMAP)
+## 11. Entitlements & PDF Toolkit (v1.9.0, M0 + M1)
+
+### Entitlements (`src/entitlements/index.ts`)
+- Centralizes Free vs. Pro feature keys (`FreeFeatureKey`, `ProFeatureKey`, `FeatureKey`) and exposes `isUnlocked(feature: FeatureKey): boolean`.
+- Default mode is `'all_unlocked'` until M5 (`v1.13.0`), so every user has full access while new features already call `isUnlocked(...)` at their entry points (`verified by tests` in `__tests__/entitlements.test.ts`).
+
+### Native Additions in `modules/scanflow-ocr` (`ScanFlowOcrModule.swift`)
+All native functions live in the single local Expo module `modules/scanflow-ocr` and run on `workerQueue` (`com.scanflow.ocr`, QoS `.utility`). In Expo Go, `getNativeModule()` returns `null` and callers degrade gracefully without crashing:
+
+| Function | Purpose | Verification Status |
+| --- | --- | --- |
+| `recognizeAsync(uri, options)` | Apple Vision text recognition on an image file (v1.5.0) | Swift compiled in CI; tested on iPhone in v1.5.1/v1.8.0 |
+| `recognizePdfAsync(uri, options)` | Extracts embedded PDF text or runs Apple Vision page by page for Word conversion (v1.8.0) | Swift compiled in CI; tested on iPhone in v1.8.0 |
+| `getPdfInfoAsync(uri)` | Opens a PDF via `PDFDocument(url:)` and returns `{ pageCount, isEncrypted, isLocked }` (v1.9.0) | Service logic `verified by tests` (`__tests__/pdfToolkit.test.ts`); Swift compilation in CI; device execution `UNVERIFIED (needs iPhone)` |
+| `renderPdfPageAsync(uri, pageIndex, dpi, outputUri)` | Rasterizes a single 0-based PDF page at `dpi` (default 200, long side capped at 2400 px) inside `autoreleasepool` onto a white RGB bitmap context (`page.draw(with: .mediaBox, to: ctx)`) and writes a JPEG (quality 0.90) to `outputUri` (v1.9.0) | Service logic `verified by tests`; Swift compilation in CI; 50-page PDF import `UNVERIFIED (needs iPhone)` |
+| `encryptPdfAsync(inputUri, outputUri, password)` | Re-saves a generated PDF with `PDFDocumentWriteOption.userPasswordOption` and `.ownerPasswordOption`, deletes `inputUri` in `defer`, and re-opens `outputUri` to assert `isEncrypted && isLocked && unlock(withPassword:)` before returning (v1.9.0) | Password validation `verified by tests`; Swift compilation in CI; iOS Files password prompt `UNVERIFIED (needs iPhone)` |
+
+- **Encryption strength note:** Apple `PDFDocument.write(to:withOptions:)` with `.userPasswordOption` / `.ownerPasswordOption` writes standard PDFKit password protection (RC4-128 / AES-128 depending on the iOS PDFKit version and PDF catalog). Neither the UI nor the documentation claims AES-256 for PDF export.
+
+### Incoming Files ("Open in ScanFlow") & Document Operations
+- `app.json` registers `CFBundleDocumentTypes` for `com.adobe.pdf` and `public.image` with `LSSupportsOpeningDocumentsInPlace: false` so iOS copies incoming files into ScanFlow's sandbox Inbox (`UNVERIFIED (needs iPhone)`).
+- `app/_layout.tsx` listens for initial and runtime `file://` URLs via `expo-linking` and passes them to `pdfToolkitService.handleIncomingUrl()`.
+- `src/db/documentOperations.ts` and `src/services/DocumentRepository.ts` implement:
+  - `moveManyToFolder(docIds, folderId)` and `deleteMany(docIds)`
+  - `mergeDocuments(docIds, newTitle?)`: creates a merged document preserving non-destructive page state (`corners`, `rotation`, `filter`, `adjustments`, `page_format`), rendered previews, and `page_text` OCR records (`verified by tests` in `__tests__/documentOperations.test.ts`).
+  - `extractPagesToDocument(sourceDocId, pageIds, newTitle?)` and `splitDocumentAtPage(sourceDocId, fromPageNumber, newTitle?)`: extracts selected pages into a new document or splits pages `fromPageNumber..N` into a second document while re-indexing remaining pages (`verified by tests` in `__tests__/documentOperations.test.ts`).
+- `ExportService.generateBatchZip(documentIds, options)` renders each selected document to a PDF and packages them into a single `.zip` archive in `storageService.exportDir` using `buildZip()` (`src/docx/zip.ts`) and `deduplicateFileNames()`, then deletes the archive after the system share sheet closes.
+
+---
+
+## 12. Not yet implemented (see ROADMAP)
 
 - Live edge overlay / auto-capture in ScanFlow's *own* camera (`app/scan.tsx`).
   Live detection and auto-capture are provided by the iOS document scanner
   (default); Expo Go offers no camera frame processors for a custom overlay.
-- Text recognition in Expo Go (needs the native module), OCR of handwriting,
-  normalized (umlaut-insensitive) title search, Unicode font for non-WinAnsi
-  text in the PDF layer.
+- Text recognition, PDF import rasterization, and PDF password encryption in
+  Expo Go (require the native `modules/scanflow-ocr` module in the IPA build).
+- Milestones M2–M7 of Phase V2 (ID-card mode, QR/GiroCode scanner, visual
+  signatures & annotations, 30-day trash, favorites & tags, smart naming,
+  Files ZIP backup/restore, haptics & accessibility audit, StoreKit 2 Pro
+  unlock, store package & TestFlight submission prep – see `docs/ROADMAP.md`).

@@ -12,6 +12,10 @@ interface DocumentCardProps {
   onMenuPress: () => void;
   /** Search hit in the recognized text (match highlighted). */
   snippet?: Snippet | null;
+  /** Whether multi-select mode is active in the library. */
+  selectMode?: boolean;
+  /** Whether this card is selected in multi-select mode. */
+  selected?: boolean;
 }
 
 export const DocumentCard: React.FC<DocumentCardProps> = ({
@@ -19,6 +23,8 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
   onPress,
   onMenuPress,
   snippet,
+  selectMode = false,
+  selected = false,
 }) => {
   const { colors, typography, spacing } = useTheme();
   const { t, language } = useTranslation();
@@ -43,7 +49,13 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
       onLongPress={onMenuPress}
       style={[styles.cell, { maxWidth: cardMaxWidth }]}
     >
-      <Card elevated="card" clip radius={CARD_RADIUS}>
+      <Card
+        elevated="card"
+        clip
+        radius={CARD_RADIUS}
+        borderColor={selectMode && selected ? colors.primary : undefined}
+        contentStyle={selectMode && selected ? { borderWidth: 2, borderColor: colors.primary } : undefined}
+      >
         {/* Thumbnail area, edge to edge (clipped by the card) */}
         <View style={[styles.thumbnailContainer, { backgroundColor: colors.surfaceSubdued }]}>
           {document.thumbnailUri ? (
@@ -63,20 +75,39 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
             </View>
           )}
 
-          {/* Menu button in the corner: a circle concentric with the card corner */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={(e) => {
-              e.stopPropagation();
-              onMenuPress();
-            }}
-            style={[styles.menuButton, { backgroundColor: colors.surface, shadowColor: colors.shadowColor }]}
-            hitSlop={(44 - MENU_SIZE) / 2}
-            accessibilityRole="button"
-            accessibilityLabel={t.library.options}
-          >
-            <Icon name="ellipsis" size={14} color={colors.textPrimary} weight="semibold" />
-          </TouchableOpacity>
+          {/* Selection badge or Menu button in the corner: a circle concentric with the card corner */}
+          {selectMode ? (
+            <View
+              style={[
+                styles.menuButton,
+                {
+                  backgroundColor: selected ? colors.primary : colors.surface,
+                  shadowColor: colors.shadowColor,
+                },
+              ]}
+            >
+              <Icon
+                name={selected ? 'checkmark' : 'circle'}
+                size={14}
+                color={selected ? '#FFFFFF' : colors.textMuted}
+                weight="bold"
+              />
+            </View>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={(e) => {
+                e.stopPropagation();
+                onMenuPress();
+              }}
+              style={[styles.menuButton, { backgroundColor: colors.surface, shadowColor: colors.shadowColor }]}
+              hitSlop={(44 - MENU_SIZE) / 2}
+              accessibilityRole="button"
+              accessibilityLabel={t.library.options}
+            >
+              <Icon name="ellipsis" size={14} color={colors.textPrimary} weight="semibold" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Info Area */}
