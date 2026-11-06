@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ThemeProvider, useTheme } from '../src/theme';
-import { I18nProvider } from '../src/i18n';
+import { I18nProvider, useTranslation } from '../src/i18n';
 import { AppLockOverlay } from '../src/components/AppLockOverlay';
 import { ScannerProvider } from '../src/components/ScannerProvider';
 import { getDatabase } from '../src/db/database';
@@ -14,6 +14,7 @@ import { ocrService } from '../src/services/OcrService';
 
 function RootNavigation() {
   const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -58,7 +59,8 @@ function RootNavigation() {
             animation: 'slide_from_right',
           }}
         >
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false, title: t.library.title }} />
+          <Stack.Screen name="search" options={{ headerShown: true, title: t.search.title, headerTransparent: false, headerTintColor: colors.primary, headerStyle: { backgroundColor: colors.background }, headerTitleStyle: { color: colors.textPrimary } }} />
           <Stack.Screen
             name="sheets/adjust"
             options={{
@@ -116,7 +118,12 @@ function RootNavigation() {
           <Stack.Screen
             name="document/[id]"
             options={{
-              headerShown: false,
+              headerShown: true,
+              title: t.filters.title,
+              headerTransparent: false,
+              headerTintColor: colors.primary,
+              headerStyle: { backgroundColor: colors.background },
+              headerTitleStyle: { color: colors.textPrimary },
             }}
           />
         </Stack>

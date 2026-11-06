@@ -12,20 +12,20 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { capsule, concentric, corner, hairline, radius, useTheme } from '../../src/theme';
-import { useTranslation } from '../../src/i18n';
+import { capsule, concentric, corner, hairline, radius, useTheme } from '../../../src/theme';
+import { useTranslation } from '../../../src/i18n';
 import {
   authService,
   type LockTimeoutOption,
   type ScannerMode,
   type UnlockCapabilities,
-} from '../../src/services/AuthService';
-import { privacyService } from '../../src/services/PrivacyService';
-import { storageService, documentRepository, documentScanner, ocrService, type OcrStats } from '../../src/services';
-import { ExportDpi, ExportQuality } from '../../src/types';
-import { EXPORT_DPI_PRESETS } from '../../src/imaging/pageFormat';
-import { PinSetupModal, type PinFlow } from '../../src/components/PinSetupModal';
-import { useAppLock } from '../../src/components/AppLockOverlay';
+} from '../../../src/services/AuthService';
+import { privacyService } from '../../../src/services/PrivacyService';
+import { storageService, documentRepository, documentScanner, ocrService, type OcrStats } from '../../../src/services';
+import { ExportDpi, ExportQuality } from '../../../src/types';
+import { EXPORT_DPI_PRESETS } from '../../../src/imaging/pageFormat';
+import { PinSetupModal, type PinFlow } from '../../../src/components/PinSetupModal';
+import { useAppLock } from '../../../src/components/AppLockOverlay';
 
 export default function SettingsScreen() {
   const { colors, typography, spacing, mode, setMode } = useTheme();
@@ -351,14 +351,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
-      <View style={[styles.header, { paddingHorizontal: spacing.base }]}>
-        <Text style={[styles.title, typography.largeTitle, { color: colors.textPrimary }]}>
-          {t.settings.title}
-        </Text>
-      </View>
-
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingHorizontal: spacing.base }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right']}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[styles.scrollContent, { paddingHorizontal: spacing.base }]}>
         {/* Section 0: Scanner (iOS document scanner or ScanFlow camera) */}
         <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary }]}>
           {t.settings.scanner}

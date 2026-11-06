@@ -4,8 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   FlatList,
   RefreshControl,
@@ -13,24 +11,22 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { capsule, useTheme } from '../../src/theme';
-import { useTranslation } from '../../src/i18n';
-import { folderRepository, documentRepository, ocrService, pageTextRepository } from '../../src/services';
-import { snippetTerm } from '../../src/db/textSearch';
-import type { Snippet } from '../../src/ocr/text';
-import { Folder, Document } from '../../src/types';
+import { Stack, useRouter, useFocusEffect } from 'expo-router';
+import { capsule, useTheme } from '../../../src/theme';
+import { useTranslation } from '../../../src/i18n';
+import { folderRepository, documentRepository, ocrService, pageTextRepository } from '../../../src/services';
+import { snippetTerm } from '../../../src/db/textSearch';
+import type { Snippet } from '../../../src/ocr/text';
+import { Folder, Document, SortOption } from '../../../src/types';
 import {
   DocumentCard,
   DocumentActionModal,
   PromptModal,
-  SortModal,
-  SortOption,
   FolderOptionsModal,
   useScanner,
   Button,
   Chip,
-} from '../../src/components';
+} from '../../../src/components';
 
 export default function LibraryScreen() {
   const { colors, typography, spacing } = useTheme();
@@ -53,7 +49,6 @@ export default function LibraryScreen() {
   // Modals State
   const [activeDocForAction, setActiveDocForAction] = useState<Document | null>(null);
   const [activeFolderForOptions, setActiveFolderForOptions] = useState<Folder | null>(null);
-  const [isSortModalVisible, setIsSortModalVisible] = useState(false);
   const [promptState, setPromptState] = useState<{
     visible: boolean;
     title: string;
@@ -244,151 +239,67 @@ export default function LibraryScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View style={[styles.header, { paddingHorizontal: spacing.base }]}>
-        <Text style={[styles.largeTitle, typography.largeTitle, { color: colors.textPrimary }]}>
-          {t.library.title}
-        </Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={[styles.headerIconButton, { backgroundColor: colors.surfaceSubdued }]}
-            activeOpacity={0.7}
-            onPress={() => scanner.importFromLibrary()}
-            disabled={scanner.busy}
-            accessibilityRole="button"
-            accessibilityLabel={t.scan.importPhotos}
-          >
-            <Ionicons name="images-outline" size={19} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerIconButton, { backgroundColor: colors.surfaceSubdued, marginLeft: spacing.sm }]}
-            activeOpacity={0.7}
-            onPress={() => setIsSortModalVisible(true)}
-          >
-            <Ionicons name="ellipsis-horizontal" size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Search Bar */}
-      <View style={[styles.searchContainer, { marginHorizontal: spacing.base, marginTop: spacing.sm }]}>
-        <View style={[styles.searchBar, { backgroundColor: colors.searchBackground }]}>
-          <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
-          <TextInput
-            placeholder={ocrService.available ? t.library.searchPlaceholderText : t.library.searchPlaceholder}
-            placeholderTextColor={colors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            style={[styles.searchInput, { color: colors.textPrimary }]}
-            clearButtonMode="while-editing"
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* Folder Categories Pill Bar */}
-      <View style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.pillsContainer, { paddingHorizontal: spacing.base }]}
-        >
-          {/* "Alle" Pill */}
-          <Chip label={t.common.all} selected={selectedFolderId === null} onPress={() => setSelectedFolderId(null)} />
-
-          {/* SQLite Persisted Folders */}
-          {folders.map((folder) => (
-            <Chip
-              key={folder.id}
-              label={folder.name}
-              selected={selectedFolderId === folder.id}
-              onPress={() => setSelectedFolderId(folder.id)}
-              onLongPress={() => setActiveFolderForOptions(folder)}
-            />
-          ))}
-
-          {/* Add Folder Button */}
-          <Chip icon="plus" label={t.library.newFolder} tint={colors.primary} onPress={handleOpenCreateFolder} />
-        </ScrollView>
-      </View>
-
-      {/* Main Content: 2-Column Grid or Empty State */}
-      <View style={styles.content}>
-        {loading && !refreshing ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="small" color={colors.primary} />
-          </View>
-        ) : documents.length === 0 ? (
-          <ScrollView
-            contentContainerStyle={styles.emptyScroll}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-          >
-            <View style={styles.emptyContainer}>
-              <View style={[styles.emptyIconCircle, { backgroundColor: colors.surfaceSubdued }]}>
-                <Ionicons name="document-text-outline" size={48} color={colors.primary} />
-              </View>
-              <Text style={[styles.emptyTitle, typography.title2, { color: colors.textPrimary, marginTop: spacing.base }]}>
-                {isSearching ? t.common.noItems : t.library.emptyTitle}
-              </Text>
-              <Text
-                style={[
-                  styles.emptySubtitle,
-                  typography.body,
-                  { color: colors.textSecondary, marginTop: spacing.xs, marginHorizontal: spacing.xl },
-                ]}
-              >
-                {isSearching ? t.library.noResultsHint : t.library.emptySubtitle}
-              </Text>
-
-              {!isSearching && (
-                <Button
-                  icon="camera"
-                  title={t.library.startScan}
-                  onPress={() => scanner.scan()}
-                  disabled={scanner.busy}
-                  style={{ marginTop: spacing.xl }}
-                />
-              )}
-
-              {!isSearching && (
-                <Button
-                  variant="plain"
-                  size="medium"
-                  icon="photo.on.rectangle"
-                  title={t.scan.importPhotos}
-                  onPress={() => scanner.importFromLibrary()}
-                  disabled={scanner.busy}
-                  style={{ marginTop: spacing.md }}
-                />
-              )}
-            </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right']}>
+      <Stack.Screen options={{
+        headerSearchBarOptions: {
+          placeholder: ocrService.available ? t.library.searchPlaceholderText : t.library.searchPlaceholder,
+          onChangeText: (event) => setSearchQuery(event.nativeEvent.text),
+          onCancelButtonPress: () => setSearchQuery(''),
+          hideWhenScrolling: false,
+          autoCapitalize: 'none',
+        },
+      }} />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button icon="photo.on.rectangle" accessibilityLabel={t.scan.importPhotos} disabled={scanner.busy} onPress={() => void scanner.importFromLibrary()} />
+        <Stack.Toolbar.Menu icon="ellipsis.circle" accessibilityLabel={t.library.options}>
+          <Stack.Toolbar.MenuAction icon="magnifyingglass" onPress={() => router.push('/search')}>{t.search.title}</Stack.Toolbar.MenuAction>
+          <Stack.Toolbar.Menu title={t.library.sort} icon="arrow.up.arrow.down">
+            {([
+              ['date_desc', t.library.sortDateDesc], ['date_asc', t.library.sortDateAsc],
+              ['title_asc', t.library.sortTitleAsc], ['title_desc', t.library.sortTitleDesc],
+            ] as [SortOption, string][]).map(([id, label]) => (
+              <Stack.Toolbar.MenuAction key={id} isOn={sortBy === id} onPress={() => setSortBy(id)}>{label}</Stack.Toolbar.MenuAction>
+            ))}
+          </Stack.Toolbar.Menu>
+        </Stack.Toolbar.Menu>
+      </Stack.Toolbar>
+      <FlatList
+        data={loading && !refreshing ? [] : documents}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        columnWrapperStyle={styles.columnWrapper}
+        contentInsetAdjustmentBehavior="automatic"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={[styles.listContainer, { paddingHorizontal: spacing.base, paddingBottom: spacing.hero, flexGrow: 1 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        ListHeaderComponent={
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsContainer}>
+            <Chip label={t.common.all} selected={selectedFolderId === null} onPress={() => setSelectedFolderId(null)} />
+            {folders.map((folder) => (
+              <Chip key={folder.id} label={folder.name} selected={selectedFolderId === folder.id}
+                onPress={() => setSelectedFolderId(folder.id)} onLongPress={() => setActiveFolderForOptions(folder)} />
+            ))}
+            <Chip icon="plus" label={t.library.newFolder} tint={colors.primary} onPress={handleOpenCreateFolder} />
           </ScrollView>
+        }
+        ListEmptyComponent={loading && !refreshing ? (
+          <View style={styles.centerContainer}><ActivityIndicator size="small" color={colors.primary} /></View>
         ) : (
-          <FlatList
-            data={documents}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            columnWrapperStyle={styles.columnWrapper}
-            contentContainerStyle={[styles.listContainer, { paddingHorizontal: spacing.base, paddingBottom: 100 }]}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-            renderItem={({ item }) => (
-              <DocumentCard
-                document={item}
-                snippet={isSearching ? snippets.get(item.id) ?? null : null}
-                onPress={() => router.push(`/document/${item.id}` as any)}
-                onMenuPress={() => setActiveDocForAction(item)}
-              />
-            )}
-          />
+          <View style={styles.emptyContainer}>
+            <View style={[styles.emptyIconCircle, { backgroundColor: colors.surfaceSubdued }]}>
+              <Ionicons name="document-text-outline" size={48} color={colors.primary} />
+            </View>
+            <Text style={[styles.emptyTitle, typography.title2, { color: colors.textPrimary, marginTop: spacing.base }]}>{isSearching ? t.common.noItems : t.library.emptyTitle}</Text>
+            <Text style={[styles.emptySubtitle, typography.body, { color: colors.textSecondary, marginTop: spacing.xs, marginHorizontal: spacing.xl }]}>{isSearching ? t.library.noResultsHint : t.library.emptySubtitle}</Text>
+            {!isSearching && <Button icon="camera" title={t.library.startScan} onPress={() => scanner.scan()} disabled={scanner.busy} style={{ marginTop: spacing.xl }} />}
+            {!isSearching && <Button variant="plain" size="medium" icon="photo.on.rectangle" title={t.scan.importPhotos} onPress={() => scanner.importFromLibrary()} disabled={scanner.busy} style={{ marginTop: spacing.md }} />}
+          </View>
         )}
-      </View>
+        renderItem={({ item }) => (
+          <DocumentCard document={item} snippet={isSearching ? snippets.get(item.id) ?? null : null}
+            onPress={() => router.push(`/document/${item.id}` as any)} onMenuPress={() => setActiveDocForAction(item)} />
+        )}
+      />
 
       {/* Document Action Modal – runs the chosen action once the menu is gone */}
       <DocumentActionModal
@@ -409,14 +320,6 @@ export default function LibraryScreen() {
         onClose={() => setActiveFolderForOptions(null)}
         onRename={handleRenameFolder}
         onDelete={handleDeleteFolder}
-      />
-
-      {/* Sort Options Modal */}
-      <SortModal
-        visible={isSortModalVisible}
-        currentSort={sortBy}
-        onClose={() => setIsSortModalVisible(false)}
-        onSelectSort={(newSort) => setSortBy(newSort)}
       />
 
       {/* Generic Prompt Modal for Name input */}

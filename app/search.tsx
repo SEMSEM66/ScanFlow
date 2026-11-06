@@ -2,14 +2,14 @@ import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { capsule, radius, useTheme } from '../../src/theme';
-import { Thumbnail } from '../../src/components';
-import { useTranslation } from '../../src/i18n';
-import { documentRepository, folderRepository, ocrService, pageTextRepository } from '../../src/services';
-import { snippetTerm } from '../../src/db/textSearch';
-import type { Snippet } from '../../src/ocr/text';
-import type { Document } from '../../src/types';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { capsule, radius, useTheme } from '../src/theme';
+import { Thumbnail } from '../src/components';
+import { useTranslation } from '../src/i18n';
+import { documentRepository, folderRepository, ocrService, pageTextRepository } from '../src/services';
+import { snippetTerm } from '../src/db/textSearch';
+import type { Snippet } from '../src/ocr/text';
+import type { Document } from '../src/types';
 
 interface SearchResults {
   documents: Document[];
@@ -157,11 +157,8 @@ export default function SearchScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
-      <View style={[styles.header, { paddingHorizontal: spacing.base }]}>
-        <Text style={[styles.largeTitle, typography.largeTitle, { color: colors.textPrimary }]}>{t.search.title}</Text>
-      </View>
-
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right']}>
+      <Stack.Screen options={{ title: t.search.title, headerBackTitle: t.library.title }} />
       <View
         style={[
           styles.searchBar,

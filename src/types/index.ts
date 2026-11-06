@@ -6,6 +6,8 @@ export type ExportQuality = 'low' | 'medium' | 'high';
 
 export type ExportFormat = 'pdf' | 'jpg';
 
+export type SortOption = 'date_desc' | 'date_asc' | 'title_asc' | 'title_desc';
+
 export type ThemeMode = 'system' | 'light' | 'dark';
 
 export type LanguageMode = 'de' | 'en';

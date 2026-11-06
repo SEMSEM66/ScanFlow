@@ -10,7 +10,7 @@ import {
   Alert,
   LayoutChangeEvent,
 } from 'react-native';
-import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, capsule } from '../../src/theme';
@@ -35,7 +35,6 @@ import {
   FilterStrip,
   DocumentBottomBar,
   PageEditorModal,
-  DocumentActionModal,
   PromptModal,
   useScanner,
   type ScanOutcome,
@@ -70,7 +69,6 @@ export default function DocumentDetailScreen() {
 
   // Modals
   const [isPageEditorVisible, setIsPageEditorVisible] = useState(false);
-  const [isActionModalVisible, setIsActionModalVisible] = useState(false);
   const [adjustOwner] = useState(() => Symbol('adjust-owner'));
   const [promptState, setPromptState] = useState<{
     visible: boolean;
@@ -363,37 +361,29 @@ export default function DocumentDetailScreen() {
   const busy = false;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      {/* Top Header matching Dokumente.png & Exportieren.png */}
-      <View style={styles.topBar}>
-        <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={colors.primary} />
-          <Text style={[typography.headline, { color: colors.primary, marginLeft: -4 }]}>{t.library.title}</Text>
-        </TouchableOpacity>
-
-        <Text numberOfLines={1} style={[typography.headline, styles.navTitle, { color: colors.textPrimary }]}>
-          {document.title}
-        </Text>
-
-        <View style={styles.headerRightActions}>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push({ pathname: '/sheets/export', params: { documentId: document.id, pageIndex: String(currentPageIndex) } })}
-            disabled={busy}
-            style={styles.headerCircleBtn}
-          >
-            <Ionicons name="share-outline" size={20} color={colors.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => setIsActionModalVisible(true)}
-            disabled={busy}
-            style={styles.headerCircleBtn}
-          >
-            <Ionicons name="ellipsis-horizontal" size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
-      </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
+      <Stack.Screen options={{ title: document.title }} />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button icon="square.and.arrow.up" accessibilityLabel={t.export.title} disabled={busy}
+          onPress={() => router.push({ pathname: '/sheets/export', params: { documentId: document.id, pageIndex: String(currentPageIndex) } })} />
+        <Stack.Toolbar.Menu icon="ellipsis.circle" accessibilityLabel={t.library.options} disabled={busy}>
+          <Stack.Toolbar.MenuAction icon="pencil" onPress={() => {
+            setPromptState({ visible: true, title: t.library.renameDocument, initialValue: document.title,
+              onConfirm: async (newTitle) => { await documentRepository.update(document.id, { title: newTitle }); loadDocumentData(); },
+            });
+          }}>{t.library.renameDocument}</Stack.Toolbar.MenuAction>
+          <Stack.Toolbar.MenuAction icon="folder" onPress={() => router.push({ pathname: '/sheets/move', params: { documentId: document.id } })}>{t.library.moveToFolder}</Stack.Toolbar.MenuAction>
+          <Stack.Toolbar.MenuAction icon="doc.on.doc" onPress={async () => {
+            const dup = await documentRepository.duplicate(document.id, t.common.copySuffix);
+            if (dup) router.replace(`/document/${dup.id}` as never);
+          }}>{t.library.duplicateDocument}</Stack.Toolbar.MenuAction>
+          {ocrService.available ? <Stack.Toolbar.MenuAction icon="doc.text" onPress={() => router.push({ pathname: '/sheets/text', params: { documentId: document.id, title: document.title } })}>{t.ocr.menuAction}</Stack.Toolbar.MenuAction> : null}
+          <Stack.Toolbar.MenuAction icon="trash" destructive onPress={async () => {
+            await documentRepository.delete(document.id);
+            router.replace('/(tabs)');
+          }}>{t.library.deleteDocument}</Stack.Toolbar.MenuAction>
+        </Stack.Toolbar.Menu>
+      </Stack.Toolbar>
 
       {/* Review hint: imported pages where no document edge was found */}
       {reviewPages.length > 0 ? (
@@ -522,33 +512,6 @@ export default function DocumentDetailScreen() {
         }}
         onAddPage={() => closeEditorThen(handleAddPage)}
         onDismiss={runEditorAction}
-      />
-
-      <DocumentActionModal
-        visible={isActionModalVisible}
-        document={document}
-        onClose={() => setIsActionModalVisible(false)}
-        onRename={() => {
-          setPromptState({
-            visible: true,
-            title: t.library.renameDocument,
-            initialValue: document.title,
-            onConfirm: async (newTitle) => {
-              await documentRepository.update(document.id, { title: newTitle });
-              loadDocumentData();
-            },
-          });
-        }}
-        onMove={() => router.push({ pathname: '/sheets/move', params: { documentId: document.id } })}
-        onDuplicate={async () => {
-          const dup = await documentRepository.duplicate(document.id, t.common.copySuffix);
-          if (dup) router.replace(`/document/${dup.id}` as never);
-        }}
-        onDelete={async () => {
-          await documentRepository.delete(document.id);
-          router.replace('/(tabs)');
-        }}
-        onShowText={ocrService.available ? () => router.push({ pathname: '/sheets/text', params: { documentId: document.id, title: document.title } }) : undefined}
       />
 
       <PromptModal
