@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, ThemeProvider as NavigationThemeProvider, DefaultTheme, DarkTheme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -52,6 +52,14 @@ function RootNavigation() {
     <ScannerProvider>
       <AppLockOverlay>
         <StatusBar style={isDark ? 'light' : 'dark'} />
+        <NavigationThemeProvider value={{
+          ...(isDark ? DarkTheme : DefaultTheme),
+          colors: {
+            ...(isDark ? DarkTheme : DefaultTheme).colors,
+            background: colors.background, card: colors.surface, text: colors.textPrimary,
+            border: colors.border, primary: colors.primary,
+          },
+        }}>
         <Stack
           screenOptions={{
             headerShown: false,
@@ -105,14 +113,18 @@ function RootNavigation() {
             name="scan"
             options={{
               presentation: 'fullScreenModal',
-              headerShown: false,
+              headerShown: true, title: t.scan.title, headerTransparent: false,
+              headerStyle: { backgroundColor: '#000000' }, headerTintColor: '#FFFFFF',
+              headerTitleStyle: { color: '#FFFFFF' },
             }}
           />
           <Stack.Screen
             name="crop"
             options={{
               presentation: 'fullScreenModal',
-              headerShown: false,
+              headerShown: true, title: t.crop.title, headerTransparent: false,
+              headerStyle: { backgroundColor: '#101114' }, headerTintColor: '#FFFFFF',
+              headerTitleStyle: { color: '#FFFFFF' },
             }}
           />
           <Stack.Screen
@@ -127,6 +139,7 @@ function RootNavigation() {
             }}
           />
         </Stack>
+        </NavigationThemeProvider>
       </AppLockOverlay>
     </ScannerProvider>
   );

@@ -12,7 +12,8 @@ import {
   Modal,
   ScrollView,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -28,7 +29,6 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 type FlashMode = 'off' | 'on' | 'auto';
 
 // Control sizes (pt) – round shapes are capsules of their real height
-const ICON_BUTTON = 44;
 const HINT_HEIGHT = 34;
 const SIDE_SLOT = 88;
 const BADGE = 22;
@@ -185,10 +185,27 @@ export default function ScanScreen() {
     }
   };
 
+  const navigationControls = (
+    <>
+      <StatusBar style="light" />
+      <Stack.Screen options={{ gestureEnabled: !isSaving && !isCapturing }} />
+      <Stack.Toolbar placement="left">
+        <Stack.Toolbar.Button disabled={isSaving || isCapturing} onPress={() => router.back()}>{t.common.cancel}</Stack.Toolbar.Button>
+      </Stack.Toolbar>
+      {cameraPermission?.granted && (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button icon={flash === 'off' ? 'bolt.slash' : 'bolt'} accessibilityLabel={flash === 'off' ? t.scan.flashOff : flash === 'on' ? t.scan.flashOn : t.scan.flashAuto} disabled={isSaving || isCapturing} onPress={toggleFlash} />
+          <Stack.Toolbar.Button icon="photo.on.rectangle" accessibilityLabel={t.scan.importFromGallery} disabled={isSaving || isCapturing} onPress={handleGalleryImport} />
+        </Stack.Toolbar>
+      )}
+    </>
+  );
+
   // Permission UI: undetermined or not granted
   if (!cameraPermission) {
     return (
       <View style={[styles.permissionContainer, { backgroundColor: colors.background }]}>
+        {navigationControls}
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -197,7 +214,8 @@ export default function ScanScreen() {
   // Denied UI
   if (!cameraPermission.granted) {
     return (
-      <SafeAreaView style={[styles.permissionContainer, { backgroundColor: colors.background }]}>
+      <SafeAreaView edges={['bottom']} style={[styles.permissionContainer, { backgroundColor: colors.background }]}>
+        {navigationControls}
         <View style={styles.permissionCard}>
           <View style={[styles.permissionIconCircle, { backgroundColor: colors.surfaceSubdued }]}>
             <Ionicons name="camera-outline" size={54} color={colors.primary} />
@@ -230,6 +248,7 @@ export default function ScanScreen() {
 
   return (
     <View style={styles.container}>
+      {navigationControls}
       {/* Fullscreen Camera View */}
       <CameraView
         ref={cameraRef}
@@ -241,49 +260,7 @@ export default function ScanScreen() {
       {/* Screen Shutter Flash Animation */}
       {isFlashing && <View style={styles.shutterFlash} />}
 
-      {/* Top Floating Controls */}
-      <SafeAreaView edges={['top']} style={styles.topControls}>
-        <View style={styles.topBarRow}>
-          {/* Close button */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.back()}
-            style={styles.iconCircleButton}
-          >
-            <Ionicons name="close" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          {/* Flash & More buttons */}
-          <View style={styles.topRightActions}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={toggleFlash}
-              style={[styles.iconCircleButton, flash !== 'off' && styles.iconCircleButtonActive]}
-            >
-              <Ionicons
-                name={
-                  flash === 'on'
-                    ? 'flash'
-                    : flash === 'auto'
-                    ? 'flash-outline'
-                    : 'flash-off-outline'
-                }
-                size={22}
-                color={flash !== 'off' ? '#FFD60A' : '#FFFFFF'}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={handleGalleryImport}
-              style={[styles.iconCircleButton, { marginLeft: 10 }]}
-            >
-              <Ionicons name="images-outline" size={22} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Alignment Hint Pill matching Scannen.png */}
+      <View style={styles.topControls}>
         <View style={styles.hintContainer}>
           <View style={styles.hintPill}>
             <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.hintText}>
@@ -291,7 +268,7 @@ export default function ScanScreen() {
             </Text>
           </View>
         </View>
-      </SafeAreaView>
+      </View>
 
       {/* Cyan Framing Corner Guides matching Scannen.png */}
       <View style={styles.frameContainer} pointerEvents="none">
@@ -489,28 +466,6 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 10,
   },
-  topBarRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-  iconCircleButton: {
-    width: ICON_BUTTON,
-    height: ICON_BUTTON,
-    ...capsule(ICON_BUTTON),
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconCircleButtonActive: {
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-  },
-  topRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   hintContainer: {
     alignItems: 'center',
     marginTop: 18,
@@ -529,10 +484,10 @@ const styles = StyleSheet.create({
   },
   frameContainer: {
     position: 'absolute',
-    top: SCREEN_HEIGHT * 0.16,
+    top: '16%',
     left: 28,
     right: 28,
-    bottom: SCREEN_HEIGHT * 0.26,
+    bottom: '26%',
     justifyContent: 'center',
     alignItems: 'center',
   },

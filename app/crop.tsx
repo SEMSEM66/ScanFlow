@@ -11,7 +11,8 @@ import {
   Alert,
   LayoutChangeEvent,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SegmentedControl } from '../src/components/ui/NativeSegmentedControl';
@@ -40,7 +41,7 @@ type Corner = 0 | 1 | 2 | 3;
 export default function CropScreen() {
   const router = useRouter();
   const { pageId } = useLocalSearchParams<{ pageId: string; documentId?: string }>();
-  const { colors, typography } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
@@ -207,20 +208,15 @@ export default function CropScreen() {
   const loupeLeft = activePoint && display && activePoint.x < display.width / 2;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: '#101114' }]} edges={['top', 'bottom']}>
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.barButton}>
-          <Text style={[typography.body, { color: '#FFFFFF' }]}>{t.common.cancel}</Text>
-        </TouchableOpacity>
-        <Text style={[typography.headline, { color: '#FFFFFF' }]}>{t.crop.title}</Text>
-        <TouchableOpacity onPress={handleApply} disabled={saving || loading} style={styles.barButton}>
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Text style={[typography.bodyBold, { color: colors.primary }]}>{t.crop.apply}</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: '#101114' }]} edges={['bottom']}>
+      <StatusBar style="light" />
+      <Stack.Screen options={{ gestureEnabled: !saving }} />
+      <Stack.Toolbar placement="left">
+        <Stack.Toolbar.Button disabled={saving} onPress={() => router.back()}>{t.common.cancel}</Stack.Toolbar.Button>
+      </Stack.Toolbar>
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button variant="done" disabled={saving || loading} onPress={handleApply}>{t.crop.apply}</Stack.Toolbar.Button>
+      </Stack.Toolbar>
 
       <View style={styles.noticeContainer}>
         <View style={styles.noticePill}>
@@ -310,14 +306,6 @@ export default function CropScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  barButton: { paddingVertical: 6, paddingHorizontal: 8 },
   noticeContainer: { alignItems: 'center', paddingVertical: 6 },
   noticePill: {
     flexDirection: 'row',
