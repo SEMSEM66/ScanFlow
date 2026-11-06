@@ -1,3 +1,4 @@
+export * from './ui';
 export * from './DocumentCard';
 export * from './DocumentActionModal';
 export * from './MoveFolderModal';

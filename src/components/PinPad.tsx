@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme';
+import { capsule, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -118,7 +118,7 @@ export const PinPad: React.FC<PinPadProps> = ({
                     onPress={leftAction.onPress}
                     accessibilityRole="button"
                     accessibilityLabel={leftAction.accessibilityLabel}
-                    style={[styles.key, { width: key, height: key, borderRadius: key / 2 }]}
+                    style={[styles.key, { width: key, height: key }, capsule(key)]}
                   >
                     <Ionicons name={leftAction.icon} size={28} color={colors.primary} />
                   </TouchableOpacity>
@@ -133,7 +133,7 @@ export const PinPad: React.FC<PinPadProps> = ({
                     onPress={onDelete}
                     accessibilityRole="button"
                     accessibilityLabel={t.security.deleteDigit}
-                    style={[styles.key, { width: key, height: key, borderRadius: key / 2, opacity: value.length === 0 ? 0.3 : 1 }]}
+                    style={[styles.key, { width: key, height: key, opacity: value.length === 0 ? 0.3 : 1 }, capsule(key)]}
                   >
                     <Ionicons name="backspace-outline" size={26} color={colors.textPrimary} />
                   </TouchableOpacity>
@@ -152,7 +152,7 @@ export const PinPad: React.FC<PinPadProps> = ({
                     {
                       width: key,
                       height: key,
-                      borderRadius: key / 2,
+                      ...capsule(key),
                       backgroundColor: colors.surfaceSubdued,
                       opacity: disabled ? 0.4 : 1,
                     },
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   dot: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    ...capsule(14),
     borderWidth: 1.5,
   },
   keypad: {

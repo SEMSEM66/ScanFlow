@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { useTheme } from '../../src/theme';
+import { capsule, concentric, corner, hairline, radius, useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import {
   authService,
@@ -787,6 +787,12 @@ export default function SettingsScreen() {
   );
 }
 
+const CARD_RADIUS = radius.lg;
+const CARD_PADDING = 14;
+/** Shapes nested in a card at its padding: concentric with the card corner. */
+const NESTED_RADIUS = concentric(CARD_RADIUS, CARD_PADDING);
+const PILL_HEIGHT = 28;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -807,9 +813,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
+    ...corner(CARD_RADIUS),
+    borderWidth: hairline,
+    padding: CARD_PADDING,
   },
   segmentedRow: {
     flexDirection: 'row',
@@ -822,7 +828,7 @@ const styles = StyleSheet.create({
   segmentButton: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 10,
+    ...corner(NESTED_RADIUS),
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.04)',
@@ -845,15 +851,16 @@ const styles = StyleSheet.create({
   iconBox: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    ...corner(NESTED_RADIUS),
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   smallPillBtn: {
+    height: PILL_HEIGHT,
+    ...capsule(PILL_HEIGHT),
     paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 14,
+    justifyContent: 'center',
   },
   pillRow: {
     flexDirection: 'row',
@@ -865,7 +872,7 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   divided: {
-    borderTopWidth: 1,
+    borderTopWidth: hairline,
     marginTop: 12,
     paddingTop: 12,
   },
@@ -878,7 +885,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    ...corner(radius.sm),
   },
   ocrStatusRow: {
     flexDirection: 'row',

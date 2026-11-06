@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
-import { lightColors, darkColors, spacing, borderRadius, typography } from './tokens';
+import { lightColors, darkColors, spacing, typography } from './tokens';
+import { radius } from './shape';
 import { ThemeMode } from '../types';
 
 type ColorTheme = typeof lightColors;
@@ -10,7 +11,7 @@ interface ThemeContextValue {
   isDark: boolean;
   colors: ColorTheme;
   spacing: typeof spacing;
-  borderRadius: typeof borderRadius;
+  radius: typeof radius;
   typography: typeof typography;
   setMode: (mode: ThemeMode) => void;
 }
@@ -36,7 +37,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isDark,
       colors,
       spacing,
-      borderRadius,
+      radius,
       typography,
       setMode,
     }),

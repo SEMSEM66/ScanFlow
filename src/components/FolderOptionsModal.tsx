@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme';
+import { capsule, corner, radius, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { Folder } from '../types';
 import { BottomSheet } from './BottomSheet';
@@ -25,7 +25,7 @@ export const FolderOptionsModal: React.FC<FolderOptionsModalProps> = ({
   onRename,
   onDelete,
 }) => {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t } = useTranslation();
   // Keep the last folder on screen while the sheet glides out (the screen clears it on close)
   const [shown, setShown] = useState(folder);
@@ -93,7 +93,7 @@ export const FolderOptionsModal: React.FC<FolderOptionsModalProps> = ({
           styles.cancelButton,
           {
             backgroundColor: colors.surfaceSubdued,
-            borderRadius: borderRadius.md,
+            ...corner(radius.md),
             marginHorizontal: spacing.base,
             marginTop: spacing.md,
             marginBottom: spacing.xl,
@@ -119,14 +119,14 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    ...capsule(4),
   },
   title: {
     textAlign: 'center',
     marginBottom: 16,
   },
   list: {
-    borderRadius: 14,
+    ...corner(radius.md),
     overflow: 'hidden',
   },
   row: {

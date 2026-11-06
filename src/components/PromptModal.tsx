@@ -10,7 +10,7 @@ import {
   Platform,
   TouchableWithoutFeedback,
 } from 'react-native';
-import { useTheme } from '../theme';
+import { corner, hairline, radius, shadows, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 
 interface PromptModalProps {
@@ -32,7 +32,7 @@ export const PromptModal: React.FC<PromptModalProps> = ({
   onConfirm,
   onClose,
 }) => {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t } = useTranslation();
   const [value, setValue] = useState(initialValue);
   // Reset the text whenever the prompt opens / gets a new initial value
@@ -68,7 +68,7 @@ export const PromptModal: React.FC<PromptModalProps> = ({
                   styles.card,
                   {
                     backgroundColor: colors.surface,
-                    borderRadius: borderRadius.lg,
+                    ...corner(radius.xl),
                     shadowColor: colors.shadowColor,
                   },
                 ]}
@@ -88,7 +88,7 @@ export const PromptModal: React.FC<PromptModalProps> = ({
                     {
                       backgroundColor: colors.surfaceSubdued,
                       borderColor: colors.border,
-                      borderRadius: borderRadius.md,
+                      ...corner(radius.md),
                       color: colors.textPrimary,
                     },
                   ]}
@@ -156,10 +156,7 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     padding: 20,
-    elevation: 8,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    ...shadows.raised,
   },
   title: {
     textAlign: 'center',
@@ -167,7 +164,7 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 44,
-    borderWidth: 1,
+    borderWidth: hairline,
     paddingHorizontal: 12,
     fontSize: 16,
   },
@@ -178,7 +175,7 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     height: 44,
-    borderRadius: 10,
+    ...corner(radius.md),
     alignItems: 'center',
     justifyContent: 'center',
   },

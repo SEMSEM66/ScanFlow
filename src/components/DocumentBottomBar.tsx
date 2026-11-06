@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme';
+import { capsule, corner, hairline, radius, shadows, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 
 interface DocumentBottomBarProps {
@@ -21,7 +21,7 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
   onAddPage,
   disabled = false,
 }) => {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t } = useTranslation();
 
   return (
@@ -31,7 +31,8 @@ export const DocumentBottomBar: React.FC<DocumentBottomBarProps> = ({
         {
           backgroundColor: colors.surface,
           borderColor: colors.borderLight,
-          borderRadius: borderRadius.xxl,
+          ...corner(radius.xl),
+          shadowColor: colors.shadowColor,
           marginHorizontal: spacing.base,
           marginBottom: spacing.md,
         },
@@ -122,12 +123,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 8,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 4,
+    borderWidth: hairline,
+    ...shadows.card,
   },
   actionItem: {
     alignItems: 'center',
@@ -137,7 +134,7 @@ const styles = StyleSheet.create({
   iconCircle: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    ...capsule(44),
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,

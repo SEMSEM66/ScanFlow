@@ -15,7 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Canvas, Path, Skia, FillType } from '@shopify/react-native-skia';
-import { useTheme } from '../src/theme';
+import { useTheme, corner, capsule, concentric, radius } from '../src/theme';
 import { useTranslation } from '../src/i18n';
 import { documentRepository, imagePipeline } from '../src/services';
 import { FULL_QUAD, isConvexQuad, polygonArea } from '../src/imaging/geometry';
@@ -24,6 +24,9 @@ import type { PageFormat, Point, Quad } from '../src/types';
 const HANDLE_SIZE = 44;
 const LOUPE_SIZE = 112;
 const LOUPE_ZOOM = 2.5;
+const HANDLE_RING = 26;
+const PILL_HEIGHT = 40;
+const SEGMENT_INSET = 2;
 const ACCENT = '#00D2FF';
 const INVALID = '#FF453A';
 
@@ -300,15 +303,15 @@ export default function CropScreen() {
           ) : (
             <Ionicons name="scan-outline" size={16} color="#FFFFFF" />
           )}
-          <Text style={styles.pillText}>{t.crop.autoDetect}</Text>
+          <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.pillText}>{t.crop.autoDetect}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.pillButton} onPress={() => setCorners(FULL_QUAD)} disabled={loading}>
           <Ionicons name="expand-outline" size={16} color="#FFFFFF" />
-          <Text style={styles.pillText}>{t.crop.fullImage}</Text>
+          <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.pillText}>{t.crop.fullImage}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.pillButton} onPress={() => setCorners(initialCorners)} disabled={loading}>
           <Ionicons name="refresh-outline" size={16} color="#FFFFFF" />
-          <Text style={styles.pillText}>{t.crop.reset}</Text>
+          <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.pillText}>{t.crop.reset}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -332,7 +335,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 16,
+    // ≈ half a one-line pill (capsule); if the hint wraps it stays a smooth rounded rect
+    ...corner(radius.md),
   },
   noticeText: { color: 'rgba(255, 255, 255, 0.85)', fontSize: 12, fontWeight: '500' },
   viewport: { flex: 1, position: 'relative', justifyContent: 'center', alignItems: 'center' },
@@ -346,13 +350,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  handleRing: { width: 26, height: 26, borderRadius: 13, borderWidth: 3 },
+  handleRing: { width: HANDLE_RING, height: HANDLE_RING, ...capsule(HANDLE_RING), borderWidth: 3 },
   loupe: {
     position: 'absolute',
     top: 8,
     width: LOUPE_SIZE,
     height: LOUPE_SIZE,
-    borderRadius: LOUPE_SIZE / 2,
+    ...capsule(LOUPE_SIZE),
     borderWidth: 3,
     borderColor: ACCENT,
     overflow: 'hidden',
@@ -369,8 +373,8 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   formatLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '500' },
-  segment: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: 2 },
-  segmentItem: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
+  segment: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.12)', ...corner(radius.sm), padding: SEGMENT_INSET },
+  segmentItem: { paddingHorizontal: 14, paddingVertical: 6, ...corner(concentric(radius.sm, SEGMENT_INSET)) },
   segmentText: { fontSize: 13, fontWeight: '600' },
   bottomBar: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, paddingVertical: 14 },
   pillButton: {
@@ -379,8 +383,8 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
+    height: PILL_HEIGHT,
+    ...capsule(PILL_HEIGHT),
   },
   pillText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
 });

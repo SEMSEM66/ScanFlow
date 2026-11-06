@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useMemo, useRef, useStat
 import { ActivityIndicator, Alert, Linking, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useTheme } from '../theme';
+import { corner, radius, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { authService } from '../services/AuthService';
 import { documentScanner } from '../services/DocumentScannerService';
@@ -64,7 +64,7 @@ function cameraRoute(target: ScanTarget) {
 const STUCK_SCAN_MS = 1500;
 
 export const ScannerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { colors, typography, borderRadius } = useTheme();
+  const { colors, typography } = useTheme();
   const { t, language, formatString } = useTranslation();
   // true while a flow is starting (settings / permission) or importing; not while the scanner is shown
   const busyRef = useRef(false);
@@ -198,7 +198,7 @@ export const ScannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         {children}
         {progress !== null ? (
           <View style={styles.overlay} accessibilityViewIsModal>
-            <View style={[styles.card, { backgroundColor: colors.card, borderRadius: borderRadius.lg }]}>
+            <View style={[styles.card, corner(radius.lg), { backgroundColor: colors.card }]}>
               <ActivityIndicator size="large" color={colors.primary} />
               <Text style={[typography.subhead, styles.text, { color: colors.textPrimary }]}>{progress}</Text>
             </View>

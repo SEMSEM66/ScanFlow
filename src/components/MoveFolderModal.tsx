@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme';
+import { capsule, corner, radius, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { Folder, Document } from '../types';
 import { BottomSheet } from './BottomSheet';
@@ -21,7 +21,7 @@ export const MoveFolderModal: React.FC<MoveFolderModalProps> = ({
   onClose,
   onSelectFolder,
 }) => {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t } = useTranslation();
   // Keep the last document on screen while the sheet glides out (the screen clears it on close)
   const [shown, setShown] = useState(document);
@@ -104,7 +104,7 @@ export const MoveFolderModal: React.FC<MoveFolderModalProps> = ({
           styles.cancelButton,
           {
             backgroundColor: colors.surfaceSubdued,
-            borderRadius: borderRadius.md,
+            ...corner(radius.md),
             marginHorizontal: spacing.base,
             marginTop: spacing.md,
             marginBottom: spacing.xl,
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    ...capsule(4),
   },
   title: {
     textAlign: 'center',

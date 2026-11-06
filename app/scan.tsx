@@ -17,14 +17,28 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../src/theme';
+import { useTheme, corner, capsule, corners, radius } from '../src/theme';
 import { useTranslation } from '../src/i18n';
 import { saveScan, ocrService } from '../src/services';
 import { scanDocumentTitle } from '../src/components/ScannerProvider';
+import { Button } from '../src/components/ui';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type FlashMode = 'off' | 'on' | 'auto';
+
+// Control sizes (pt) – round shapes are capsules of their real height
+const ICON_BUTTON = 44;
+const HINT_HEIGHT = 34;
+const SIDE_SLOT = 88;
+const BADGE = 22;
+const GALLERY_BUTTON = 50;
+const SHUTTER_RING = 78;
+const SHUTTER_CORE = 64;
+const DONE_HEIGHT = 44;
+const PERMISSION_ICON = 100;
+const REVIEW_CLOSE = 36;
+const DELETE_HEIGHT = 34;
 
 /**
  * ScanFlow's own camera (setting "ScanFlow-Kamera", or fallback when the iOS
@@ -37,7 +51,7 @@ export default function ScanScreen() {
   const router = useRouter();
   // documentId: append pages to an existing document; replacePageId: retake one page
   const { documentId, replacePageId } = useLocalSearchParams<{ documentId?: string; replacePageId?: string }>();
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t, formatString, language } = useTranslation();
   const [progressText, setProgressText] = useState<string | null>(null);
 
@@ -196,25 +210,9 @@ export default function ScanScreen() {
           </Text>
 
           {cameraPermission.canAskAgain ? (
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={requestCameraPermission}
-              style={[styles.primaryButton, { backgroundColor: colors.primary, borderRadius: borderRadius.round }]}
-            >
-              <Text style={[typography.bodyBold, { color: '#FFFFFF' }]}>
-                {t.scan.grantPermission}
-              </Text>
-            </TouchableOpacity>
+            <Button title={t.scan.grantPermission} onPress={requestCameraPermission} style={styles.primaryButton} />
           ) : (
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => Linking.openSettings()}
-              style={[styles.primaryButton, { backgroundColor: colors.primary, borderRadius: borderRadius.round }]}
-            >
-              <Text style={[typography.bodyBold, { color: '#FFFFFF' }]}>
-                {t.scan.openSettings}
-              </Text>
-            </TouchableOpacity>
+            <Button title={t.scan.openSettings} onPress={() => Linking.openSettings()} style={styles.primaryButton} />
           )}
 
           <TouchableOpacity
@@ -288,7 +286,9 @@ export default function ScanScreen() {
         {/* Alignment Hint Pill matching Scannen.png */}
         <View style={styles.hintContainer}>
           <View style={styles.hintPill}>
-            <Text style={styles.hintText}>{t.scan.alignDocument}</Text>
+            <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.hintText}>
+              {t.scan.alignDocument}
+            </Text>
           </View>
         </View>
       </SafeAreaView>
@@ -326,7 +326,9 @@ export default function ScanScreen() {
                   style={styles.stackedThumbnail}
                 />
                 <View style={[styles.pageBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.pageBadgeText}>{capturedPages.length}</Text>
+                  <Text maxFontSizeMultiplier={1} style={styles.pageBadgeText}>
+                    {capturedPages.length}
+                  </Text>
                 </View>
               </TouchableOpacity>
             ) : (
@@ -362,11 +364,13 @@ export default function ScanScreen() {
                 {isSaving ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.doneButtonText}>{t.common.done}</Text>
+                  <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.doneButtonText}>
+                    {t.common.done}
+                  </Text>
                 )}
               </TouchableOpacity>
             ) : (
-              <View style={{ width: 80 }} />
+              <View style={{ width: SIDE_SLOT }} />
             )}
           </View>
         </SafeAreaView>
@@ -414,29 +418,31 @@ export default function ScanScreen() {
                   style={styles.deletePageButton}
                 >
                   <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
-                  <Text style={styles.deletePageText}>{t.common.delete}</Text>
+                  <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.deletePageText}>
+                    {t.common.delete}
+                  </Text>
                 </TouchableOpacity>
               </View>
             ))}
           </ScrollView>
 
           <View style={styles.reviewBottomActions}>
-            <TouchableOpacity
+            <Button
+              variant="gray"
+              fill="rgba(255,255,255,0.2)"
+              tint="#FFFFFF"
+              title={t.scan.continueScanning}
               onPress={() => setIsReviewOpen(false)}
-              style={[styles.continueScanButton, { backgroundColor: 'rgba(255,255,255,0.2)' }]}
-            >
-              <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>{t.scan.continueScanning}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
+              style={styles.reviewAction}
+            />
+            <Button
+              title={t.common.done}
               onPress={() => {
                 setIsReviewOpen(false);
                 handleFinishScan();
               }}
-              style={[styles.continueScanButton, { backgroundColor: colors.primary }]}
-            >
-              <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>{t.common.done}</Text>
-            </TouchableOpacity>
+              style={styles.reviewAction}
+            />
           </View>
         </SafeAreaView>
       </Modal>
@@ -490,9 +496,9 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   iconCircleButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: ICON_BUTTON,
+    height: ICON_BUTTON,
+    ...capsule(ICON_BUTTON),
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -511,8 +517,9 @@ const styles = StyleSheet.create({
   hintPill: {
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    height: HINT_HEIGHT,
+    justifyContent: 'center',
+    ...capsule(HINT_HEIGHT),
   },
   hintText: {
     color: '#FFFFFF',
@@ -548,28 +555,28 @@ const styles = StyleSheet.create({
     left: 0,
     borderTopWidth: 4,
     borderLeftWidth: 4,
-    borderTopLeftRadius: 10,
+    ...corners({ topLeft: radius.sm }),
   },
   cornerTR: {
     top: 0,
     right: 0,
     borderTopWidth: 4,
     borderRightWidth: 4,
-    borderTopRightRadius: 10,
+    ...corners({ topRight: radius.sm }),
   },
   cornerBL: {
     bottom: 0,
     left: 0,
     borderBottomWidth: 4,
     borderLeftWidth: 4,
-    borderBottomLeftRadius: 10,
+    ...corners({ bottomLeft: radius.sm }),
   },
   cornerBR: {
     bottom: 0,
     right: 0,
     borderBottomWidth: 4,
     borderRightWidth: 4,
-    borderBottomRightRadius: 10,
+    ...corners({ bottomRight: radius.sm }),
   },
   bottomSheet: {
     position: 'absolute',
@@ -577,8 +584,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: 'rgba(18, 18, 20, 0.95)',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    ...corners({ topLeft: radius.xl, topRight: radius.xl }),
     paddingTop: 20,
     paddingBottom: 8,
   },
@@ -590,7 +596,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   sideControlSlot: {
-    width: 80,
+    width: SIDE_SLOT,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -605,7 +611,7 @@ const styles = StyleSheet.create({
     left: -4,
     width: 48,
     height: 62,
-    borderRadius: 6,
+    ...corner(radius.xs),
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
   stackedCardMiddle: {
@@ -614,13 +620,13 @@ const styles = StyleSheet.create({
     left: -2,
     width: 50,
     height: 64,
-    borderRadius: 6,
+    ...corner(radius.xs),
     backgroundColor: 'rgba(255, 255, 255, 0.6)',
   },
   stackedThumbnail: {
     width: 52,
     height: 66,
-    borderRadius: 6,
+    ...corner(radius.xs),
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
   },
@@ -628,9 +634,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -8,
     right: -8,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: BADGE,
+    height: BADGE,
+    ...capsule(BADGE),
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
@@ -642,32 +648,32 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   galleryButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: GALLERY_BUTTON,
+    height: GALLERY_BUTTON,
+    ...capsule(GALLERY_BUTTON),
     backgroundColor: '#26262A',
     alignItems: 'center',
     justifyContent: 'center',
   },
   shutterOuterRing: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
+    width: SHUTTER_RING,
+    height: SHUTTER_RING,
+    ...capsule(SHUTTER_RING),
     borderWidth: 4,
     borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   shutterInnerCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: SHUTTER_CORE,
+    height: SHUTTER_CORE,
+    ...capsule(SHUTTER_CORE),
     backgroundColor: '#FFFFFF',
   },
   doneButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 22,
+    paddingHorizontal: 18,
+    height: DONE_HEIGHT,
+    ...capsule(DONE_HEIGHT),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -687,9 +693,9 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   permissionIconCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: PERMISSION_ICON,
+    height: PERMISSION_ICON,
+    ...capsule(PERMISSION_ICON),
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
@@ -704,10 +710,7 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   primaryButton: {
-    width: '100%',
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignSelf: 'stretch',
   },
   secondaryButton: {
     paddingVertical: 10,
@@ -726,9 +729,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   reviewCloseButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: REVIEW_CLOSE,
+    height: REVIEW_CLOSE,
+    ...capsule(REVIEW_CLOSE),
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -745,15 +748,15 @@ const styles = StyleSheet.create({
   reviewImage: {
     width: SCREEN_WIDTH * 0.85,
     height: SCREEN_HEIGHT * 0.65,
-    borderRadius: 12,
+    ...corner(radius.md),
   },
   deletePageButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 59, 48, 0.8)',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    height: DELETE_HEIGHT,
+    ...capsule(DELETE_HEIGHT),
     marginTop: 16,
     gap: 6,
   },
@@ -768,11 +771,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     gap: 12,
   },
-  continueScanButton: {
+  reviewAction: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

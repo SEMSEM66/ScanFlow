@@ -12,7 +12,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { useTheme } from '../theme';
+import { corners, radius as radii, useTheme } from '../theme';
 import { SHEET_CLOSE_BEZIER, SHEET_SKIRT, SHEET_SPRING, SheetMachine, type SheetDriver } from './sheetMotion';
 
 const closeEasing = Easing.bezier(SHEET_CLOSE_BEZIER[0], SHEET_CLOSE_BEZIER[1], SHEET_CLOSE_BEZIER[2], SHEET_CLOSE_BEZIER[3]);
@@ -32,7 +32,7 @@ interface BottomSheetProps {
   dragArea?: 'full' | 'top';
   /** Darkness of the backdrop when open (0–1). Default 0.45. */
   dim?: number;
-  /** Corner radius at the top. Default `borderRadius.xl`. */
+  /** Corner radius at the top. Default `radius.xl`. */
   radius?: number;
   /** Extra style of the sheet (e.g. padding). */
   style?: StyleProp<ViewStyle>;
@@ -57,7 +57,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   style,
   children,
 }) => {
-  const { colors, borderRadius } = useTheme();
+  const { colors } = useTheme();
   // The modal stays presented while the sheet glides out (`visible` is already false then)
   const [presented, setPresented] = useState(visible);
   const [layout, setLayout] = useState<{ height: number; seq: number } | null>(null);
@@ -129,7 +129,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
     setLayout((prev) => ({ height, seq: (prev?.seq ?? 0) + 1 }));
   };
 
-  const cornerRadius = radius ?? borderRadius.xl;
+  const cornerRadius = radius ?? radii.xl;
 
   return (
     <Modal
@@ -152,8 +152,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
           style={[
             {
               backgroundColor: colors.surface,
-              borderTopLeftRadius: cornerRadius,
-              borderTopRightRadius: cornerRadius,
+              ...corners({ topLeft: cornerRadius, topRight: cornerRadius }),
             },
             style,
             { transform: [{ translateY: offset }] },

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { useTheme } from '../theme';
+import { capsule, hairline, radius, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { Adjustments } from '../types';
 import { DEFAULT_ADJUSTMENTS } from '../imaging/types';
 import { BottomSheet } from './BottomSheet';
+import { Button } from './ui';
 
 interface AdjustmentsPanelProps {
   visible: boolean;
@@ -19,7 +20,7 @@ interface AdjustmentsPanelProps {
 
 /** Bottom sheet with brightness / contrast / sharpness sliders and a denoise switch. */
 export const AdjustmentsPanel: React.FC<AdjustmentsPanelProps> = ({ visible, value, onChange, onApplyToAll, onClose, busy }) => {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t } = useTranslation();
   const [local, setLocal] = useState<Adjustments>(value);
   // Re-sync with the page value when it changes from outside (React "adjust state on prop change" pattern)
@@ -64,7 +65,7 @@ export const AdjustmentsPanel: React.FC<AdjustmentsPanelProps> = ({ visible, val
       onClose={onClose}
       dim={0.35}
       dragArea="top"
-      radius={borderRadius.xxl}
+      radius={radius.xl}
       style={styles.sheet}
     >
       <View style={styles.handleContainer}>
@@ -89,21 +90,14 @@ export const AdjustmentsPanel: React.FC<AdjustmentsPanelProps> = ({ visible, val
             trackColor={{ false: colors.border, true: colors.primary }}
           />
         </View>
-        <TouchableOpacity
-          activeOpacity={0.85}
+        <Button
+          variant="tinted"
+          title={t.filters.applyToAll}
           disabled={busy}
           onPress={onApplyToAll}
-          style={[styles.applyAll, { borderColor: colors.primary, borderRadius: borderRadius.lg, opacity: busy ? 0.5 : 1 }]}
-        >
-          <Text style={[typography.bodyBold, { color: colors.primary }]}>{t.filters.applyToAll}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={onClose}
-          style={[styles.done, { backgroundColor: colors.primary, borderRadius: borderRadius.lg }]}
-        >
-          <Text style={[typography.headline, { color: '#FFFFFF' }]}>{t.common.done}</Text>
-        </TouchableOpacity>
+          style={styles.applyAll}
+        />
+        <Button title={t.common.done} onPress={onClose} style={styles.done} />
       </View>
     </BottomSheet>
   );
@@ -112,7 +106,7 @@ export const AdjustmentsPanel: React.FC<AdjustmentsPanelProps> = ({ visible, val
 const styles = StyleSheet.create({
   sheet: { paddingTop: 12 },
   handleContainer: { alignItems: 'center', paddingBottom: 12 },
-  handle: { width: 44, height: 5, borderRadius: 2.5 },
+  handle: { width: 44, height: 5, ...capsule(5) },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   row: { marginTop: 10 },
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -122,8 +116,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 14,
     paddingTop: 12,
-    borderTopWidth: 1,
+    borderTopWidth: hairline,
   },
-  applyAll: { marginTop: 18, height: 48, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  done: { marginTop: 10, height: 50, alignItems: 'center', justifyContent: 'center' },
+  applyAll: { marginTop: 18 },
+  done: { marginTop: 10 },
 });

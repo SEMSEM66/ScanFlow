@@ -6,14 +6,18 @@ import {
   Modal,
   TouchableOpacity,
   ScrollView,
-  Image,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme';
+import { capsule, concentric, hairline, radius, useTheme } from '../theme';
+import { Card, Thumbnail } from './ui';
 import { useTranslation } from '../i18n';
 import { DocumentPage } from '../types';
+
+const CARD_RADIUS = radius.lg;
+/** Card padding = thumbnail inset → the thumbnail corner is concentric with the card corner. */
+const CARD_PADDING = 12;
 
 interface PageEditorModalProps {
   visible: boolean;
@@ -37,7 +41,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
   onAddPage,
   onDismiss,
 }) => {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t, formatString } = useTranslation();
   const filterLabel = (f: DocumentPage['filter']) =>
     ({
@@ -74,18 +78,14 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
 
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {pages.map((page, index) => (
-            <View
-              key={page.id}
-              style={[
-                styles.pageCard,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.cardBorder,
-                  borderRadius: borderRadius.lg,
-                },
-              ]}
-            >
-              <Image source={{ uri: page.previewUri }} style={styles.pageThumb} resizeMode="cover" />
+            <Card key={page.id} radius={CARD_RADIUS} contentStyle={styles.pageCard}>
+              <Thumbnail
+                uri={page.previewUri}
+                width={65}
+                height={85}
+                radius={concentric(CARD_RADIUS, CARD_PADDING)}
+                style={styles.pageThumb}
+              />
 
               <View style={styles.pageInfo}>
                 <Text style={[typography.headline, { color: colors.textPrimary }]}>
@@ -147,7 +147,7 @@ export const PageEditorModal: React.FC<PageEditorModalProps> = ({
                   </TouchableOpacity>
                 </View>
               </View>
-            </View>
+            </Card>
           ))}
         </ScrollView>
       </SafeAreaView>
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 14,
-    borderBottomWidth: 1,
+    borderBottomWidth: hairline,
   },
   headerButton: {
     padding: 6,
@@ -176,14 +176,10 @@ const styles = StyleSheet.create({
   },
   pageCard: {
     flexDirection: 'row',
-    padding: 12,
-    borderWidth: 1,
+    padding: CARD_PADDING,
     alignItems: 'center',
   },
   pageThumb: {
-    width: 65,
-    height: 85,
-    borderRadius: 8,
     marginRight: 16,
   },
   pageInfo: {
@@ -197,7 +193,7 @@ const styles = StyleSheet.create({
   iconBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    ...capsule(36),
     alignItems: 'center',
     justifyContent: 'center',
   },

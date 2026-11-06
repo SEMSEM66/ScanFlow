@@ -3,7 +3,8 @@ import { ActivityIndicator, FlatList, Modal, Share, StyleSheet, Text, TouchableO
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { useTheme } from '../theme';
+import { corner, hairline, radius, useTheme } from '../theme';
+import { Button, Card, Chip } from './ui';
 import { useTranslation } from '../i18n';
 import { documentRepository } from '../services/DocumentRepository';
 import { ocrService } from '../services/OcrService';
@@ -19,7 +20,7 @@ interface DocumentTextModalProps {
 
 /** Recognized text of a document, page by page – selectable, copy per page or all, share. */
 export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ visible, document, onClose }) => {
-  const { colors, typography, borderRadius } = useTheme();
+  const { colors, typography } = useTheme();
   const { t, formatString } = useTranslation();
   const [pages, setPages] = useState<DocumentPage[]>([]);
   const [texts, setTexts] = useState<Map<string, PageTextRecord>>(new Map());
@@ -121,20 +122,16 @@ export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ visible, d
       status = <Text style={[typography.footnote, { color: colors.textMuted }]}>{t.ocr.notRecognized}</Text>;
     }
     return (
-      <View style={[styles.pageCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderRadius: borderRadius.lg }]}>
+      <Card contentStyle={styles.pageCard}>
         <View style={styles.pageHeader}>
           <Text style={[typography.headline, { color: colors.textPrimary }]}>{pageLabel(index)}</Text>
           {text ? (
-            <TouchableOpacity
+            <Chip
               onPress={() => copy(item.id, text)}
-              style={[styles.pill, { backgroundColor: colors.surfaceSubdued }]}
-              accessibilityRole="button"
-            >
-              <Ionicons name={copied === item.id ? 'checkmark' : 'copy-outline'} size={14} color={colors.primary} />
-              <Text style={[typography.caption1, { color: colors.primary, fontWeight: '700', marginLeft: 4 }]}>
-                {copied === item.id ? t.ocr.copied : t.ocr.copyPage}
-              </Text>
-            </TouchableOpacity>
+              icon={copied === item.id ? 'checkmark' : 'doc.on.doc'}
+              label={copied === item.id ? t.ocr.copied : t.ocr.copyPage}
+              tint={colors.primary}
+            />
           ) : null}
         </View>
         {text ? (
@@ -144,7 +141,7 @@ export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ visible, d
         ) : (
           <View style={styles.pageText}>{status}</View>
         )}
-      </View>
+      </Card>
     );
   };
 
@@ -174,7 +171,7 @@ export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ visible, d
         </View>
 
         {notice ? (
-          <View style={[styles.notice, { backgroundColor: colors.primarySubdued, borderColor: colors.primaryBorder, borderRadius: borderRadius.md }]}>
+          <View style={[styles.notice, corner(radius.md), { backgroundColor: colors.primarySubdued, borderColor: colors.primaryBorder }]}>
             <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
             <Text style={[typography.footnote, { color: colors.textPrimary, flex: 1, marginLeft: 8 }]}>{notice}</Text>
             {available && !enabled ? (
@@ -206,17 +203,12 @@ export const DocumentTextModal: React.FC<DocumentTextModalProps> = ({ visible, d
         )}
 
         <View style={[styles.footer, { borderTopColor: colors.borderLight }]}>
-          <TouchableOpacity
+          <Button
             onPress={() => copy('all', allText)}
             disabled={!allText}
-            style={[styles.copyAll, { backgroundColor: colors.primary, borderRadius: borderRadius.md, opacity: allText ? 1 : 0.4 }]}
-            accessibilityRole="button"
-          >
-            <Ionicons name={copied === 'all' ? 'checkmark' : 'copy-outline'} size={18} color="#FFFFFF" />
-            <Text style={[typography.bodyBold, { color: '#FFFFFF', marginLeft: 8 }]}>
-              {copied === 'all' ? t.ocr.copied : t.ocr.copyAll}
-            </Text>
-          </TouchableOpacity>
+            icon={copied === 'all' ? 'checkmark' : 'doc.on.doc'}
+            title={copied === 'all' ? t.ocr.copied : t.ocr.copyAll}
+          />
         </View>
       </SafeAreaView>
     </Modal>
@@ -233,7 +225,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
+    borderBottomWidth: hairline,
   },
   headerTitle: {
     flex: 1,
@@ -247,7 +239,7 @@ const styles = StyleSheet.create({
   notice: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: hairline,
     marginHorizontal: 16,
     marginTop: 12,
     paddingHorizontal: 12,
@@ -263,20 +255,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   pageCard: {
-    borderWidth: 1,
     padding: 14,
   },
   pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
   },
   pageText: {
     marginTop: 10,
@@ -286,15 +270,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footer: {
-    borderTopWidth: 1,
+    borderTopWidth: hairline,
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
-  },
-  copyAll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
   },
 });

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme';
+import { capsule, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { authService } from '../services/AuthService';
 import { DEFAULT_PIN_LENGTH, isWeakPin, type PinLength } from '../security/pinHash';
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   iconCircle: {
     width: 76,
     height: 76,
-    borderRadius: 38,
+    ...capsule(76),
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,

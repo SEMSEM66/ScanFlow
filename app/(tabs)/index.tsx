@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { useTheme } from '../../src/theme';
+import { capsule, useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { folderRepository, documentRepository, ocrService, pageTextRepository } from '../../src/services';
 import { snippetTerm } from '../../src/db/textSearch';
@@ -30,10 +30,12 @@ import {
   SortOption,
   FolderOptionsModal,
   useScanner,
+  Button,
+  Chip,
 } from '../../src/components';
 
 export default function LibraryScreen() {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
   const scanner = useScanner();
@@ -285,7 +287,7 @@ export default function LibraryScreen() {
 
       {/* Search Bar */}
       <View style={[styles.searchContainer, { marginHorizontal: spacing.base, marginTop: spacing.sm }]}>
-        <View style={[styles.searchBar, { backgroundColor: colors.searchBackground, borderRadius: borderRadius.md }]}>
+        <View style={[styles.searchBar, { backgroundColor: colors.searchBackground }]}>
           <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
           <TextInput
             placeholder={ocrService.available ? t.library.searchPlaceholderText : t.library.searchPlaceholder}
@@ -313,74 +315,21 @@ export default function LibraryScreen() {
           contentContainerStyle={[styles.pillsContainer, { paddingHorizontal: spacing.base }]}
         >
           {/* "Alle" Pill */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setSelectedFolderId(null)}
-            style={[
-              styles.pill,
-              {
-                backgroundColor: selectedFolderId === null ? colors.primary : colors.surface,
-                borderColor: selectedFolderId === null ? colors.primary : colors.border,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.pillText,
-                { color: selectedFolderId === null ? '#FFFFFF' : colors.textPrimary },
-              ]}
-            >
-              {t.common.all}
-            </Text>
-          </TouchableOpacity>
+          <Chip label={t.common.all} selected={selectedFolderId === null} onPress={() => setSelectedFolderId(null)} />
 
           {/* SQLite Persisted Folders */}
-          {folders.map((folder) => {
-            const isSelected = selectedFolderId === folder.id;
-            return (
-              <TouchableOpacity
-                key={folder.id}
-                activeOpacity={0.8}
-                onPress={() => setSelectedFolderId(folder.id)}
-                onLongPress={() => setActiveFolderForOptions(folder)}
-                style={[
-                  styles.pill,
-                  {
-                    backgroundColor: isSelected ? colors.primary : colors.surface,
-                    borderColor: isSelected ? colors.primary : colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.pillText,
-                    { color: isSelected ? '#FFFFFF' : colors.textPrimary },
-                  ]}
-                >
-                  {folder.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          {folders.map((folder) => (
+            <Chip
+              key={folder.id}
+              label={folder.name}
+              selected={selectedFolderId === folder.id}
+              onPress={() => setSelectedFolderId(folder.id)}
+              onLongPress={() => setActiveFolderForOptions(folder)}
+            />
+          ))}
 
           {/* Add Folder Button */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={handleOpenCreateFolder}
-            style={[
-              styles.pill,
-              styles.addFolderPill,
-              {
-                backgroundColor: colors.surfaceSubdued,
-                borderColor: colors.borderLight,
-              },
-            ]}
-          >
-            <Ionicons name="add" size={16} color={colors.primary} style={{ marginRight: 4 }} />
-            <Text style={[styles.pillText, { color: colors.primary }]}>
-              {t.library.newFolder}
-            </Text>
-          </TouchableOpacity>
+          <Chip icon="plus" label={t.library.newFolder} tint={colors.primary} onPress={handleOpenCreateFolder} />
         </ScrollView>
       </View>
 
@@ -413,38 +362,25 @@ export default function LibraryScreen() {
               </Text>
 
               {!isSearching && (
-                <TouchableOpacity
-                  activeOpacity={0.85}
+                <Button
+                  icon="camera"
+                  title={t.library.startScan}
                   onPress={() => scanner.scan()}
                   disabled={scanner.busy}
-                  style={[
-                    styles.scanButton,
-                    {
-                      backgroundColor: colors.primary,
-                      borderRadius: borderRadius.round,
-                      marginTop: spacing.xl,
-                      paddingHorizontal: spacing.xl,
-                      paddingVertical: spacing.md,
-                    },
-                  ]}
-                >
-                  <Ionicons name="camera" size={20} color="#FFFFFF" style={{ marginRight: spacing.xs }} />
-                  <Text style={[styles.scanButtonText, { color: '#FFFFFF' }]}>
-                    {t.library.startScan}
-                  </Text>
-                </TouchableOpacity>
+                  style={{ marginTop: spacing.xl }}
+                />
               )}
 
               {!isSearching && (
-                <TouchableOpacity
-                  activeOpacity={0.7}
+                <Button
+                  variant="plain"
+                  size="medium"
+                  icon="photo.on.rectangle"
+                  title={t.scan.importPhotos}
                   onPress={() => scanner.importFromLibrary()}
                   disabled={scanner.busy}
-                  style={[styles.importButton, { marginTop: spacing.md }]}
-                >
-                  <Ionicons name="images-outline" size={18} color={colors.primary} style={{ marginRight: spacing.xs }} />
-                  <Text style={[typography.bodyMedium, { color: colors.primary }]}>{t.scan.importPhotos}</Text>
-                </TouchableOpacity>
+                  style={{ marginTop: spacing.md }}
+                />
               )}
             </View>
           </ScrollView>
@@ -542,16 +478,11 @@ const styles = StyleSheet.create({
   headerIconButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    ...capsule(36),
     alignItems: 'center',
     justifyContent: 'center',
   },
-  importButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
+
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -561,6 +492,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 40,
+    ...capsule(40),
     paddingHorizontal: 12,
   },
   searchIcon: {
@@ -576,21 +508,9 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 6,
   },
-  pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  addFolderPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-  },
-  pillText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
+
+
+
   content: {
     flex: 1,
   },
@@ -618,7 +538,7 @@ const styles = StyleSheet.create({
   emptyIconCircle: {
     width: 88,
     height: 88,
-    borderRadius: 44,
+    ...capsule(88),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -629,12 +549,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  scanButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  scanButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
+
+
 });

@@ -1,9 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { FilterType } from '../types';
 import { FILTER_ORDER } from '../imaging/filters';
-import { useTheme } from '../theme';
+import { corner, radius, shadows, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
+import { Thumbnail } from './ui';
+
+const THUMB_WIDTH = 62;
+const THUMB_HEIGHT = 80;
+const THUMB_RADIUS = radius.sm;
 
 interface FilterStripProps {
   activeFilter: FilterType;
@@ -22,7 +27,7 @@ export const FilterStrip: React.FC<FilterStripProps> = ({
   onSelectFilter,
   disabled = false,
 }) => {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t } = useTranslation();
 
   const label = (f: FilterType): string =>
@@ -57,25 +62,18 @@ export const FilterStrip: React.FC<FilterStripProps> = ({
               accessibilityState={{ selected: isSelected }}
               accessibilityLabel={label(id)}
             >
-              <View
-                style={[
-                  styles.thumbnailBox,
-                  {
-                    backgroundColor: colors.surfaceSubdued,
-                    borderColor: isSelected ? colors.primary : colors.cardBorder,
-                    borderWidth: isSelected ? 2.5 : 1,
-                    borderRadius: borderRadius.md,
-                  },
-                ]}
-              >
-                {uri || fallbackUri ? (
-                  <Image
-                    source={{ uri: uri ?? fallbackUri }}
-                    style={[styles.thumbnailImage, { borderRadius: borderRadius.md - 2, opacity: uri ? 1 : 0.35 }]}
-                    resizeMode="cover"
-                  />
-                ) : null}
-                {!uri ? <ActivityIndicator style={StyleSheet.absoluteFill} size="small" color={colors.primary} /> : null}
+              {/* Shadow on a wrapper: the thumbnail itself clips its image */}
+              <View style={[styles.thumbnailShadow, corner(THUMB_RADIUS), { backgroundColor: colors.surfaceSubdued, shadowColor: colors.shadowColor }]}>
+                <Thumbnail
+                  uri={uri ?? fallbackUri}
+                  width={THUMB_WIDTH}
+                  height={THUMB_HEIGHT}
+                  radius={THUMB_RADIUS}
+                  selected={isSelected}
+                  imageStyle={{ opacity: uri ? 1 : 0.35 }}
+                >
+                  {!uri ? <ActivityIndicator style={StyleSheet.absoluteFill} size="small" color={colors.primary} /> : null}
+                </Thumbnail>
               </View>
               <Text
                 numberOfLines={2}
@@ -111,19 +109,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: 70,
   },
-  thumbnailBox: {
-    width: 62,
-    height: 80,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  thumbnailImage: {
-    width: '100%',
-    height: '100%',
+  thumbnailShadow: {
+    ...shadows.low,
   },
   label: {
     marginTop: 6,

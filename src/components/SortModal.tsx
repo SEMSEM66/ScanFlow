@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme';
+import { capsule, corner, radius, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { BottomSheet } from './BottomSheet';
 
@@ -20,7 +20,7 @@ export const SortModal: React.FC<SortModalProps> = ({
   onClose,
   onSelectSort,
 }) => {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t } = useTranslation();
 
   const options: { id: SortOption; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -90,7 +90,7 @@ export const SortModal: React.FC<SortModalProps> = ({
           styles.cancelButton,
           {
             backgroundColor: colors.surfaceSubdued,
-            borderRadius: borderRadius.md,
+            ...corner(radius.md),
             marginHorizontal: spacing.base,
             marginTop: spacing.md,
             marginBottom: spacing.xl,
@@ -116,14 +116,14 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    ...capsule(4),
   },
   title: {
     textAlign: 'center',
     marginBottom: 16,
   },
   list: {
-    borderRadius: 14,
+    ...corner(radius.md),
     overflow: 'hidden',
   },
   row: {

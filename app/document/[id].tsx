@@ -13,7 +13,7 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../src/theme';
+import { useTheme, capsule } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import {
   documentRepository,
@@ -49,9 +49,11 @@ import {
   ModalHandoff,
   useScanner,
   type ScanOutcome,
+  Card,
 } from '../../src/components';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const HEADER_BUTTON = 36;
 
 const thumbKeyOf = (p: DocumentPage) =>
   `${p.id}|${p.originalUri}|${JSON.stringify(p.corners)}|${p.rotation}|${p.pageFormat}|${JSON.stringify(p.adjustments)}`;
@@ -60,7 +62,7 @@ export default function DocumentDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  const { colors, typography, borderRadius } = useTheme();
+  const { colors, typography, radius } = useTheme();
   const { t, formatString } = useTranslation();
   const scanner = useScanner();
 
@@ -466,12 +468,7 @@ export default function DocumentDetailScreen() {
 
       {/* Review hint: imported pages where no document edge was found */}
       {reviewPages.length > 0 ? (
-        <View
-          style={[
-            styles.reviewBanner,
-            { backgroundColor: colors.primarySubdued, borderColor: colors.primaryBorder, borderRadius: borderRadius.md },
-          ]}
-        >
+        <Card radius={radius.md} color={colors.primarySubdued} borderColor={colors.primaryBorder} style={styles.reviewBanner}>
           <Ionicons name="crop-outline" size={18} color={colors.primary} />
           <Text numberOfLines={2} style={[typography.footnote, styles.reviewText, { color: colors.textPrimary }]}>
             {reviewPages.length === 1
@@ -489,23 +486,21 @@ export default function DocumentDetailScreen() {
           >
             <Ionicons name="close" size={16} color={colors.textSecondary} />
           </TouchableOpacity>
-        </View>
+        </Card>
       ) : null}
 
       {/* Page viewer */}
       <View style={styles.pageViewerContainer}>
         <View style={styles.pageArea} onLayout={onAreaLayout}>
-          <View
-            style={[
-              styles.documentCard,
-              cardSize,
-              {
-                backgroundColor: '#FFFFFF',
-                borderColor: colors.cardBorder,
-                borderRadius: borderRadius.sm,
-                shadowColor: colors.shadowColor,
-              },
-            ]}
+          {/* Shadow on Card's wrapper, the page image is clipped inside */}
+          <Card
+            radius={radius.sm}
+            elevated="raised"
+            clip
+            color="#FFFFFF"
+            borderColor={colors.cardBorder}
+            style={cardSize}
+            contentStyle={styles.documentCard}
           >
             {showUri ? (
               <Image
@@ -527,7 +522,7 @@ export default function DocumentDetailScreen() {
                 </Text>
               </View>
             ) : null}
-          </View>
+          </Card>
         </View>
 
         {pages.length > 1 && (
@@ -699,9 +694,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerCircleBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: HEADER_BUTTON,
+    height: HEADER_BUTTON,
+    ...capsule(HEADER_BUTTON),
     backgroundColor: 'rgba(0,0,0,0.05)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -720,12 +715,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   documentCard: {
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
@@ -768,7 +757,6 @@ const styles = StyleSheet.create({
   reviewBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
     marginHorizontal: 16,
     marginBottom: 4,
     paddingVertical: 8,

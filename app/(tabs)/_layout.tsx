@@ -2,7 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../src/theme';
+import { useTheme, capsule } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { useScanner } from '../../src/components/ScannerProvider';
 
@@ -101,6 +101,8 @@ export default function TabLayout() {
   );
 }
 
+const FAB_SIZE = 60;
+
 const styles = StyleSheet.create({
   floatingButtonContainer: {
     top: -16,
@@ -108,9 +110,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   floatingButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    ...capsule(FAB_SIZE),
     justifyContent: 'center',
     alignItems: 'center',
     shadowOffset: { width: 0, height: 4 },

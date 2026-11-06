@@ -1,9 +1,10 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useTheme } from '../../src/theme';
+import { capsule, radius, useTheme } from '../../src/theme';
+import { Thumbnail } from '../../src/components';
 import { useTranslation } from '../../src/i18n';
 import { documentRepository, folderRepository, ocrService, pageTextRepository } from '../../src/services';
 import { snippetTerm } from '../../src/db/textSearch';
@@ -24,7 +25,7 @@ interface SearchResults {
  * library, see src/db/textSearch.ts).
  */
 export default function SearchScreen() {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
 
@@ -98,18 +99,9 @@ export default function SearchScreen() {
         onPress={() => router.push(`/document/${item.id}` as never)}
         style={[styles.row, { paddingHorizontal: spacing.base, borderBottomColor: colors.borderLight }]}
       >
-        <View
-          style={[
-            styles.thumb,
-            { backgroundColor: colors.surfaceSubdued, borderColor: colors.borderLight, borderRadius: borderRadius.xs },
-          ]}
-        >
-          {item.thumbnailUri ? (
-            <Image source={{ uri: item.thumbnailUri }} style={styles.thumbImage} resizeMode="cover" />
-          ) : (
-            <Ionicons name="document-text-outline" size={22} color={colors.textMuted} />
-          )}
-        </View>
+        <Thumbnail uri={item.thumbnailUri} width={44} height={56} radius={radius.xs} style={styles.thumb}>
+          {item.thumbnailUri ? null : <Ionicons name="document-text-outline" size={22} color={colors.textMuted} />}
+        </Thumbnail>
         <View style={styles.rowText}>
           <Text numberOfLines={1} style={[typography.headline, { color: colors.textPrimary }]}>
             {item.title}
@@ -175,7 +167,6 @@ export default function SearchScreen() {
           styles.searchBar,
           {
             backgroundColor: colors.searchBackground,
-            borderRadius: borderRadius.md,
             marginHorizontal: spacing.base,
             marginTop: spacing.sm,
           },
@@ -223,6 +214,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 40,
+    ...capsule(40),
     paddingHorizontal: 12,
   },
   searchIcon: {
@@ -243,16 +235,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   thumb: {
-    width: 44,
-    height: 56,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  thumbImage: {
-    width: '100%',
-    height: '100%',
   },
   rowText: {
     flex: 1,
@@ -272,7 +256,7 @@ const styles = StyleSheet.create({
   messageIcon: {
     width: 64,
     height: 64,
-    borderRadius: 32,
+    ...capsule(64),
     alignItems: 'center',
     justifyContent: 'center',
   },

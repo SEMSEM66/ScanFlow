@@ -8,13 +8,14 @@ import {
   Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme';
+import { capsule, concentric, corner, hairline, radius, shadows, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { ExportDpi, ExportFormat, ExportQuality } from '../types';
 import { exportService } from '../services/ExportService';
 import { authService } from '../services/AuthService';
 import { EXPORT_DPI_PRESETS } from '../imaging/pageFormat';
 import { BottomSheet } from './BottomSheet';
+import { Button } from './ui';
 
 interface ExportModalProps {
   visible: boolean;
@@ -40,7 +41,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   progress = null,
   onDismiss,
 }) => {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t, formatString, language } = useTranslation();
 
   const [format, setFormat] = useState<ExportFormat>('pdf');
@@ -72,7 +73,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       onClose={onClose}
       onDismiss={onDismiss}
       dismissible={!isGenerating}
-      radius={borderRadius.xxl}
+      radius={radius.xl}
       style={styles.sheet}
     >
       {/* Drag Handle Bar matching Exportieren.png */}
@@ -263,20 +264,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           </Text>
         </View>
 
-        {/* Primary CTA: "Teilen" Button matching Exportieren.png */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          disabled={isGenerating}
+        {/* Primary CTA: "Teilen" */}
+        <Button
           onPress={handleSharePress}
-          style={[
-            styles.shareButton,
-            {
-              backgroundColor: colors.primary,
-              borderRadius: borderRadius.lg,
-              marginTop: spacing.lg,
-              marginBottom: spacing.xxl,
-            },
-          ]}
+          loading={isGenerating}
+          title={t.export.share}
+          icon="square.and.arrow.up"
+          style={{ marginTop: spacing.lg, marginBottom: spacing.xxl }}
         >
           {isGenerating ? (
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -287,19 +281,16 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 </Text>
               ) : null}
             </View>
-          ) : (
-            <>
-              <Ionicons name="share-outline" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={[typography.headline, { color: '#FFFFFF', fontWeight: '700' }]}>
-                {t.export.share}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
+          ) : undefined}
+        </Button>
       </View>
     </BottomSheet>
   );
 };
+
+/** Segmented controls: track radius and the inset of the selected segment (concentric). */
+const SEGMENT_RADIUS = radius.md;
+const SEGMENT_INSET = 3;
 
 const styles = StyleSheet.create({
   sheet: {
@@ -312,7 +303,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 44,
     height: 5,
-    borderRadius: 2.5,
+    ...capsule(5),
   },
   content: {},
   title: {
@@ -325,8 +316,8 @@ const styles = StyleSheet.create({
   },
   formatContainer: {
     flexDirection: 'row',
-    borderRadius: 12,
-    padding: 3,
+    ...corner(SEGMENT_RADIUS),
+    padding: SEGMENT_INSET,
   },
   formatOption: {
     flex: 1,
@@ -334,33 +325,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    borderRadius: 10,
+    ...corner(concentric(SEGMENT_RADIUS, SEGMENT_INSET)),
   },
   formatOptionSelected: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    ...shadows.low,
   },
   qualityContainer: {
     flexDirection: 'row',
-    borderRadius: 12,
-    padding: 3,
+    ...corner(SEGMENT_RADIUS),
+    padding: SEGMENT_INSET,
   },
   qualityOption: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 10,
+    ...corner(concentric(SEGMENT_RADIUS, SEGMENT_INSET)),
   },
   qualityOptionSelected: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    ...shadows.low,
   },
   watermarkRow: {
     flexDirection: 'row',
@@ -368,7 +353,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 14,
     paddingVertical: 8,
-    borderTopWidth: 1,
+    borderTopWidth: hairline,
   },
   watermarkTextWrap: {
     flexDirection: 'row',
@@ -379,11 +364,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 14,
     paddingHorizontal: 4,
-  },
-  shareButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 54,
   },
 });

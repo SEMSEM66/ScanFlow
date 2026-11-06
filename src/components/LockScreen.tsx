@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme';
+import { capsule, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { authService, type PinResult, type UnlockCapabilities } from '../services/AuthService';
 import { formatWait } from '../security/lockout';
@@ -26,7 +26,7 @@ const nextFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 32));
 
 /** Full-screen lock UI; rendered above every screen and sheet (see AppLockOverlay). */
 export const LockScreen: React.FC<LockScreenProps> = ({ checking, caps, authBusy, onUnlock, onSubmitPin, onRefresh }) => {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t, formatString } = useTranslation();
   const insets = useSafeAreaInsets();
 
@@ -166,7 +166,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ checking, caps, authBusy
                 accessibilityRole="button"
                 style={[
                   styles.unlockButton,
-                  { backgroundColor: colors.primary, borderRadius: borderRadius.round, opacity: authBusy ? 0.6 : 1 },
+                  { backgroundColor: colors.primary, opacity: authBusy ? 0.6 : 1 },
                 ]}
               >
                 <Ionicons name={biometryIcon} size={22} color="#FFFFFF" style={styles.unlockIcon} />
@@ -180,6 +180,8 @@ export const LockScreen: React.FC<LockScreenProps> = ({ checking, caps, authBusy
   );
 };
 
+const UNLOCK_HEIGHT = 50;
+
 const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
@@ -191,7 +193,7 @@ const styles = StyleSheet.create({
   iconCircle: {
     width: 80,
     height: 80,
-    borderRadius: 40,
+    ...capsule(80),
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -221,8 +223,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    height: UNLOCK_HEIGHT,
+    ...capsule(UNLOCK_HEIGHT),
     paddingHorizontal: 28,
-    paddingVertical: 14,
   },
   unlockIcon: {
     marginRight: 8,

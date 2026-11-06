@@ -17,6 +17,7 @@ export const lightColors = {
   
   success: '#34C759',
   danger: '#FF3B30',
+  dangerSubdued: '#FFEDEC',
   warning: '#FF9500',
   
   border: '#E8E5DF',
@@ -56,6 +57,7 @@ export const darkColors: typeof lightColors = {
   
   success: '#30D158',
   danger: '#FF453A',
+  dangerSubdued: '#3B1A18',
   warning: '#FF9F0A',
   
   border: '#2B2D35',
@@ -86,15 +88,14 @@ export const spacing = {
   hero: 40,
 } as const;
 
-export const borderRadius = {
-  xs: 6,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  round: 9999,
+/** Soft shadows – always on a wrapper view, never on a view that clips (overflow: 'hidden'). */
+export const shadows = {
+  low: { shadowOffset: { width: 0, height: 1 }, shadowRadius: 3, shadowOpacity: 0.08 },
+  card: { shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, shadowOpacity: 0.06 },
+  raised: { shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, shadowOpacity: 0.1 },
 } as const;
+
+export type ShadowLevel = keyof typeof shadows;
 
 export const typography = {
   largeTitle: {

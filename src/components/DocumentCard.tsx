@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Document } from '../types';
 import type { Snippet } from '../ocr/text';
-import { useTheme } from '../theme';
+import { capsule, concentric, corner, radius, shadows, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
+import { Card, Icon } from './ui';
 
 interface DocumentCardProps {
   document: Document;
@@ -20,7 +20,7 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
   onMenuPress,
   snippet,
 }) => {
-  const { colors, typography, spacing, borderRadius } = useTheme();
+  const { colors, typography, spacing } = useTheme();
   const { t, formatString } = useTranslation();
 
   const formattedDate = new Date(document.createdAt).toLocaleDateString('de-DE', {
@@ -35,97 +35,79 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
       : `${document.pageCount} ${t.common.pages}`;
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.88}
-      onPress={onPress}
-      onLongPress={onMenuPress}
-      style={[
-        styles.card,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.cardBorder,
-          borderRadius: borderRadius.lg,
-          shadowColor: colors.shadowColor,
-        },
-      ]}
-    >
-      {/* Thumbnail Area */}
-      <View
-        style={[
-          styles.thumbnailContainer,
-          {
-            backgroundColor: colors.surfaceSubdued,
-            borderTopLeftRadius: borderRadius.lg - 1,
-            borderTopRightRadius: borderRadius.lg - 1,
-          },
-        ]}
-      >
-        {document.thumbnailUri ? (
-          <Image
-            source={{ uri: document.thumbnailUri }}
-            style={styles.thumbnailImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.placeholderContainer}>
-            <View style={[styles.placeholderDoc, { backgroundColor: colors.surface }]}>
-              <View style={[styles.placeholderLine, { backgroundColor: colors.border, width: '40%' }]} />
-              <View style={[styles.placeholderLine, { backgroundColor: colors.borderLight, width: '80%' }]} />
-              <View style={[styles.placeholderLine, { backgroundColor: colors.borderLight, width: '70%' }]} />
-              <View style={[styles.placeholderLine, { backgroundColor: colors.borderLight, width: '60%' }]} />
+    <TouchableOpacity activeOpacity={0.88} onPress={onPress} onLongPress={onMenuPress} style={styles.cell}>
+      <Card elevated="card" clip radius={CARD_RADIUS}>
+        {/* Thumbnail area, edge to edge (clipped by the card) */}
+        <View style={[styles.thumbnailContainer, { backgroundColor: colors.surfaceSubdued }]}>
+          {document.thumbnailUri ? (
+            <Image
+              source={{ uri: document.thumbnailUri }}
+              style={styles.thumbnailImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.placeholderContainer}>
+              <View style={[styles.placeholderDoc, { backgroundColor: colors.surface, shadowColor: colors.shadowColor }]}>
+                <View style={[styles.placeholderLine, { backgroundColor: colors.border, width: '40%' }]} />
+                <View style={[styles.placeholderLine, { backgroundColor: colors.borderLight, width: '80%' }]} />
+                <View style={[styles.placeholderLine, { backgroundColor: colors.borderLight, width: '70%' }]} />
+                <View style={[styles.placeholderLine, { backgroundColor: colors.borderLight, width: '60%' }]} />
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* Floating Menu Button on Thumbnail */}
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={(e) => {
-            e.stopPropagation();
-            onMenuPress();
-          }}
-          style={[styles.menuButton, { backgroundColor: colors.surface }]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="ellipsis-horizontal" size={16} color={colors.textPrimary} />
-        </TouchableOpacity>
-      </View>
+          {/* Menu button in the corner: a circle concentric with the card corner */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={(e) => {
+              e.stopPropagation();
+              onMenuPress();
+            }}
+            style={[styles.menuButton, { backgroundColor: colors.surface, shadowColor: colors.shadowColor }]}
+            hitSlop={(44 - MENU_SIZE) / 2}
+            accessibilityRole="button"
+            accessibilityLabel={t.library.options}
+          >
+            <Icon name="ellipsis" size={14} color={colors.textPrimary} weight="semibold" />
+          </TouchableOpacity>
+        </View>
 
-      {/* Info Area */}
-      <View style={[styles.infoContainer, { padding: spacing.md }]}>
-        <Text
-          numberOfLines={1}
-          style={[typography.headline, styles.title, { color: colors.textPrimary }]}
-        >
-          {document.title}
-        </Text>
-        <Text
-          numberOfLines={1}
-          style={[typography.footnote, styles.subtitle, { color: colors.textSecondary, marginTop: 4 }]}
-        >
-          {formattedDate} · {pageText}
-        </Text>
-        {snippet ? (
-          <Text numberOfLines={3} style={[typography.caption1, styles.snippet, { color: colors.textSecondary }]}>
-            {snippet.before}
-            <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{snippet.match}</Text>
-            {snippet.after}
+        {/* Info Area */}
+        <View style={[styles.infoContainer, { padding: spacing.md }]}>
+          <Text
+            numberOfLines={1}
+            style={[typography.headline, styles.title, { color: colors.textPrimary }]}
+          >
+            {document.title}
           </Text>
-        ) : null}
-      </View>
+          <Text
+            numberOfLines={1}
+            style={[typography.footnote, styles.subtitle, { color: colors.textSecondary, marginTop: 4 }]}
+          >
+            {formattedDate} · {pageText}
+          </Text>
+          {snippet ? (
+            <Text numberOfLines={3} style={[typography.caption1, styles.snippet, { color: colors.textSecondary }]}>
+              {snippet.before}
+              <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{snippet.match}</Text>
+              {snippet.after}
+            </Text>
+          ) : null}
+        </View>
+      </Card>
     </TouchableOpacity>
   );
 };
 
+const CARD_RADIUS = radius.lg;
+/** Inset of the menu button from the card edges. */
+const MENU_INSET = 8;
+/** Diameter = 2 × concentric radius, so the button's curve runs parallel to the card corner. */
+const MENU_SIZE = 2 * concentric(CARD_RADIUS, MENU_INSET);
+
 const styles = StyleSheet.create({
-  card: {
+  cell: {
     flex: 1,
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
     marginBottom: 16,
   },
   thumbnailContainer: {
@@ -150,34 +132,28 @@ const styles = StyleSheet.create({
   placeholderDoc: {
     width: '75%',
     height: '85%',
-    borderRadius: 8,
+    ...corner(radius.xs),
     padding: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 1,
+    ...shadows.low,
     justifyContent: 'center',
     gap: 8,
   },
   placeholderLine: {
     height: 4,
-    borderRadius: 2,
+    ...capsule(4),
   },
   menuButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    top: MENU_INSET,
+    right: MENU_INSET,
+    width: MENU_SIZE,
+    height: MENU_SIZE,
+    ...capsule(MENU_SIZE),
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.15,
     shadowRadius: 3,
-    elevation: 3,
   },
   infoContainer: {
     justifyContent: 'center',
