@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { capsule, hairline, radius, useTheme } from '../theme';
+import { hairline, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { Adjustments } from '../types';
 import { DEFAULT_ADJUSTMENTS } from '../imaging/types';
-import { BottomSheet } from './BottomSheet';
 import { Button } from './ui';
 
 interface AdjustmentsPanelProps {
-  visible: boolean;
   value: Adjustments;
   /** Called when a slider is released / the switch toggled (triggers a re-render of the page). */
   onChange: (value: Adjustments) => void;
@@ -19,14 +17,14 @@ interface AdjustmentsPanelProps {
 }
 
 /** Bottom sheet with brightness / contrast / sharpness sliders and a denoise switch. */
-export const AdjustmentsPanel: React.FC<AdjustmentsPanelProps> = ({ visible, value, onChange, onApplyToAll, onClose, busy }) => {
+export const AdjustmentsPanel: React.FC<AdjustmentsPanelProps> = ({ value, onChange, onApplyToAll, onClose, busy }) => {
   const { colors, typography, spacing } = useTheme();
   const { t } = useTranslation();
   const [local, setLocal] = useState<Adjustments>(value);
   // Re-sync with the page value when it changes from outside (React "adjust state on prop change" pattern)
-  const [synced, setSynced] = useState({ value, visible });
-  if (synced.value !== value || synced.visible !== visible) {
-    setSynced({ value, visible });
+  const [synced, setSynced] = useState(value);
+  if (synced !== value) {
+    setSynced(value);
     setLocal(value);
   }
 
@@ -58,20 +56,8 @@ export const AdjustmentsPanel: React.FC<AdjustmentsPanelProps> = ({ visible, val
     </View>
   );
 
-  // Sliders: a pull-down to close starts only on the handle / title
   return (
-    <BottomSheet
-      visible={visible}
-      onClose={onClose}
-      dim={0.35}
-      dragArea="top"
-      radius={radius.xl}
-      style={styles.sheet}
-    >
-      <View style={styles.handleContainer}>
-        <View style={[styles.handle, { backgroundColor: colors.border }]} />
-      </View>
-      <View style={{ paddingHorizontal: spacing.base, paddingBottom: spacing.xxl }}>
+      <View style={{ paddingTop: 24, paddingHorizontal: spacing.base, paddingBottom: spacing.xxl }}>
         <View style={styles.titleRow}>
           <Text style={[typography.title2, { color: colors.textPrimary }]}>{t.filters.adjust}</Text>
           <TouchableOpacity onPress={() => commit({ ...DEFAULT_ADJUSTMENTS })} disabled={busy}>
@@ -99,14 +85,10 @@ export const AdjustmentsPanel: React.FC<AdjustmentsPanelProps> = ({ visible, val
         />
         <Button title={t.common.done} onPress={onClose} style={styles.done} />
       </View>
-    </BottomSheet>
   );
 };
 
 const styles = StyleSheet.create({
-  sheet: { paddingTop: 12 },
-  handleContainer: { alignItems: 'center', paddingBottom: 12 },
-  handle: { width: 44, height: 5, ...capsule(5) },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   row: { marginTop: 10 },
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

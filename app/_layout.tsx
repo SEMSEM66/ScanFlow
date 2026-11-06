@@ -60,6 +60,16 @@ function RootNavigation() {
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
+            name="sheets/adjust"
+            options={{
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.75, 1],
+              sheetGrabberVisible: true,
+              sheetExpandsWhenScrolledToEdge: true,
+              contentStyle: { backgroundColor: Platform.OS === 'ios' && parseInt(String(Platform.Version), 10) >= 26 ? 'transparent' : colors.surface },
+            }}
+          />
+          <Stack.Screen
             name="sheets/export"
             options={{
               presentation: 'formSheet',

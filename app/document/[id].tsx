@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -30,13 +30,13 @@ import {
 } from '../../src/types';
 import { FILTER_ORDER } from '../../src/imaging/filters';
 import { nextRotation } from '../../src/imaging/pageState';
+import { adjustSheetSession } from '../../src/components/adjustSheetSession';
 import {
   FilterStrip,
   DocumentBottomBar,
   PageEditorModal,
   DocumentActionModal,
   PromptModal,
-  AdjustmentsPanel,
   useScanner,
   type ScanOutcome,
   Card,
@@ -71,7 +71,7 @@ export default function DocumentDetailScreen() {
   // Modals
   const [isPageEditorVisible, setIsPageEditorVisible] = useState(false);
   const [isActionModalVisible, setIsActionModalVisible] = useState(false);
-  const [isAdjustVisible, setIsAdjustVisible] = useState(false);
+  const [adjustOwner] = useState(() => Symbol('adjust-owner'));
   const [promptState, setPromptState] = useState<{
     visible: boolean;
     title: string;
@@ -234,6 +234,14 @@ export default function DocumentDetailScreen() {
     await loadDocumentData();
     Alert.alert(t.filters.applyToAll, t.filters.appliedToAll);
   };
+
+  // Refresh the bridge only after render, while this editor owns the session.
+  useLayoutEffect(() => {
+    if (currentPage && adjustSheetSession.get()?.owner === adjustOwner) {
+      adjustSheetSession.publish({ owner: adjustOwner, value: currentPage.adjustments, onChange: handleAdjust, onApplyToAll: handleApplyToAll });
+    }
+  });
+  useEffect(() => () => adjustSheetSession.clear(adjustOwner), [adjustOwner]);
 
   const handleCrop = () => {
     if (!currentPage) return;
@@ -493,19 +501,13 @@ export default function DocumentDetailScreen() {
       <DocumentBottomBar
         onRotate={handleRotate}
         onCrop={handleCrop}
-        onAdjust={() => setIsAdjustVisible(true)}
+        onAdjust={() => {
+          adjustSheetSession.publish({ owner: adjustOwner, value: currentPage.adjustments, onChange: handleAdjust, onApplyToAll: handleApplyToAll });
+          router.push('/sheets/adjust');
+        }}
         onDeletePage={() => deletePageAt(currentPageIndex)}
         onAddPage={handleAddPage}
         disabled={busy}
-      />
-
-      <AdjustmentsPanel
-        visible={isAdjustVisible}
-        value={currentPage.adjustments}
-        onChange={handleAdjust}
-        onApplyToAll={handleApplyToAll}
-        onClose={() => setIsAdjustVisible(false)}
-        busy={busy}
       />
 
       <PageEditorModal
