@@ -29,6 +29,17 @@ jest.mock('../src/services/DocumentRepository', () => ({
 }));
 jest.mock('../src/services/PageRenderService', () => ({ importPages: (...args: unknown[]) => mockImportPages(...args) }));
 jest.mock('../src/services/StorageService', () => ({ storageService: { deleteTempFile: (uri: string) => mockDeleteTempFile(uri) } }));
+jest.mock('../src/utils/haptics', () => ({
+  haptics: {
+    selection: jest.fn(),
+    light: jest.fn(),
+    medium: jest.fn(),
+    heavy: jest.fn(),
+    success: jest.fn(),
+    warning: jest.fn(),
+    error: jest.fn(),
+  },
+}));
 
 const QUAD = [
   { x: 0.1, y: 0.1 },
@@ -65,7 +76,7 @@ test('creates a new document from scanner pages without detection', async () => 
   const res = await saveScan({ uris, detect: false, title: 'Scan 05.11.2026 10:00' });
 
   expect(mockImportPages).toHaveBeenCalledWith(uris, undefined, { detect: false });
-  expect(mockRepo.create).toHaveBeenCalledWith({ title: 'Scan 05.11.2026 10:00', pages: imported(2) });
+  expect(mockRepo.create).toHaveBeenCalledWith({ title: 'Scan 05.11.2026 10:00', pages: imported(2), titleAuto: true });
   expect(res).toEqual({ documentId: 'doc_new', created: true, pageIds: ['p1', 'p2'], undetectedPageIds: [] });
   expect(mockDeleteTempFile.mock.calls.map((c) => c[0])).toEqual(uris);
   expect(scanNotices.take('doc_new')).toEqual({ pageIds: ['p1', 'p2'], undetectedPageIds: [] });

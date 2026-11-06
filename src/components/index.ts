@@ -18,3 +18,4 @@ export * from './SignatureAnnotationModal';
 export * from './TrashModal';
 export * from './TagEditModal';
 export * from './PaywallModal';
+export * from './LegalModal';

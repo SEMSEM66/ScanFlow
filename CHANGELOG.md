@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.0-rc] - 2026-11-06
+
+Phase V2 Milestone **M6 (Compliance, Legal & Store Package)**: Apple Privacy Manifest (`PrivacyInfo.xcprivacy`), localized permission descriptions, zero-network quality gate (`check:network`), in-app legal readers (Privacy, Terms, Open Source Licenses), and complete App Store package in `docs/store/` and `tools/store-screenshots/`.
+
+### Added
+- **M6 – Apple Privacy Manifest (`PrivacyInfo.xcprivacy`, `app.json`):**
+  - Declared `NSPrivacyTracking: false`, `NSPrivacyTrackingDomains: []`, and `NSPrivacyCollectedDataTypes: []` (zero data collected).
+  - Configured Apple required reason codes:
+    - `NSPrivacyAccessedAPITypeUserDefaults`: `CA92.1` (local app settings storage).
+    - `NSPrivacyAccessedAPITypeFileTimestamp`: `C617.1` (file modification timestamps for documents).
+    - `NSPrivacyAccessedAPITypeDiskSpace`: `E174.1` (disk space headroom check for scans).
+    - `NSPrivacyAccessedAPITypeSystemBootTime`: `35F9.1` (measuring app lock timeout).
+- **M6 – Localized Permissions (`locales/de.json`, `locales/en.json`, `app.json`):**
+  - Localized Info.plist descriptions for Camera (`NSCameraUsageDescription`), Photo Library (`NSPhotoLibraryUsageDescription`), and Face ID (`NSFaceIDUsageDescription`) in German and English.
+- **M6 – Zero-Network Quality Gate (`scripts/check-network.mjs`, `package.json`):**
+  - Added automated audit script `npm run check:network` that verifies 0 network calls, 0 third-party trackers, and 0 external telemetry across all 122 application source files.
+- **M6 – In-App Legal & License Reader (`LegalModal.tsx`, `app/(tabs)/(settings)/index.tsx`):**
+  - Added native formSheet modal in Settings under *Über* providing full offline legal texts:
+    - *Datenschutzerklärung* (Offline Privacy Policy)
+    - *Nutzungsbedingungen* (Terms of Service & EULA with visual signature disclaimer)
+    - *Lizenzen* (Open Source Licenses for React Native, Expo, Skia, pdf-lib, etc.)
+- **M6 – Complete App Store Store Package (`docs/store/`, `tools/store-screenshots/`):**
+  - `docs/store/privacy-policy.md` and `privacy-policy.html`: 100% offline privacy policy ready for GitHub Pages or static web hosting.
+  - `docs/store/terms.md`: standard terms of service compliant with German civil law (BGB) and Apple standard EULA.
+  - `docs/store/impressum.md`: § 5 TMG / DDG compliant template for European App Store listings.
+  - `docs/store/app-store-metadata.md`: complete German and English titles, subtitles, keywords (100-char limits), promotional text, and full descriptions free of competitor trademarks.
+  - `docs/store/review-notes.md`: step-by-step review instructions and demo guide for Apple App Reviewers.
+  - `docs/store/privacy-nutrition-label.md`: documentation of "Data Not Collected" for App Store Connect.
+  - `docs/store/age-rating.md`: questionnaire declaration for global 4+ / USK 0 rating.
+  - `docs/store/export-compliance.md`: EAR Category 5, Part 2 exemption documentation justifying `ITSAppUsesNonExemptEncryption = false`.
+  - `docs/store/review-guidelines-checklist.md`: complete compliance audit against Apple App Review Guidelines 2.1, 2.3, 3.1.1, 3.1.2, 5.1.1, 5.1.2.
+  - `tools/store-screenshots/README.md` and `compose-spec.json`: layout specification and copy for 6 App Store screenshot slides in 6.9", 6.7", and 6.5" resolutions.
+
+---
+
 ## [1.13.0] - 2026-11-06
 
 Phase V2 Milestone **M5 (Monetization & StoreKit 2)**: 100% on-device StoreKit 2 integration, zero third-party tracking, Free vs. Pro entitlement gating, offline Keychain entitlement caching, Paywall modal, and App Store review trigger.

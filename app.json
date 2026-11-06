@@ -2,15 +2,43 @@
   "expo": {
     "name": "ScanFlow",
     "slug": "scanflow",
-    "version": "1.13.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "scanflow",
     "userInterfaceStyle": "automatic",
+    "locales": {
+      "de": "./locales/de.json",
+      "en": "./locales/en.json"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.scanflow.app",
+      "privacyManifests": {
+        "NSPrivacyTracking": false,
+        "NSPrivacyTrackingDomains": [],
+        "NSPrivacyCollectedDataTypes": [],
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPITypeUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPITypeFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPITypeDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPITypeSystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": ["35F9.1"]
+          }
+        ]
+      },
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "ScanFlow benötigt Zugriff auf Ihre Kamera, um Dokumente zu scannen.",
         "NSPhotoLibraryUsageDescription": "ScanFlow benötigt Zugriff auf Ihre Fotomediathek, um Dokumente zu importieren.",
         "NSFaceIDUsageDescription": "ScanFlow verwendet Face ID, um die App zu entsperren.",

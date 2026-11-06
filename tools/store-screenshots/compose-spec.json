@@ -1,0 +1,104 @@
+{
+  "project": "ScanFlow",
+  "version": "2.0.0",
+  "targetSizes": [
+    { "name": "iPhone 6.9 inch", "width": 1320, "height": 2868 },
+    { "name": "iPhone 6.7 inch", "width": 1290, "height": 2796 },
+    { "name": "iPhone 6.5 inch", "width": 1242, "height": 2688 }
+  ],
+  "colors": {
+    "backgroundLight": "#FBF9F5",
+    "backgroundDark": "#0A0A0C",
+    "primary": "#0066FF",
+    "textLight": "#1C1C1E",
+    "textDark": "#FFFFFF",
+    "subtextLight": "#6C6C70",
+    "subtextDark": "#8E8E93"
+  },
+  "slides": [
+    {
+      "index": 1,
+      "screen": "camera_or_crop",
+      "copy": {
+        "de": {
+          "headline": "Präzises Scannen",
+          "subtitle": "Automatische Kantenerkennung & 4-Punkte-Korrektur"
+        },
+        "en": {
+          "headline": "Precision Scanning",
+          "subtitle": "Automatic edge detection & perspective crop"
+        }
+      }
+    },
+    {
+      "index": 2,
+      "screen": "document_filters",
+      "copy": {
+        "de": {
+          "headline": "Kristallklare Filter",
+          "subtitle": "Text-Optimierung, Magische Farbe & Schwarz-Weiß"
+        },
+        "en": {
+          "headline": "Crystal-Clear Filters",
+          "subtitle": "Text enhancement, Magic Color & Black & White"
+        }
+      }
+    },
+    {
+      "index": 3,
+      "screen": "search_ocr",
+      "copy": {
+        "de": {
+          "headline": "Texterkennung & Volltextsuche",
+          "subtitle": "100% auf dem Gerät mit Apple Vision. Durchsuchbare PDFs"
+        },
+        "en": {
+          "headline": "On-Device OCR & Search",
+          "subtitle": "100% on-device with Apple Vision. Searchable PDFs"
+        }
+      }
+    },
+    {
+      "index": 4,
+      "screen": "pdf_toolkit_export",
+      "copy": {
+        "de": {
+          "headline": "PDF-Werkzeuge & Schutz",
+          "subtitle": "PDFs zusammenfügen, teilen, signieren & verschlüsseln"
+        },
+        "en": {
+          "headline": "PDF Toolkit & Protection",
+          "subtitle": "Merge, split, sign & password-protect PDFs"
+        }
+      }
+    },
+    {
+      "index": 5,
+      "screen": "library_organization",
+      "copy": {
+        "de": {
+          "headline": "Intelligente Organisation",
+          "subtitle": "Ordner, Tags, Favoriten, automatische Benennung & Papierkorb"
+        },
+        "en": {
+          "headline": "Smart Organization",
+          "subtitle": "Folders, tags, favorites, smart naming & 30-day trash"
+        }
+      }
+    },
+    {
+      "index": 6,
+      "screen": "security_lock",
+      "copy": {
+        "de": {
+          "headline": "100% Privat & Ohne Tracking",
+          "subtitle": "Kein Konto. Keine Werbung. Kein Datenabfluss. Geschützt mit Face ID"
+        },
+        "en": {
+          "headline": "100% Private & Zero Tracking",
+          "subtitle": "No account. No ads. No tracking. Protected by Face ID"
+        }
+      }
+    }
+  ]
+}

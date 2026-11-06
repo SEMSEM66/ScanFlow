@@ -1,0 +1,5 @@
+{
+  "NSCameraUsageDescription": "ScanFlow needs access to your camera to scan documents.",
+  "NSPhotoLibraryUsageDescription": "ScanFlow needs access to your photo library to import documents.",
+  "NSFaceIDUsageDescription": "ScanFlow uses Face ID to securely unlock the app."
+}

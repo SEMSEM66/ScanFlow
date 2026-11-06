@@ -1,6 +1,6 @@
 {
   "name": "scanflow",
-  "version": "1.13.0",
+  "version": "2.0.0",
   "main": "expo-router/entry",
   "scripts": {
     "postinstall": "node scripts/patch-expo-modules-jsi.js",
@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "check:corners": "node scripts/check-corners.mjs",
+    "check:network": "node scripts/check-network.mjs",
     "test": "jest",
     "test:security": "jest __tests__/security.test.ts __tests__/authService.test.ts __tests__/exportCleanup.test.ts",
     "test:imaging": "jest __tests__/geometry.test.ts __tests__/edgeDetection.test.ts __tests__/pageState.test.ts __tests__/pdf.test.ts __tests__/migrations.test.ts __tests__/annotationsAndIdCard.test.ts",

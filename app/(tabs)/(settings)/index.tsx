@@ -39,6 +39,7 @@ import { ExportDpi, ExportQuality } from '../../../src/types';
 import { EXPORT_DPI_PRESETS } from '../../../src/imaging/pageFormat';
 import { PinSetupModal, type PinFlow } from '../../../src/components/PinSetupModal';
 import { PaywallModal } from '../../../src/components/PaywallModal';
+import { LegalModal, type LegalDocType } from '../../../src/components/LegalModal';
 import { useAppLock } from '../../../src/components/AppLockOverlay';
 import { SMART_NAMING_PRESETS, formatSmartDocumentTitle } from '../../../src/utils/organization';
 
@@ -79,6 +80,10 @@ export default function SettingsScreen() {
   const [isPro, setIsPro] = useState(monetizationService.isProUnlocked());
   const [paywallVisible, setPaywallVisible] = useState(false);
   const [restoringPurchases, setRestoringPurchases] = useState(false);
+  const [legalModal, setLegalModal] = useState<{ visible: boolean; type: LegalDocType }>({
+    visible: false,
+    type: 'privacy',
+  });
 
   useEffect(() => {
     const unsub = monetizationService.subscribe((val) => {
@@ -990,6 +995,30 @@ export default function SettingsScreen() {
               {t.settings.developerName}
             </Text>
           </View>
+          <TouchableOpacity
+            onPress={() => setLegalModal({ visible: true, type: 'privacy' })}
+            style={[styles.infoRow, { borderTopWidth: hairline, borderTopColor: colors.borderLight, marginTop: 10, paddingTop: 10 }]}
+            accessibilityRole="button"
+          >
+            <Text style={[typography.body, { color: colors.textPrimary }]}>{t.settings.privacyPolicy}</Text>
+            <Icon name="chevron.right" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setLegalModal({ visible: true, type: 'terms' })}
+            style={[styles.infoRow, { borderTopWidth: hairline, borderTopColor: colors.borderLight, marginTop: 10, paddingTop: 10 }]}
+            accessibilityRole="button"
+          >
+            <Text style={[typography.body, { color: colors.textPrimary }]}>{t.settings.termsOfService}</Text>
+            <Icon name="chevron.right" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setLegalModal({ visible: true, type: 'licenses' })}
+            style={[styles.infoRow, { borderTopWidth: hairline, borderTopColor: colors.borderLight, marginTop: 10, paddingTop: 10 }]}
+            accessibilityRole="button"
+          >
+            <Text style={[typography.body, { color: colors.textPrimary }]}>{t.settings.licenses}</Text>
+            <Icon name="chevron.right" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -1007,6 +1036,13 @@ export default function SettingsScreen() {
         visible={paywallVisible}
         onClose={() => setPaywallVisible(false)}
         onSuccess={() => setIsPro(monetizationService.isProUnlocked())}
+      />
+
+      {/* Legal & Licenses Modal */}
+      <LegalModal
+        visible={legalModal.visible}
+        type={legalModal.type}
+        onClose={() => setLegalModal((prev) => ({ ...prev, visible: false }))}
       />
     </SafeAreaView>
   );

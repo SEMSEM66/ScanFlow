@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScanFlow – Datenschutzerklärung (Privacy Policy)</title>
+  <style>
+    :root {
+      --bg: #FBF9F5;
+      --card: #FFFFFF;
+      --text: #111111;
+      --muted: #6C6C70;
+      --primary: #0066FF;
+      --border: #E8E5DF;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0D0E11;
+        --card: #1A1B20;
+        --text: #F6F6F7;
+        --muted: #A0A2AA;
+        --primary: #2B7FFF;
+        --border: #2B2D35;
+      }
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      margin: 0;
+      padding: 32px 16px;
+    }
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      color: var(--primary);
+    }
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-top: 28px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(0, 102, 255, 0.1);
+      color: var(--primary);
+      font-weight: 600;
+      font-size: 13px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+    p, li {
+      color: var(--text);
+      font-size: 15px;
+    }
+    ul {
+      padding-left: 20px;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ScanFlow – Datenschutzerklärung</h1>
+    <div class="badge">100% Offline &middot; Zero Tracking &middot; No Accounts</div>
+    <div class="meta">Stand: November 2026 &middot; Gilt für ScanFlow für iOS</div>
+
+    <h2>1. Grundsatz: Absolute Datensparsamkeit</h2>
+    <p>ScanFlow arbeitet nach dem Grundsatz vollständiger digitaler Privatsphäre:</p>
+    <ul>
+      <li><strong>Keine Server:</strong> Wir betreiben keine eigenen Server und leiten keine Daten an Dritte weiter.</li>
+      <li><strong>Keine Benutzerkonten:</strong> Zur Nutzung ist keine Anmeldung oder E-Mail-Adresse erforderlich.</li>
+      <li><strong>Keine Tracker oder Werbung:</strong> ScanFlow enthält weder Werbe- noch Analyse-SDKs.</li>
+      <li><strong>100% lokale Verarbeitung:</strong> Alle Berechnungen (Kantenerkennung, Skia-Bildfilterung, Apple Vision OCR, Word-Konvertierung, PDF-Verschlüsselung) laufen ausschließlich lokal auf Ihrem iPhone.</li>
+    </ul>
+
+    <h2>2. Erfassung und Gerätezugriffe</h2>
+    <p><strong>Kamera:</strong> Der Kamerazugriff dient rein optisch dem Erfassen von Dokumenten im Moment der Aufnahme.</p>
+    <p><strong>Fotomediathek:</strong> Dient dem manuellen Import von Bildern, die Sie als Dokumentenseite hinzufügen möchten.</p>
+    <p><strong>App-Sperre & Biometrie:</strong> Face ID / Touch ID erfolgt über das gesicherte iOS LocalAuthentication-System. Ein ScanFlow-PIN wird mit PBKDF2-HMAC-SHA256 verschlüsselt im iOS Keychain (nur auf diesem Gerät) gespeichert.</p>
+    <p><strong>In-App-Käufe:</strong> Käufe werden über Apple StoreKit 2 verarbeitet. ScanFlow erhält keine Zahlungsdaten.</p>
+
+    <h2>3. Export & Teilen</h2>
+    <p>Gescannte Dokumente verlassen Ihr Gerät nur, wenn Sie diese explizit über das iOS-Freigabemenü (z.B. per AirDrop, E-Mail oder Dateien-App) teilen. Temporäre Exportdateien werden nach Schließen des Freigabedialogs gelöscht.</p>
+
+    <h2>4. Kontakt</h2>
+    <p>Fragen richten Sie bitte an: <a href="mailto:support@scanflow.app" style="color: var(--primary);">support@scanflow.app</a></p>
+  </div>
+</body>
+</html>
