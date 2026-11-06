@@ -632,13 +632,13 @@ export default function SettingsScreen() {
             <Text style={[typography.body, { color: colors.textPrimary }]}>{t.settings.storedDocuments}</Text>
             <Text style={[typography.bodyBold, { color: colors.textSecondary }]}>{docCount}</Text>
           </View>
-          <View style={[styles.infoRow, { borderTopWidth: 1, borderTopColor: colors.borderLight, marginTop: 10, paddingTop: 10 }]}>
+          <View style={[styles.infoRow, { borderTopWidth: hairline, borderTopColor: colors.borderLight, marginTop: 10, paddingTop: 10 }]}>
             <Text style={[typography.body, { color: colors.textPrimary }]}>{t.settings.storageUsed}</Text>
             <Text style={[typography.bodyBold, { color: colors.textSecondary }]}>{formatStorage(storageBytes)}</Text>
           </View>
           <TouchableOpacity
             onPress={handleClearCache}
-            style={[styles.clearCacheBtn, { borderTopWidth: 1, borderTopColor: colors.borderLight, marginTop: 10, paddingTop: 10 }]}
+            style={[styles.clearCacheBtn, { borderTopWidth: hairline, borderTopColor: colors.borderLight, marginTop: 10, paddingTop: 10 }]}
           >
             <Text style={[typography.bodyMedium, { color: colors.primary }]}>{t.settings.clearCache}</Text>
           </TouchableOpacity>
