@@ -8,6 +8,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
@@ -31,11 +32,13 @@ import {
   ocrService,
   smartNamingService,
   backupService,
+  monetizationService,
   type OcrStats,
 } from '../../../src/services';
 import { ExportDpi, ExportQuality } from '../../../src/types';
 import { EXPORT_DPI_PRESETS } from '../../../src/imaging/pageFormat';
 import { PinSetupModal, type PinFlow } from '../../../src/components/PinSetupModal';
+import { PaywallModal } from '../../../src/components/PaywallModal';
 import { useAppLock } from '../../../src/components/AppLockOverlay';
 import { SMART_NAMING_PRESETS, formatSmartDocumentTitle } from '../../../src/utils/organization';
 
@@ -71,6 +74,18 @@ export default function SettingsScreen() {
 
   // Full Backup & Restore state
   const [backupBusy, setBackupBusy] = useState<string | null>(null);
+
+  // ScanFlow Pro monetization state
+  const [isPro, setIsPro] = useState(monetizationService.isProUnlocked());
+  const [paywallVisible, setPaywallVisible] = useState(false);
+  const [restoringPurchases, setRestoringPurchases] = useState(false);
+
+  useEffect(() => {
+    const unsub = monetizationService.subscribe((val) => {
+      setIsPro(val);
+    });
+    return () => unsub();
+  }, []);
 
   // Text recognition (Apple Vision, installed app only)
   const ocrAvailable = ocrService.available;
@@ -454,9 +469,102 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleRestorePurchases = async () => {
+    setRestoringPurchases(true);
+    try {
+      const outcome = await monetizationService.restorePurchases();
+      if (outcome.unlocked) {
+        Alert.alert(t.monetization.restoreSuccessTitle, t.monetization.restoreSuccessMessage);
+      } else {
+        Alert.alert(t.monetization.restoreNoneTitle, t.monetization.restoreNoneMessage);
+      }
+    } catch {
+      Alert.alert(t.common.error, t.monetization.restoreNoneMessage);
+    } finally {
+      setRestoringPurchases(false);
+    }
+  };
+
+  const handleManageSubscriptions = () => {
+    void Linking.openURL('https://apps.apple.com/account/subscriptions');
+  };
+
+  const handleToggleDevMockPro = async (val: boolean) => {
+    await monetizationService.setDevMockPro(val);
+    setIsPro(val);
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right']}>
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[styles.scrollContent, { paddingHorizontal: spacing.base }]}>
+        {/* Section: ScanFlow Pro Banner */}
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: isPro ? colors.card : colors.primarySubdued,
+              borderColor: isPro ? colors.cardBorder : colors.primary,
+              borderWidth: isPro ? hairline : 1.5,
+              marginTop: spacing.sm,
+            },
+          ]}
+        >
+          <View style={styles.proRow}>
+            <View style={[styles.iconBox, { backgroundColor: isPro ? colors.primarySubdued : colors.primary }]}>
+              <Icon name="sparkles" size={20} color={isPro ? colors.primary : '#FFFFFF'} />
+            </View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[typography.headline, { color: colors.textPrimary, fontWeight: '700' }]}>
+                {isPro ? t.monetization.proActive : t.monetization.proTitle}
+              </Text>
+              <Text style={[typography.caption1, { color: colors.textSecondary, marginTop: 2 }]}>
+                {isPro ? t.monetization.proSubtitle : t.monetization.subscribeTrial}
+              </Text>
+            </View>
+            {!isPro && (
+              <TouchableOpacity
+                onPress={() => setPaywallVisible(true)}
+                style={[styles.proPill, { backgroundColor: colors.primary }]}
+                accessibilityRole="button"
+              >
+                <Text style={[typography.caption1, { color: '#FFFFFF', fontWeight: '700' }]}>
+                  {t.monetization.subscribeNow}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={[styles.proFooter, { borderTopWidth: hairline, borderTopColor: colors.borderLight }]}>
+            <TouchableOpacity onPress={handleRestorePurchases} disabled={restoringPurchases} accessibilityRole="button">
+              {restoringPurchases ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={[typography.footnote, { color: colors.primary, fontWeight: '600' }]}>
+                  {t.monetization.restorePurchases}
+                </Text>
+              )}
+            </TouchableOpacity>
+            {isPro && (
+              <TouchableOpacity onPress={handleManageSubscriptions} accessibilityRole="button">
+                <Text style={[typography.footnote, { color: colors.textSecondary }]}>
+                  {t.monetization.manageSubscription}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {!monetizationService.isStoreKitAvailable && (
+            <View style={[styles.toggleRow, styles.divided, { borderTopColor: colors.borderLight, marginTop: 8, paddingTop: 8 }]}>
+              <Text style={[typography.caption1, { color: colors.textSecondary, flex: 1 }]}>
+                {t.monetization.devMockToggle}
+              </Text>
+              <Switch
+                value={isPro}
+                onValueChange={(val) => void handleToggleDevMockPro(val)}
+                trackColor={{ false: colors.border, true: colors.primary }}
+              />
+            </View>
+          )}
+        </View>
+
         {/* Section 0: Scanner (iOS document scanner or ScanFlow camera) */}
         <Text style={[typography.subhead, styles.sectionHeader, { color: colors.textSecondary }]}>
           {t.settings.scanner}
@@ -893,6 +1001,13 @@ export default function SettingsScreen() {
         onClose={() => endPinFlow(false)}
         onSuccess={() => endPinFlow(true)}
       />
+
+      {/* ScanFlow Pro Paywall */}
+      <PaywallModal
+        visible={paywallVisible}
+        onClose={() => setPaywallVisible(false)}
+        onSuccess={() => setIsPro(monetizationService.isProUnlocked())}
+      />
     </SafeAreaView>
   );
 }
@@ -934,6 +1049,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  proRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  proPill: {
+    height: 32,
+    ...capsule(32),
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  proFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 10,
   },
   toggleRowLeft: {
     flexDirection: 'row',

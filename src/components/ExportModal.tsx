@@ -18,6 +18,7 @@ import { isUnlocked } from '../entitlements';
 import { exportService } from '../services/ExportService';
 import { authService } from '../services/AuthService';
 import { ocrService } from '../services/OcrService';
+import { reviewService } from '../services/ReviewService';
 import { EXPORT_DPI_PRESETS } from '../imaging/pageFormat';
 import { Button } from './ui';
 
@@ -81,6 +82,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     const watermarkText = format === 'pdf' && includeWatermark ? t.export.watermarkText : undefined;
     const pdfPassword = passwordActive ? password : undefined;
     await onShare(format, quality, dpi, watermarkText, pdfPassword);
+    void reviewService.recordSuccessfulExport();
   };
 
   return (

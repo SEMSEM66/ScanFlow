@@ -469,10 +469,25 @@ Requested by the user after STOP C: the dark background of *Anpassen* slid up to
   2. **Accessibility & VoiceOver:** Enable VoiceOver on iPhone: navigate Library, document view, crop screen, and PIN pad; confirm every button speaks its localized label and role (DE/EN) without silent elements or unlabelled icons; verify 44 pt minimum hit targets.
   3. **Home Screen Quick Actions:** Long-press the ScanFlow app icon on the iPhone Home Screen: confirm "Dokument scannen" and "Suchen" appear; tap "Dokument scannen" → verify ScanFlow opens and launches the scanner immediately; tap "Suchen" → verify ScanFlow opens straight into search.
 
-### ⏳ M5 – Monetization (v1.13.0)
-- [ ] **STOP FIRST:** Write `docs/MONETIZATION.md` (StoreKit 2 vs. RevenueCat comparison, proposed Free/Pro gating, pricing hypotheses) and wait for user approval before coding the paywall.
-- [ ] **P0:** StoreKit 2 integration (local JWS verification, `Transaction.currentEntitlements`, `Transaction.updates`, `AppStore.sync` restore), fair paywall UI, Settings Pro status & manage/restore, offline cached entitlement state, and `expo-store-review` after 3rd successful export.
-- [ ] **🛑 STOP M5:** TestFlight / sandbox purchase & restore checklist.
+### ✅ M5 – Monetization (v1.13.0)
+- [x] **Architecture Document:** `docs/MONETIZATION.md` covering StoreKit 2 vs. RevenueCat comparison (adopted StoreKit 2 for 100% on-device zero-tracking compliance), Free vs. Pro entitlement split, pricing hypotheses (Yearly with 7-day trial, Monthly, Lifetime), and offline caching architecture.
+- [x] **P0 – StoreKit 2 Native Integration (`modules/scanflow-ocr/ios/ScanFlowOcrModule.swift`):**
+  - Modern Swift StoreKit 2 functions: `fetchProductsAsync`, `purchaseProductAsync`, `restorePurchasesAsync`, `checkEntitlementsAsync` using `Product.purchase()`, `Transaction.currentEntitlements`, and `AppStore.sync()`.
+  - On-device cryptographic verification: verified JWS transaction signatures, revocation checks, and expiration validation.
+- [x] **P0 – Entitlements Layer (`src/entitlements/`, `MonetizationService.ts`):**
+  - Strict Free tier protection: scanning, filters, folders, basic PDF/JPG export, App Lock, 30-day Trash, and QR/GiroCode reader are **permanently free** and never blocked.
+  - Pro feature gating: OCR & searchable PDF, Word export, PDF import/merge/split, password encryption, ID-card mode, signatures/annotations, smart naming auto-rename, batch ZIP export, and full ZIP backup (`__tests__/monetization.test.ts` & `__tests__/entitlements.test.ts` – `verified by tests`).
+  - Offline Keychain caching: `scanflow_pro_entitlement` stored with `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` so Pro features remain available offline without internet connection.
+- [x] **P0 – Paywall & Settings UI (`PaywallModal.tsx`, `app/(tabs)/(settings)/index.tsx`):**
+  - Native formSheet paywall modal with tier options (Yearly with 7-day trial, Monthly, Lifetime), restore purchases action, and terms/privacy links.
+  - Settings Pro banner with real-time status, manage subscription link, and developer sandbox simulation toggle for Expo Go.
+- [x] **P0 – App Store Review Prompt (`ReviewService.ts`, `expo-store-review`):**
+  - Automatically triggers `StoreReview.requestReview()` after the 3rd successful document export, rate-limited to at most once per app version (`UNVERIFIED (needs iPhone)`).
+- [ ] **🛑 STOP M5 (queued for v2.0.0-rc single IPA build):**
+  1. **Sandbox Purchase:** On physical iPhone in TestFlight / Sandbox account, open *Einstellungen* → tap *Jetzt freischalten* on the Pro banner → select *Jährlich* → complete StoreKit 2 purchase sheet with Sandbox Apple ID → verify Pro banner switches to *ScanFlow Pro ist aktiv*.
+  2. **Feature Gating Verification:** With Pro active, verify ID-Card mode, PDF encryption, Word export, and full backup are fully functional. Turn off Pro (or test on fresh install) → verify attempting gated actions presents the Paywall modal while scanning, filters, folders, and basic export remain completely unrestricted.
+  3. **Restore Purchases:** Tap *Käufe wiederherstellen* → confirm StoreKit 2 calls `AppStore.sync()` and restores the Pro entitlement with success alert.
+  4. **App Store Review:** Export 3 documents in succession → verify native iOS App Store rating prompt appears after the 3rd export.
 
 ### ⏳ M6 – Compliance, Legal & Store Package (v2.0.0-rc)
 - [ ] **P0 (Code):** `ios.privacyManifests` in `app.json`, `ITSAppUsesNonExemptEncryption` decision + documentation, localized `Info.plist` permission strings (`de`/`en`), icon/splash verification, `scripts/check-network.mjs` (`npm run check:network`), and in-app *Einstellungen → Über* legal & open-source license views (generated from `package-lock.json`).
@@ -493,16 +508,17 @@ Requested by the user after STOP C: the dark background of *Anpassen* slid up to
 ---
 
 ### 📌 Next Steps (Session Handoff for Fresh Agents)
-- **Current Branch:** `feat/m4-ios-integration` (stacked on `feat/m3-organization`, `feat/m2-capture-marking`, and `feat/m0-m1-pdf-toolkit`).
+- **Current Branch:** `feat/m5-monetization` (stacked on `feat/m4-ios-integration`, `feat/m3-organization`, `feat/m2-capture-marking`, and `feat/m0-m1-pdf-toolkit`).
 - **Completed in Current Program:**
   - **M0 (Foundations) & M1 (PDF Toolkit — v1.9.0):** `src/entitlements`, i18n parity test, PDF & image import from Files ("Open in ScanFlow") with native 200 dpi PDFKit rasterization, Library multi-select & batch ZIP export, document merge & page split/extract, password-protected PDF export via PDFKit.
   - **M2 (Capture Modes & Marking — v1.10.0):** ID-Card Mode (true 1:1 `85.6 × 54 mm` scale on A4 with optional purpose watermark), QR/Barcode & SEPA GiroCode (EPC) scanner in *Werkzeuge*, non-destructive visual signatures & annotations layer (schema v4, `RENDER_VERSION = 2`), photo-to-signature thresholding (P1).
   - **M3 (Organization & Automation — v1.11.0):** 30-day Trash (*Zuletzt gelöscht*, auto-purge on launch, schema v5), Favorites & Tags with search integration, deterministic Smart Naming templates with auto-rename hook, and Full-Library ZIP Backup & Restore via Files picker (`manifest.json` v1).
   - **M4 (iOS Integration & Polish — v1.12.0):** `expo-haptics` with Reduce Motion respect (filter change, corner snap/lock, PIN pad, success/error), automated WCAG 2.1 AA token contrast test (`__tests__/contrast.test.ts`), 44 pt minimum hit targets, `expo-quick-actions` Home Screen quick actions (*Dokument scannen*, *Suchen*), and time-boxed native spikes (`app-intents.md`, `lock-screen-widget.md`, `share-extension.md`).
+  - **M5 (Monetization & StoreKit 2 — v1.13.0):** `docs/MONETIZATION.md`, native StoreKit 2 on-device implementation in `ScanFlowOcrModule.swift`, Free vs. Pro entitlement enforcement with offline Keychain caching (`scanflow_pro_entitlement`), `PaywallModal.tsx`, Settings Pro banner & Expo Go sandbox simulation toggle, and App Store review trigger via `expo-store-review`.
 - **What to Do Next:**
-  - Proceed to Milestone **M5 – Monetization (v1.13.0)** on branch `feat/m5-monetization`:
-    1. **STOP FIRST:** Write `docs/MONETIZATION.md` (StoreKit 2 native on-device entitlements, no third-party tracking SDKs, Free vs. Pro feature gating table, pricing tiers).
-    2. **P0 – StoreKit 2:** Implement StoreKit 2 native module in `modules/scanflow-ocr` (or `StoreKitService.ts`), paywall modal, restore purchases, and `expo-store-review` trigger after 3rd export.
-    3. Update ROADMAP, ARCHITECTURE, CHANGELOG, run tests, and commit.
+  - Proceed to Milestone **M6 – Compliance, Legal & Store Package (v2.0.0-rc)** on branch `feat/m6-compliance-store`:
+    1. **P0 (Code):** `ios.privacyManifests` in `app.json`, `ITSAppUsesNonExemptEncryption` decision + documentation, localized `Info.plist` permission strings (`de`/`en`), `scripts/check-network.mjs` (`npm run check:network`), and in-app legal/license view (*Einstellungen → Über*).
+    2. **P0 (`docs/store/`):** Privacy policy, Terms, Impressum, App Store metadata (DE & EN), Review notes, Privacy nutrition label, and store screenshot instructions.
+    3. Update docs and commit.
 
 

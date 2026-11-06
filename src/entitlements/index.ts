@@ -44,6 +44,14 @@ export type FeatureKey = FreeFeatureKey | ProFeatureKey;
 
 export const ALL_FEATURES: readonly FeatureKey[] = [...FREE_FEATURES, ...PRO_FEATURES];
 
+export const PRO_PRODUCT_IDS = {
+  yearly: 'com.scanflow.app.pro.yearly',
+  monthly: 'com.scanflow.app.pro.monthly',
+  lifetime: 'com.scanflow.app.pro.lifetime',
+} as const;
+
+export type ProProductId = (typeof PRO_PRODUCT_IDS)[keyof typeof PRO_PRODUCT_IDS];
+
 const PRO_SET: ReadonlySet<string> = new Set<string>(PRO_FEATURES);
 const FREE_SET: ReadonlySet<string> = new Set<string>(FREE_FEATURES);
 

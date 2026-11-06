@@ -15,6 +15,8 @@ import { documentRepository } from '../src/services/DocumentRepository';
 import { ocrService } from '../src/services/OcrService';
 import { pdfToolkitService } from '../src/services/PdfToolkitService';
 import { quickActionService, type QuickActionItem } from '../src/services/QuickActionService';
+import { monetizationService } from '../src/services/MonetizationService';
+import { setEntitlementMode } from '../src/entitlements';
 
 function QuickActionsHandler() {
   const { scan } = useScanner();
@@ -81,6 +83,9 @@ function RootNavigation() {
         await storageService.clearCaches();
         // Purge expired documents from 30-day Trash on launch
         await documentRepository.purgeExpiredTrash();
+        // Initialize monetization & sync StoreKit 2 entitlements
+        await monetizationService.init();
+        setEntitlementMode(monetizationService.isProUnlocked() ? 'pro' : 'free');
         // Text recognition of new / changed pages in the background (installed app only)
         ocrService.start();
       } catch (err) {
@@ -90,6 +95,11 @@ function RootNavigation() {
       }
     }
     initApp();
+
+    const unsub = monetizationService.subscribe((isPro) => {
+      setEntitlementMode(isPro ? 'pro' : 'free');
+    });
+    return () => unsub();
   }, []);
 
   // Handle "Open in ScanFlow" incoming file:// URLs (PDFs and images from Files / Share Sheet)

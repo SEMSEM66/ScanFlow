@@ -667,12 +667,34 @@ All native functions live in the single local Expo module `modules/scanflow-ocr`
 
 ---
 
-## 15. Not yet implemented (see ROADMAP)
+## 15. Monetization & StoreKit 2 Architecture (v1.13.0, M5)
+
+### StoreKit 2 Native Implementation (`ScanFlowOcrModule.swift`)
+- **Direct on-device architecture:** uses Swift `StoreKit.Product` and `StoreKit.Transaction` without third-party SDKs, preserving zero-tracking and offline guarantees.
+- **Functions:**
+  - `fetchProductsAsync(productIds: [String])`: queries App Store for localized titles and formatted prices.
+  - `purchaseProductAsync(productId: String)`: invokes `product.purchase()`, finishes verified transactions (`await transaction.finish()`), and returns status.
+  - `restorePurchasesAsync()`: calls `try await AppStore.sync()` and re-evaluates active verified entitlements.
+  - `checkEntitlementsAsync()`: iterates `Transaction.currentEntitlements`, verifying signatures against Apple Root CA and filtering out expired or revoked transactions.
+
+### Offline Entitlements & Keychain Cache (`MonetizationService.ts`, `src/entitlements/`)
+- **Key separation:** Free tier features are **permanently unlocked** in `src/entitlements/index.ts` (`isFreeFeature(...)` returns `true` across all modes).
+- **Pro gating:** Pro features (`ocr_search`, `word_export`, `pdf_import`, `pdf_merge_split`, `pdf_password`, `batch_export`, `id_card_mode`, `signatures_annotations`, `smart_naming`, `backup_restore`) return `true` only when `isProUnlocked()` is true.
+- **Offline Keychain caching:** active Pro status is persisted in Keychain (`scanflow_pro_entitlement`, `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`), enabling full Pro functionality in airplane mode without internet connectivity (`verified by tests` in `__tests__/monetization.test.ts`).
+- **Expo Go fallback & dev simulation:** in Expo Go, StoreKit 2 is detected as unavailable and mock state (`scanflow_dev_pro_mock`) allows toggling Pro access in Settings for UI and workflow testing.
+
+### App Store Review (`ReviewService.ts`, `expo-store-review`)
+- Tracks successful document exports in Keychain (`scanflow_export_count`).
+- Automatically triggers native iOS review prompt (`StoreReview.requestReview()`) after the **3rd export**, rate-limited to at most once per major app version.
+
+---
+
+## 16. Not yet implemented (see ROADMAP)
 
 - Live edge overlay / auto-capture in ScanFlow's *own* camera (`app/scan.tsx`).
   Live detection and auto-capture are provided by the iOS document scanner
   (default); Expo Go offers no camera frame processors for a custom overlay.
 - Text recognition, PDF import rasterization, and PDF password encryption in
   Expo Go (require the native `modules/scanflow-ocr` module in the IPA build).
-- Milestones M5–M7 of Phase V2 (StoreKit 2 Pro unlock, store package &
-  TestFlight submission prep – see `docs/ROADMAP.md`).
+- Milestones M6–M7 of Phase V2 (store compliance, legal screens, store
+  package & TestFlight submission prep – see `docs/ROADMAP.md`).

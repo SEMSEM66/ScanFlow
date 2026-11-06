@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.13.0] - 2026-11-06
+
+Phase V2 Milestone **M5 (Monetization & StoreKit 2)**: 100% on-device StoreKit 2 integration, zero third-party tracking, Free vs. Pro entitlement gating, offline Keychain entitlement caching, Paywall modal, and App Store review trigger.
+
+### Added
+- **M5 – StoreKit 2 On-Device Architecture (`docs/MONETIZATION.md`, `ScanFlowOcrModule.swift`):**
+  - Native StoreKit 2 implementation directly in `modules/scanflow-ocr`: `fetchProductsAsync`, `purchaseProductAsync`, `restorePurchasesAsync`, and `checkEntitlementsAsync` utilizing Apple's modern Swift `StoreKit.Product` and `StoreKit.Transaction` APIs with on-device JWS cryptographic verification.
+  - 100% privacy-compliant: zero third-party subscription analytics SDKs, zero network telemetry, no external accounts.
+- **M5 – Free vs. Pro Entitlement Enforcement (`src/entitlements/`, `MonetizationService.ts`):**
+  - Strict Free tier protection: unlimited scanning, perspective correction, all 7 filters, folder categorization, basic PDF/JPG export, App Lock (Face ID/PIN), 30-day Trash, and QR/GiroCode scanning are **permanently free** and never blocked.
+  - Pro features unlocked via active StoreKit 2 entitlement: Apple Vision OCR, Word conversion (.docx), PDF import/merge/split/extract, password encryption, ID-card mode on A4, visual signatures/annotations, smart naming auto-rename, batch ZIP export, and full-library backup.
+  - Offline Keychain cache: entitlement state is securely cached in Keychain (`scanflow_pro_entitlement`, `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`) ensuring immediate offline Pro access without internet connectivity (`verified by tests` in `__tests__/monetization.test.ts`).
+- **M5 – Paywall & Settings UI (`PaywallModal.tsx`, `app/(tabs)/(settings)/index.tsx`):**
+  - Native formSheet paywall modal with tier options:
+    - *Jährlich* (`com.scanflow.app.pro.yearly`): 19,99 € / Jahr with 7-day free trial.
+    - *Monatlich* (`com.scanflow.app.pro.monthly`): 2,99 € / Monat.
+    - *Lifetime* (`com.scanflow.app.pro.lifetime`): 49,99 € one-time purchase.
+  - Real-time entitlement sync, one-tap *Käufe wiederherstellen* (Restore Purchases), and developer sandbox toggle for testing in Expo Go.
+- **M5 – App Store Review Prompt (`ReviewService.ts`, `expo-store-review`):**
+  - Automatically requests an App Store review after the user's 3rd successful document export (`StoreReview.requestReview()`), rate-limited to at most once per major app version.
+
 ## [1.12.0] - 2026-11-06
 
 Phase V2 Milestone **M4 (iOS Integration & Polish)**: Haptic feedback, accessibility AA contrast verification, Home Screen Quick Actions, and time-boxed native spikes.

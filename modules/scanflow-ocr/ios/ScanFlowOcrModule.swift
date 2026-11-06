@@ -7,6 +7,7 @@ import ExpoModulesCore
 import Foundation
 import ImageIO
 import PDFKit
+import StoreKit
 import Vision
 
 struct RecognizeOptions: Record {
@@ -76,6 +77,22 @@ public final class ScanFlowOcrModule: Module {
     AsyncFunction("encryptPdfAsync") { (sourceUrl: URL, outputUrl: URL, password: String) throws -> [String: Any] in
       return try ScanFlowOcrModule.encryptPdf(sourceUrl: sourceUrl, outputUrl: outputUrl, password: password)
     }.runOnQueue(ocrQueue)
+
+    AsyncFunction("fetchProductsAsync") { (productIds: [String]) async throws -> [[String: Any]] in
+      return try await ScanFlowOcrModule.fetchProducts(productIds: productIds)
+    }
+
+    AsyncFunction("purchaseProductAsync") { (productId: String) async throws -> [String: Any] in
+      return try await ScanFlowOcrModule.purchaseProduct(productId: productId)
+    }
+
+    AsyncFunction("restorePurchasesAsync") { () async throws -> [String: Any] in
+      return try await ScanFlowOcrModule.restorePurchases()
+    }
+
+    AsyncFunction("checkEntitlementsAsync") { () async throws -> [String: Any] in
+      return try await ScanFlowOcrModule.checkEntitlements()
+    }
   }
 
   private static func supportedLanguages() throws -> [String] {
@@ -390,5 +407,83 @@ public final class ScanFlowOcrModule: Module {
       return .up
     }
     return orientation
+  }
+
+  // MARK: - StoreKit 2 On-Device Monetization
+
+  @available(iOS 15.0, *)
+  private static func fetchProducts(productIds: [String]) async throws -> [[String: Any]] {
+    let products = try await Product.products(for: productIds)
+    var result: [[String: Any]] = []
+    for p in products {
+      var item: [String: Any] = [
+        "id": p.id,
+        "displayName": p.displayName,
+        "description": p.description,
+        "displayPrice": p.displayPrice,
+        "price": NSDecimalNumber(decimal: p.price).doubleValue
+      ]
+      if let subscription = p.subscription {
+        item["period"] = "\(subscription.subscriptionPeriod.value) \(subscription.subscriptionPeriod.unit)"
+      }
+      result.append(item)
+    }
+    return result
+  }
+
+  @available(iOS 15.0, *)
+  private static func purchaseProduct(productId: String) async throws -> [String: Any] {
+    let products = try await Product.products(for: [productId])
+    guard let product = products.first else {
+      return ["status": "error", "error": "Product not found: \(productId)"]
+    }
+    let result = try await product.purchase()
+    switch result {
+    case .success(let verification):
+      switch verification {
+      case .verified(let transaction):
+        await transaction.finish()
+        return [
+          "status": "success",
+          "productId": transaction.productID,
+          "transactionId": String(transaction.id)
+        ]
+      case .unverified(_, let error):
+        return ["status": "unverified", "error": error.localizedDescription]
+      }
+    case .userCancelled:
+      return ["status": "cancelled"]
+    case .pending:
+      return ["status": "pending"]
+    @unknown default:
+      return ["status": "unknown"]
+    }
+  }
+
+  @available(iOS 15.0, *)
+  private static func restorePurchases() async throws -> [String: Any] {
+    try await AppStore.sync()
+    return try await checkEntitlements()
+  }
+
+  @available(iOS 15.0, *)
+  private static func checkEntitlements() async throws -> [String: Any] {
+    var activeIds: [String] = []
+    for await verification in Transaction.currentEntitlements {
+      guard case .verified(let transaction) = verification else {
+        continue
+      }
+      if transaction.revocationDate != nil {
+        continue
+      }
+      if let expirationDate = transaction.expirationDate, expirationDate < Date() {
+        continue
+      }
+      activeIds.append(transaction.productID)
+    }
+    return [
+      "isPro": !activeIds.isEmpty,
+      "activeProductIds": activeIds
+    ]
   }
 }

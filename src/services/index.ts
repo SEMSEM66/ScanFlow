@@ -14,3 +14,5 @@ export * from './QrScannerService';
 export * from './SmartNamingService';
 export * from './BackupService';
 export * from './QuickActionService';
+export * from './MonetizationService';
+export * from './ReviewService';

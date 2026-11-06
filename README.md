@@ -79,6 +79,12 @@ Designed as a clean, ad-free alternative to apps like CamScanner, ScanFlow proce
 - **♿ Accessibility & WCAG AA Contrast:** all UI colors verified for WCAG 2.1 AA compliance (up to 18.4:1 contrast ratio) in light and dark mode, 44 × 44 pt minimum hit targets across all buttons and controls, and full VoiceOver accessibility labels/hints (`verified by tests` in `__tests__/contrast.test.ts`).
 - **⚡ Home Screen Quick Actions:** 3D Touch / Haptic Touch quick actions on the ScanFlow home screen icon to instantly trigger *Dokument scannen* or *Suchen* (`expo-quick-actions`, safe fallback in Expo Go).
 
+### Phase V2 – Monetization & StoreKit 2 (v1.13.0, M5)
+- **💎 100% On-Device StoreKit 2:** native In-App Purchases and auto-renewable subscriptions processed directly between your iPhone and Apple using Swift StoreKit 2 (`Product`, `Transaction`). Zero third-party analytics SDKs, zero user tracking, and no external accounts (`docs/MONETIZATION.md`).
+- **🛡️ Free vs. Pro Entitlements:** unlimited scanning, filters, folders, basic PDF/JPG export, App Lock, 30-day Trash, and QR/GiroCode scanning are **forever free**. Pro unlocks Apple Vision OCR, Word conversion, PDF import/merge/split, password protection, ID-card mode, signatures/annotations, smart naming, batch ZIP, and full backup.
+- **✈️ Offline Keychain Entitlements:** purchased Pro entitlements are securely cached in Keychain (`scanflow_pro_entitlement`), guaranteeing full Pro access on flights or offline without network checks (`verified by tests` in `__tests__/monetization.test.ts`).
+- **⭐ Fair App Store Review Trigger:** automatically asks for an App Store rating after your 3rd successful document export (`expo-store-review`), rate-limited to once per version.
+
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the scan flow, the pipeline, the app lock, the text recognition, the PDF toolkit and the native sheets, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phases.
 
 ### Known limitations

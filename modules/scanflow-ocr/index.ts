@@ -70,6 +70,27 @@ export interface NativePdfEncryptResult {
   isLocked: boolean;
 }
 
+export interface NativeStoreProduct {
+  id: string;
+  displayName: string;
+  description: string;
+  displayPrice: string;
+  price: number;
+  period?: string;
+}
+
+export interface NativePurchaseResult {
+  status: 'success' | 'cancelled' | 'pending' | 'unverified' | 'error' | 'unknown';
+  productId?: string;
+  transactionId?: string;
+  error?: string;
+}
+
+export interface NativeEntitlementsResult {
+  isPro: boolean;
+  activeProductIds: string[];
+}
+
 export interface ScanFlowOcrNativeModule {
   supportedLanguagesAsync(): Promise<string[]>;
   /** `uri`: file:// URL of a JPEG / PNG. */
@@ -91,6 +112,14 @@ export interface ScanFlowOcrNativeModule {
     outputUri: string,
     password: string
   ): Promise<NativePdfEncryptResult>;
+  /** StoreKit 2: queries App Store for products */
+  fetchProductsAsync?(productIds: string[]): Promise<NativeStoreProduct[]>;
+  /** StoreKit 2: triggers native purchase sheet */
+  purchaseProductAsync?(productId: string): Promise<NativePurchaseResult>;
+  /** StoreKit 2: syncs with App Store and validates verified transactions */
+  restorePurchasesAsync?(): Promise<NativeEntitlementsResult>;
+  /** StoreKit 2: checks current active verified entitlements */
+  checkEntitlementsAsync?(): Promise<NativeEntitlementsResult>;
 }
 
 export const ScanFlowOcr = requireOptionalNativeModule<ScanFlowOcrNativeModule>('ScanFlowOcr');
