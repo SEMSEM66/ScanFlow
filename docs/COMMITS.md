@@ -1,12 +1,15 @@
 # Commit groups per release
 
-## iOS polish – work in progress
+## v1.7.0 – Native iOS polish
 
-The `feat/ios-polish` branch contains the corner-token, shared UI and test
-commits, followed by native page-sheet and form-sheet migrations. The menu,
-adjustment and navigation migrations are still outstanding. Do not release or
-push to `main` until the complete task is checked; a main push triggers an IPA
-build. Native share presentation must be verified on an iPhone.
+The `feat/ios-polish` work is grouped into conventional commits: dependencies;
+corner tokens and primitives; corner guard and tests; native page and form
+sheets; native menus and prompts; removal of custom sheet machinery; native
+tabs, headers and toolbars; segmented controls; SF Symbols; typography; and
+release documentation. The scanner tab uses the SDK 58 native tab press event
+without selecting its placeholder. All-folder search is retained in the library
+menu. Native presentation and the export share flow require physical-iPhone
+verification; do not describe static checks as device testing.
 
 ---
 

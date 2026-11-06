@@ -7,11 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased] – iOS polish (in progress)
+## [1.7.0] – Native iOS polish
 
-- Added continuous corner helpers, shared UI primitives, and a corner-checking gate.
-- Migrated export, recognized text, and the folder picker to native form sheets; the page editor, PIN setup, and scan review use native page sheets. Remaining sheets and navigation are not yet migrated.
-- Native presentation and export sharing need physical-iPhone verification.
+### Changed
+- Native iOS tabs and large-title stack headers replace the custom tab bar and title bars. Scan opens the scanner without switching tabs. All-folder search remains available in the library menu.
+- Export, recognized text, folder selection and adjustments use native form sheets; page overview, PIN setup and scan review use native page sheets. Document and folder actions and name prompts use system menus and alerts.
+- Native segmented controls, SF Symbols, iOS text sizes, continuous corner tokens and shared controls bring the interface closer to iOS conventions in light and dark mode.
+- Export stays open while its file is generated; the system share sheet opens above it. The scanner, sharing, sheet gestures, and native controls still need physical-iPhone testing.
+
+### Developer notes
+- Run `npm run check:corners` along with the type check, lint and tests. The old custom bottom sheet and handoff helpers have been removed.
 
 ---
 

@@ -1,4 +1,4 @@
-# ScanFlow – Architecture: Scan & Image Pipeline (Phase A + B), App Lock & Security (v1.4.0), Text Recognition (v1.5.0), Sheets & Navigation (v1.6.0)
+# ScanFlow – Architecture: Scan & Image Pipeline (Phase A + B), App Lock & Security (v1.4.0), Text Recognition (v1.5.0), Native iOS UI (v1.7.0)
 
 This document describes how ScanFlow captures pages (iOS document scanner or
 its own camera), turns a phone photo into a page that looks like a real
@@ -7,7 +7,7 @@ is the reference for anybody changing `src/imaging/` or the scan flow.
 Section 8 describes the app lock, the ScanFlow PIN and the privacy features
 (`src/security/`, v1.4.0), section 9 the text recognition, the text search and
 the searchable PDF (`src/ocr/`, `modules/scanflow-ocr`, v1.5.0), section 10
-the bottom sheets, the tab bar and the search tab (v1.6.0).
+native sheets, navigation and UI conventions (v1.7.0).
 
 ---
 
@@ -57,12 +57,13 @@ src/services/
 
 src/components/ScannerProvider.tsx  App-wide scan entry (useScanner): scanner choice, permission,
                                     progress overlay, fallback to the ScanFlow camera
-src/components/modalHandoff.ts      ModalHandoff: hide a sheet, resolve on Modal.onDismiss (1.5 s fallback)
-                                    → then present a native sheet (export sheet → share sheet)
-src/components/BottomSheet.tsx      iOS-style bottom sheet: backdrop fades, sheet glides with a spring,
-                                    pull down / tap outside to close, onDismiss once gone (see §10)
-src/components/sheetMotion.ts       Pure TS: sheet constants, gesture math, SheetMachine (driver injected)
-app/(tabs)/search.tsx               Search tab: all folders, title + recognized text, excerpts (see §10)
+src/components/adjustSheetSession.ts  In-memory bridge for live document adjustments while the form sheet is open
+src/components/useNativeMenu.ts      Native action sheets and delayed follow-up presentation
+src/components/ui/                   Shared controls, SF Symbols, native segmented-control wrapper
+src/theme/shape.ts, squircle.ts      Continuous corner tokens/helpers and Skia path
+app/sheets/                          Native form sheet routes: adjust, export, move, text
+app/(tabs)/_layout.tsx               Native tab bar and per-tab native stacks
+app/search.tsx                       All-folder title / recognized-text search
 
 src/security/           Pure TypeScript: SHA-256/PBKDF2, PIN records, attempt limit, lock policy (see §8)
 
@@ -535,75 +536,17 @@ compiled in CI (macOS) and tested on the iPhone (ROADMAP STOP C).
 
 ---
 
-## 10. Bottom sheets & navigation
+## 10. Native iOS UI conventions
 
-### UI conventions (migration in progress)
-
-- Prefer native iOS navigation, form sheets and menus. Export, recognized text
-  and the folder picker are route-based `formSheet`s; page editor, PIN setup
-  and scan review use native page sheets. Remaining panels are documented below.
-- Leave native sheet corners at the system default; do not add a backdrop or
-  shadow over native presentation. iOS 26 material and older iOS backgrounds
-  require device testing. Disable interactive dismissal while saving/exporting.
-- `src/theme/shape.ts` provides continuous radius tokens and `corner`,
-  `corners`, `capsule`, and `concentric`; `squirclePath` handles Skia paths.
-  Use shared UI components and `Icon` (SF Symbols), and run `npm run check:corners`.
-- Never put a shadow on a view that clips; use a separate wrapper. Use
-  `StyleSheet.hairlineWidth` for borders and separators.
-
-### Legacy custom sheets (remaining during migration)
-
-### `BottomSheet` (`src/components/BottomSheet.tsx`, `sheetMotion.ts`)
-
-- One `Animated.Value`: the sheet's offset below its open position (0 = open,
-  sheet height = hidden; parked at the window height while hidden). The
-  backdrop opacity is interpolated from it (`[0, height] → [dim, 0]`), so the
-  backdrop and the sheet always move together – also while the sheet is
-  pulled. The RN `Modal` is `transparent` with `animationType="none"`; all
-  motion runs on the native driver.
-- Open and snap back: spring (stiffness 220, damping 24, mass 1 → damping
-  ratio ≈ 0.81, ≈ 1 % overshoot). Close: timing with the iOS sheet curve
-  `bezier(0.32, 0.72, 0, 1)`, 280 ms; after a flick the duration follows the
-  finger's speed (140–280 ms). A sheet-coloured skirt below the sheet covers
-  the gap while it bounces or is stretched upwards (rubber band, max 40 pt).
-- Pull to close (`PanResponder`, never on touch start, so taps stay with the
-  buttons): starts after 8 pt of mostly vertical movement; closes when
-  released after ≥ 30 % of the sheet height (max 160 pt) or at ≥ 0.8 pt/ms
-  after ≥ 16 pt; moving up at ≥ 0.3 pt/ms keeps it open. `dragArea="top"`
-  limits the start to the top 60 pt (handle + title) for sheets with sliders
-  or lists (*Anpassen*, *In Ordner verschieben*).
-- `SheetMachine` (hidden → waiting for the layout → opening → open ⇄
-  dragging / settling → closing → hidden) is pure TypeScript with an injected
-  driver and is unit-tested (`__tests__/sheetMotion.test.ts`). It keeps the
-  modal presented while the sheet glides out, reports `onClose` (backdrop,
-  pull, VoiceOver escape) and `onDismiss` exactly once per close – after
-  `Modal.onDismiss`, or 1 s after hiding if that event never arrives.
-  Reopening while closing turns the sheet around; if the screen ignores
-  `onClose`, the sheet comes back.
-- `dismissible={false}` disables backdrop, pull and escape for custom sheets.
-
-### Hand-over rule
-
-- Anything presented after a sheet (prompt, alert, next sheet, share sheet,
-  scanner) starts from the sheet's `onDismiss` (AGENTS.md rule 9). The
-  document and folder menus store the chosen entry and run it there. Export
-  instead presents the iOS share UI above an open native form sheet; never
-  present it while that sheet is dismissing.
-- Menus keep showing the last document / folder while they glide out (the
-  screens clear it on close).
-
-### Tab bar & search tab
-
-- `app/(tabs)/_layout.tsx`: five routes – `index`, `search`,
-  `scan-tab-placeholder` (camera button via `tabBarButton`), `tools`,
-  `settings`. Every tab bar item has `flex: 1`, so five slots put the camera
-  button exactly in the middle. Labels 10 pt with `tabBarAllowFontScaling:
-  false` (like the iOS tab bar).
-- `app/(tabs)/search.tsx`: `documentRepository.getAll({ searchQuery })`
-  without a folder (all folders), excerpts from
-  `pageTextRepository.snippets()`, folder names from `folderRepository`.
-  Only the newest search may update the list (sequence counter); it searches
-  again on focus and on `ocrService` page events while a query is active.
+- Use native stack headers and the system tab bar. The library, tools and settings have large titles; the library uses the native header search and sort menu. The Scan tab intercepts the system tab press without selecting a placeholder and calls `useScanner()`. All-folder search is available in the library menu.
+- Export, recognized text, folder selection and adjustments are `formSheet` routes with native detents, grabbers and scroll expansion. Leave system corner radii and backdrop untouched. iOS 26 uses a transparent sheet content background for system material; older versions use the theme surface. Test both on devices.
+- Page overview, PIN setup and camera review use native RN page sheets because their callback-based flows remain mounted. Disable interactive dismissal for active saves and exports. Present the share sheet above the still-open export sheet, never while a sheet is dismissing. The OCR hold ends when generation ends; exported files are cleaned up after sharing.
+- iOS action sheets and prompts have no dismissal callback: `useNativeMenu` defers a selected action briefly before starting any follow-up presentation. Page-editor handoffs use `Modal.onDismiss` with a fallback. Presentation timing and the sharing flow require iPhone testing.
+- The adjustment route uses `adjustSheetSession` as a temporary in-memory bridge to the mounted editor; no document data is serialized through the route. The bridge is cleared when the editor unmounts.
+- `src/theme/shape.ts` provides continuous radius tokens and `corner`, `corners`, `capsule`, and `concentric`; use `squirclePath` for Skia paths. Use shared UI primitives, `Icon` for SF Symbols, and `StyleSheet.hairlineWidth` for borders. Keep shadows on a separate non-clipping wrapper. Run `npm run check:corners`.
+- Text styles follow iOS sizes; fixed-height controls cap Dynamic Type where needed. Native segmented controls are used for export, appearance, language and crop format; the scanner selector remains custom because it needs to disable only one option.
+- `app/search.tsx` searches all folders and includes recognized text excerpts where available. Only the newest search may update the list; it searches again on focus and OCR page events.
+- Native tabs, sheet detents, system material, share presentation, and segmented-control interoperability must be verified on a physical iPhone in both Expo Go and the installed IPA. OCR and the system scanner have their existing availability limitations in Expo Go.
 
 ---
 
