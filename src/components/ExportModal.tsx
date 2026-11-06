@@ -8,38 +8,30 @@ import {
   Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { capsule, concentric, corner, hairline, radius, shadows, useTheme } from '../theme';
+import { concentric, corner, hairline, radius, shadows, useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { ExportDpi, ExportFormat, ExportQuality } from '../types';
 import { exportService } from '../services/ExportService';
 import { authService } from '../services/AuthService';
 import { EXPORT_DPI_PRESETS } from '../imaging/pageFormat';
-import { BottomSheet } from './BottomSheet';
 import { Button } from './ui';
 
 interface ExportModalProps {
-  visible: boolean;
   documentTitle: string;
   pageCount: number;
-  onClose: () => void;
   onShare: (format: ExportFormat, quality: ExportQuality, dpi: ExportDpi, watermark?: string) => Promise<void>;
   /** True while the file is created and handed to the share sheet – the sheet cannot be closed then. */
   isGenerating?: boolean;
   /** Export progress (pages rendered). */
   progress?: { current: number; total: number } | null;
-  /** Called once the sheet has fully disappeared (after it glided out and its modal is gone). */
-  onDismiss?: () => void;
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
-  visible,
   documentTitle,
   pageCount,
-  onClose,
   onShare,
   isGenerating = false,
   progress = null,
-  onDismiss,
 }) => {
   const { colors, typography, spacing } = useTheme();
   const { t, formatString, language } = useTranslation();
@@ -49,12 +41,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [dpi, setDpi] = useState<ExportDpi>(200);
   const [includeWatermark, setIncludeWatermark] = useState(false);
 
-  // Defaults from the settings each time the sheet opens
+  // Defaults from settings when the sheet opens.
   useEffect(() => {
-    if (!visible) return;
     authService.getDefaultQuality().then(setQuality);
     authService.getDefaultDpi().then(setDpi);
-  }, [visible]);
+  }, []);
 
   const estimatedSize = exportService.formatBytes(
     exportService.estimateBytes(format === 'pdf' ? pageCount : 1, format, dpi, quality),
@@ -66,21 +57,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     await onShare(format, quality, dpi, watermarkText);
   };
 
-  // While the file is created the sheet stays open (progress); it closes itself before the share sheet opens
   return (
-    <BottomSheet
-      visible={visible}
-      onClose={onClose}
-      onDismiss={onDismiss}
-      dismissible={!isGenerating}
-      radius={radius.xl}
-      style={styles.sheet}
-    >
-      {/* Drag Handle Bar matching Exportieren.png */}
-      <View style={styles.handleContainer}>
-        <View style={[styles.handle, { backgroundColor: colors.border }]} />
-      </View>
-
       <View style={[styles.content, { paddingHorizontal: spacing.base }]}>
         {/* Title */}
         <Text
@@ -284,7 +261,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           ) : undefined}
         </Button>
       </View>
-    </BottomSheet>
   );
 };
 
@@ -293,19 +269,7 @@ const SEGMENT_RADIUS = radius.md;
 const SEGMENT_INSET = 3;
 
 const styles = StyleSheet.create({
-  sheet: {
-    paddingTop: 12,
-  },
-  handleContainer: {
-    alignItems: 'center',
-    paddingBottom: 16,
-  },
-  handle: {
-    width: 44,
-    height: 5,
-    ...capsule(5),
-  },
-  content: {},
+  content: { paddingTop: 24 },
   title: {
     marginBottom: 16,
     letterSpacing: -0.3,
